@@ -355,13 +355,7 @@ export default function Home() {
     latestBracketRef.current = bracket;
   }, [bracket]);
 
-  // Auto-fill Maker details from verified account
-  useEffect(() => {
-    if (userLoggedIn && mockUserTwitter) {
-      setNewMaker(mockUserTwitter.replace(/^@/, ""));
-      setNewTwitter(mockUserTwitter);
-    }
-  }, [userLoggedIn, mockUserTwitter]);
+
 
   // Act refs & trigger states for scroll effects
   const narrativeRef = useRef<HTMLDivElement>(null);
@@ -1005,6 +999,17 @@ export default function Home() {
 
   // Export critiques for a product as a CSV file
   const handleExportCritiquesCsv = async (product: Product) => {
+    // Privacy & Security Check: Ensure only the verified creator of this product can download its CSV critiques
+    if (!userLoggedIn || !mockUserTwitter) {
+      alert("Authentication Required!\n\nPlease link and verify your identity before exporting critiques.");
+      return;
+    }
+    const isOwner = product.makerTwitter.replace(/^@/, "").toLowerCase() === mockUserTwitter.replace(/^@/, "").toLowerCase();
+    if (!isOwner) {
+      alert("Access Denied!\n\nYou can only export critiques for your own registered products to respect developer privacy.");
+      return;
+    }
+
     try {
       let critiques: Array<{
         voter: string;
@@ -1760,13 +1765,25 @@ export default function Home() {
                             )}
                           </td>
                           <td className="py-3.5 px-4 text-center">
-                            <button
-                              onClick={() => handleExportCritiquesCsv(p)}
-                              className="inline-flex items-center space-x-1 bg-amber-50 border border-amber-300 text-[#d97706] px-2 py-0.5 text-3xs font-pixel rounded-none hover:bg-amber-100 hover:border-amber-500 transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
-                              title="Export critiques as CSV"
-                            >
-                              <span>📥 CSV</span>
-                            </button>
+                            {(() => {
+                              const isOwner = userLoggedIn && mockUserTwitter && p.makerTwitter.replace(/^@/, "").toLowerCase() === mockUserTwitter.replace(/^@/, "").toLowerCase();
+                              return isOwner ? (
+                                <button
+                                  onClick={() => handleExportCritiquesCsv(p)}
+                                  className="inline-flex items-center space-x-1 bg-amber-50 border border-amber-300 text-[#d97706] px-2 py-0.5 text-3xs font-pixel rounded-none hover:bg-amber-100 hover:border-amber-500 transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
+                                  title="Export your critiques as CSV"
+                                >
+                                  <span>📥 CSV</span>
+                                </button>
+                              ) : (
+                                <span 
+                                  className="text-stone-400 font-pixel text-4xs uppercase flex items-center justify-center gap-1 select-none" 
+                                  title="Only the verified project owner can export critiques"
+                                >
+                                  🔒 PRIVATE
+                                </span>
+                              );
+                            })()}
                           </td>
                         </tr>
                       );
