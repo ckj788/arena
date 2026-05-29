@@ -1,0 +1,126 @@
+/**
+ * 📅 SHIP OR DUEL — NEW YORK TIMEZONE (EST/EDT) CORE TIMING MODULE
+ * File: d:\ZASON-项目\1\lib\timeHelpers.ts
+ * Helper functions to calculate countdowns and automatic round settles
+ * strictly using the New York Timezone benchmark.
+ */
+
+// 1. 获取当前纽约的本地时间 Date 对象
+export function getNewYorkTime(): Date {
+  const date = new Date();
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const map = new Map(parts.map(p => [p.type, p.value]));
+  
+  return new Date(
+    Number(map.get("year")),
+    Number(map.get("month")) - 1,
+    Number(map.get("day")),
+    Number(map.get("hour")),
+    Number(map.get("minute")),
+    Number(map.get("second"))
+  );
+}
+
+// 2. 计算距离下一次纽约时间零点（Midnight 00:00:00）的剩余毫秒数
+// 🚀 [TESTING DEPLOYMENT BYPASS]: 为了在 Vercel 部署后极速跑通全套流程，我们将原本等待至纽约零点的限制缩短为 10 秒倒计时！
+// 若要恢复原本的纽约零点限制，只需取消注释原版代码。
+export function getMillisecondsToNextNYMidnight(): number {
+  return 10 * 1000; // ⚡️ 绕过纽约零点限制，10 秒内自动启动首轮对决！
+  
+  /* 原版纽约时间零点限制：
+  const nyNow = getNewYorkTime();
+  const nyMidnight = new Date(nyNow);
+  nyMidnight.setHours(24, 0, 0, 0); 
+  return nyMidnight.getTime() - nyNow.getTime();
+  */
+}
+
+// 3. 根据 3-2-1-1 规则，获取每轮赛事的规定时长（单位：毫秒）
+// 🚀 [TESTING DEPLOYMENT BYPASS]: 将原本的 3天-2天-1天-1天 缩短为 3分钟-2分钟-1分钟-1分钟
+// 方便全套轮次与晋级流程在一小时内完整跑通！
+export function getRoundDurationMs(roundNumber: number): number {
+  const ONE_MINUTE_MS = 60 * 1000;
+  switch (roundNumber) {
+    case 1:
+      return 3 * ONE_MINUTE_MS; // 3 分钟
+    case 2:
+      return 2 * ONE_MINUTE_MS; // 2 分钟
+    case 3:
+      return 1 * ONE_MINUTE_MS; // 1 分钟
+    case 4:
+      return 1 * ONE_MINUTE_MS; // 1 分钟
+    default:
+      return 1 * ONE_MINUTE_MS;
+  }
+  
+  /* 原版天数时间配置：
+  const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+  switch (roundNumber) {
+    case 1: return 3 * ONE_DAY_MS;
+    case 2: return 2 * ONE_DAY_MS;
+    case 3: return 1 * ONE_DAY_MS;
+    case 4: return 1 * ONE_DAY_MS;
+    default: return 1 * ONE_DAY_MS;
+  }
+  */
+}
+
+// 4. 获取当前轮次的剩余截止时间（单位：毫秒）
+// 参数 startedAtStr: 数据库中记录的当前轮次启动 ISO 时间戳
+export function getRoundRemainingMs(roundNumber: number, startedAtStr: string): number {
+  const startedAt = new Date(startedAtStr).getTime();
+  const duration = getRoundDurationMs(roundNumber);
+  const deadline = startedAt + duration;
+  
+  // 转换成纽约本地时间计算
+  const currentNYTime = getNewYorkTime().getTime();
+  const rawCurrentLocalTime = new Date().getTime();
+  const diffOffset = currentNYTime - rawCurrentLocalTime; // 纽约时区时间差修正
+
+  const adjustedNow = Date.now() + diffOffset;
+  const remaining = deadline - adjustedNow;
+  return Math.max(0, remaining);
+}
+
+// 5. 格式化毫秒数为天、时、分、秒字符串 (用于 UI 渲染)
+export function formatDuration(ms: number): string {
+  if (ms <= 0) return "00:00:00";
+  
+  const seconds = Math.floor((ms / 1000) % 60);
+  const minutes = Math.floor((ms / (1000 * 60)) % 60);
+  const hours = Math.floor((ms / (1000 * 60 * 60)) % 24);
+  const days = Math.floor(ms / (1000 * 60 * 60 * 24));
+  
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}D`);
+  
+  const pad = (num: number) => String(num).padStart(2, "0");
+  parts.push(`${pad(hours)}H`);
+  parts.push(`${pad(minutes)}M`);
+  parts.push(`${pad(seconds)}S`);
+  
+  return parts.join(" ");
+}
+
+// 6. 极速格式化为 HH:MM:SS 格式 (用于集结倒计时)
+export function formatToHMS(ms: number): string {
+  if (ms <= 0) return "00:00:00";
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${pad(h)}:${pad(m)}:${pad(s)}`;
+}
