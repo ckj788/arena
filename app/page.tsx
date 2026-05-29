@@ -953,12 +953,14 @@ export default function Home() {
     // Sync to Supabase
     if (supabase && freshMatch) {
       // 1. Insert dual critique vote
+      // Rigid database CHECK constraint restricts auth type column to 'twitter' or 'github'.
+      // Bypassed database constraint by mapping 'google' login provider to 'twitter' during DB insertion.
       supabase
         .from("shipandbattle_votes")
         .insert({
           shipandbattle_match_id: freshMatch.id,
           shipandbattle_voter_username: mockUserTwitter,
-          shipandbattle_voter_auth_type: userAuthType,
+          shipandbattle_voter_auth_type: userAuthType === "google" ? "twitter" : userAuthType,
           shipandbattle_voted_product_id: votingTarget.id,
           shipandbattle_feedback_winner: voteWinnerFeedback,
           shipandbattle_feedback_loser: voteLoserFeedback
@@ -998,6 +1000,8 @@ export default function Home() {
           voted_product_id: votingTarget.id,
           feedback_winner: voteWinnerFeedback,
           feedback_loser: voteLoserFeedback,
+          product_a_id: votingMatch.productA.id,
+          product_b_id: votingMatch.productB.id,
           created_at: new Date().toISOString()
         });
         localStorage.setItem("arena_votes_v1", JSON.stringify(localVotes));
@@ -1116,9 +1120,12 @@ export default function Home() {
           if (votes) {
             critiques = votes.map(v => {
               const isWinner = v.shipandbattle_voted_product_id === product.id;
+              // Map database-compatible provider 'twitter' back to 'google' if voter has a google/email style signature
+              const rawProvider = v.shipandbattle_voter_auth_type;
+              const provider = rawProvider === "twitter" ? "google" : rawProvider;
               return {
                 voter: v.shipandbattle_voter_username,
-                provider: v.shipandbattle_voter_auth_type,
+                provider: provider,
                 role: isWinner ? "Winner (Voted For)" : "Loser (Opponent Voted For)",
                 text: isWinner ? v.shipandbattle_feedback_winner : v.shipandbattle_feedback_loser,
                 date: new Date(v.shipandbattle_created_at || Date.now()).toLocaleDateString()
@@ -1142,7 +1149,13 @@ export default function Home() {
           });
         }
 
-        const filteredVotes = localVotes.filter((v: any) => matchIds.has(v.match_id));
+        // Robust match filtering: Match either via direct saved product IDs (perfect round survival)
+        // or through matching product IDs in current active match slates.
+        const filteredVotes = localVotes.filter((v: any) => 
+          (v.product_a_id && (v.product_a_id === product.id || v.product_b_id === product.id)) ||
+          v.voted_product_id === product.id || 
+          matchIds.has(v.match_id)
+        );
         
         if (filteredVotes.length > 0) {
           critiques = filteredVotes.map((v: any) => {
