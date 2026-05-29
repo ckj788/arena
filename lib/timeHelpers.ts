@@ -1,5 +1,5 @@
 /**
- * 📅 SHIP OR DUEL — NEW YORK TIMEZONE (EST/EDT) CORE TIMING MODULE
+ * 📅 INDIE CLASH — NEW YORK TIMEZONE (EST/EDT) CORE TIMING MODULE
  * File: d:\ZASON-项目\1\lib\timeHelpers.ts
  * Helper functions to calculate countdowns and automatic round settles
  * strictly using the New York Timezone benchmark.

@@ -16,10 +16,10 @@ export const supabase =
 
 if (!supabase) {
   console.warn(
-    "⚠️ [SHIP OR DUEL] Supabase environment variables are not configured. Automatically falling back to local sandbox storage mode (localStorage)."
+    "⚠️ [INDIE CLASH] Supabase environment variables are not configured. Automatically falling back to local sandbox storage mode (localStorage)."
   );
 } else {
   console.log(
-    "⚔️ [SHIP OR DUEL] Supabase database connected successfully! Switched to real-time online duel mode."
+    "⚔️ [INDIE CLASH] Supabase database connected successfully! Switched to real-time online duel mode."
   );
 }

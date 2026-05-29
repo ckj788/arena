@@ -1,5 +1,5 @@
 -- ========================================================
--- 🛡️ SHIP OR DUEL — SUPABASE DATABASE TABLES BACKUP
+-- 🛡️ INDIE CLASH — SUPABASE DATABASE TABLES BACKUP
 -- Local backup to prevent table name typos and mismatches
 -- File: d:\ZASON-项目\1\lib\schema.sql
 -- 所有表和列均添加了 'shipandbattle_' 前缀，以防免费版数据库重合冲突

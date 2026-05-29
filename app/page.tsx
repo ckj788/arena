@@ -1435,7 +1435,7 @@ export default function Home() {
         {/* 8-Bit Pixel-Art Elegant Header inside First Fold */}
         <header className="border-b border-stone-850 py-5 px-6 sm:px-12 flex justify-between items-center bg-[#181715]/75 backdrop-blur-xs relative z-20 text-[#faf5ef] shadow-sm">
           <div className="flex items-center space-x-4">
-            <span className="text-xl sm:text-2xl font-pixel tracking-wider text-[#faf5ef] animate-pixel-bounce">SHIP_DUEL ⚔️</span>
+            <span className="text-xl sm:text-2xl font-pixel tracking-wider text-[#faf5ef] animate-pixel-bounce">INDIE_CLASH ⚔️</span>
             <span className="bg-[#181715] border border-stone-700 text-xs font-pixel px-2 py-0.5 text-[#d97706] uppercase">
               {supabase ? "LIVE_CLOUD" : "STAGE_1"}
             </span>
