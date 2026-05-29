@@ -3181,72 +3181,74 @@ export default function Home() {
       {/* ========================================================
           Developer testing console (PM Sandbox control panel)
          ======================================================== */}
-      <div className="fixed bottom-4 right-4 z-40 bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel p-4 max-w-xs hover:-translate-y-1 transition-all text-[#181715]">
-        <div className="flex justify-between items-center mb-3 pb-1 border-b border-pixel">
-          <span className="text-3xs font-pixel text-[#d97706]">
-            SANDBOX_CONSOLE
-          </span>
-          <span className="w-2 h-2 bg-blue-600 border border-pixel animate-ping"></span>
-        </div>
-        <div className="space-y-2">
-          {!bracket ? (
-            <>
-              <button 
-                onClick={handleAddDummy}
-                className="w-full text-left px-2.5 py-1.5 border border-pixel hover:bg-[#fdf2e9] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
-              >
-                <span>➕ Inject Mock Competitor</span>
-                <span className="bg-[#fdf2e9] px-1 py-0.2 rounded font-mono font-bold text-[#181715]">{waitingProducts.length}/16</span>
-              </button>
-              <button 
-                onClick={handleAutoFillAndStart}
-                className="w-full text-left px-2.5 py-1.5 bg-[#181715] text-[#fcfbfa] hover:bg-[#d97706] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
-              >
-                <span>🚀 Autofill 16 & Launch</span>
-                <span className="font-mono">➔</span>
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="p-2 bg-[#fdf2e9] border border-pixel text-3xs font-pixel space-y-1 text-stone-700">
-                <div>STATUS: <strong className="text-emerald-700">{bracket.status}</strong></div>
-                <div>STAGE: <strong className="text-[#d97706]">{
-                  activeRoundNum === 1 ? "ROUND_16" : 
-                  activeRoundNum === 2 ? "QUARTERS" : 
-                  activeRoundNum === 3 ? "SEMIS" : "FINALS"
-                }</strong></div>
-              </div>
-              {bracket.status === "completed" ? (
-                <button
-                  onClick={handleReset}
-                  className="w-full text-left px-2.5 py-1.5 bg-stone-900 text-white hover:bg-stone-850 transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed bottom-4 right-4 z-40 bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel p-4 max-w-xs hover:-translate-y-1 transition-all text-[#181715]">
+          <div className="flex justify-between items-center mb-3 pb-1 border-b border-pixel">
+            <span className="text-3xs font-pixel text-[#d97706]">
+              SANDBOX_CONSOLE
+            </span>
+            <span className="w-2 h-2 bg-blue-600 border border-pixel animate-ping"></span>
+          </div>
+          <div className="space-y-2">
+            {!bracket ? (
+              <>
+                <button 
+                  onClick={handleAddDummy}
+                  className="w-full text-left px-2.5 py-1.5 border border-pixel hover:bg-[#fdf2e9] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
                 >
-                  <span>🔄 Start New Season (Reset)</span>
+                  <span>➕ Inject Mock Competitor</span>
+                  <span className="bg-[#fdf2e9] px-1 py-0.2 rounded font-mono font-bold text-[#181715]">{waitingProducts.length}/16</span>
+                </button>
+                <button 
+                  onClick={handleAutoFillAndStart}
+                  className="w-full text-left px-2.5 py-1.5 bg-[#181715] text-[#fcfbfa] hover:bg-[#d97706] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
+                >
+                  <span>🚀 Autofill 16 & Launch</span>
                   <span className="font-mono">➔</span>
                 </button>
-              ) : (
-                <button
-                  onClick={handleAdvanceRound}
-                  className="w-full text-left px-2.5 py-1.5 bg-[#d97706] text-white hover:bg-[#181715] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
-                >
-                  <span>
-                    {bracket.status === "preparing" 
-                      ? "⚡ Force Start (Skip Midnight)" 
-                      : "🏆 Settle & Advance Round"}
-                  </span>
-                  <span className="font-mono">➔</span>
-                </button>
-              )}
-            </>
-          )}
-          <button 
-            onClick={handleReset}
-            className="w-full text-left px-2.5 py-1.5 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-all text-3xs font-pixel"
-          >
-            🔄 Reset Sandbox
-          </button>
+              </>
+            ) : (
+              <>
+                <div className="p-2 bg-[#fdf2e9] border border-pixel text-3xs font-pixel space-y-1 text-stone-700">
+                  <div>STATUS: <strong className="text-emerald-700">{bracket.status}</strong></div>
+                  <div>STAGE: <strong className="text-[#d97706]">{
+                    activeRoundNum === 1 ? "ROUND_16" : 
+                    activeRoundNum === 2 ? "QUARTERS" : 
+                    activeRoundNum === 3 ? "SEMIS" : "FINALS"
+                  }</strong></div>
+                </div>
+                {bracket.status === "completed" ? (
+                  <button
+                    onClick={handleReset}
+                    className="w-full text-left px-2.5 py-1.5 bg-stone-900 text-white hover:bg-stone-850 transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
+                  >
+                    <span>🔄 Start New Season (Reset)</span>
+                    <span className="font-mono">➔</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleAdvanceRound}
+                    className="w-full text-left px-2.5 py-1.5 bg-[#d97706] text-white hover:bg-[#181715] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
+                  >
+                    <span>
+                      {bracket.status === "preparing" 
+                        ? "⚡ Force Start (Skip Midnight)" 
+                        : "🏆 Settle & Advance Round"}
+                    </span>
+                    <span className="font-mono">➔</span>
+                  </button>
+                )}
+              </>
+            )}
+            <button 
+              onClick={handleReset}
+              className="w-full text-left px-2.5 py-1.5 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-all text-3xs font-pixel"
+            >
+              🔄 Reset Sandbox
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ========================================================
           Retro Pixel Authentication Selector Modal (Twitter/X & GitHub)
