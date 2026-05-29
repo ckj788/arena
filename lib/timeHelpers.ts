@@ -87,14 +87,18 @@ export function getRoundRemainingMs(roundNumber: number, startedAtStr: string): 
   const duration = getRoundDurationMs(roundNumber);
   const deadline = startedAt + duration;
   
-  // 转换成纽约本地时间计算
+  // 🚀 [TESTING DEPLOYMENT BYPASS]: 采用纯 UTC 时间戳相减，100% 免疫任何时区差（如中美时差）导致的“瞬间归零”Bug！
+  const remaining = deadline - Date.now();
+  return Math.max(0, remaining);
+  
+  /* 原版纽约时间修正逻辑（在分钟级短测试下会因为时区差导致直接归零）：
   const currentNYTime = getNewYorkTime().getTime();
   const rawCurrentLocalTime = new Date().getTime();
-  const diffOffset = currentNYTime - rawCurrentLocalTime; // 纽约时区时间差修正
-
+  const diffOffset = currentNYTime - rawCurrentLocalTime; 
   const adjustedNow = Date.now() + diffOffset;
   const remaining = deadline - adjustedNow;
   return Math.max(0, remaining);
+  */
 }
 
 // 5. 格式化毫秒数为天、时、分、秒字符串 (用于 UI 渲染)
