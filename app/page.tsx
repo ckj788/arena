@@ -2657,22 +2657,22 @@ export default function Home() {
               setIsAuthOpen(false);
             }}
           />
-          <div className="relative w-full max-w-sm bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-6 sm:p-8 rounded-none z-10 animate-scale-in" style={{ borderColor: '#181715' }}>
-            <div className="flex justify-between items-center mb-6 border-b-2 border-pixel pb-3" style={{ borderColor: '#181715' }}>
-              <h3 className="font-pixel text-xs uppercase text-[#181715]">
+          <div className="relative w-full max-w-sm bg-[#131312]/95 border border-stone-850 shadow-2xl p-6 sm:p-8 rounded-xl z-10 animate-scale-in">
+            <div className="flex justify-between items-center mb-6 border-b border-stone-850 pb-3">
+              <h3 className="font-pixel text-xs uppercase text-[#faf5ef]">
                 Link Identity
               </h3>
               <button 
                 onClick={() => {
                   setIsAuthOpen(false);
                 }}
-                className="text-stone-400 hover:text-stone-700 text-sm font-bold"
+                className="text-stone-400 hover:text-stone-200 text-sm font-bold transition-all cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <p className="text-3xs text-stone-500 mb-6 font-mono leading-relaxed">
+            <p className="text-3xs text-stone-400 mb-6 font-mono leading-relaxed">
               * Connect your real social profile to authorize your dual-critique voting in the combat arena. Real identity makes your feedback globally verifiable and high-trust.
             </p>
 
@@ -2697,8 +2697,7 @@ export default function Home() {
                     alert("Sandbox Mock: Google authorization linked successfully!");
                   }
                 }}
-                className="btn-pixel w-full py-3 text-3xs font-pixel border-2 flex items-center justify-center space-x-2 transition-all shadow-pixel-sm"
-                style={{ color: '#181715', borderColor: '#181715', backgroundColor: '#faf5ef' }}
+                className="btn-pixel w-full py-3 text-3xs font-pixel border flex items-center justify-center space-x-2 transition-all cursor-pointer"
               >
                 <span className="text-sm">🔑</span> <span>CONNECT WITH GOOGLE</span>
               </button>
@@ -2723,8 +2722,7 @@ export default function Home() {
                     alert("Sandbox Mock: GitHub authorization linked successfully!");
                   }
                 }}
-                className="btn-pixel w-full py-3 text-3xs font-pixel border-2 flex items-center justify-center space-x-2 transition-all shadow-pixel-sm"
-                style={{ color: '#181715', borderColor: '#181715', backgroundColor: '#faf5ef' }}
+                className="btn-pixel w-full py-3 text-3xs font-pixel border flex items-center justify-center space-x-2 transition-all cursor-pointer"
               >
                 <span className="text-sm">🐙</span> <span>CONNECT WITH GITHUB</span>
               </button>

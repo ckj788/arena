@@ -1,12 +1,12 @@
 @import "tailwindcss";
 
 :root {
-  --background: #faf5ef;
-  --foreground: #181715;
+  --background: #0c0c0b;
+  --foreground: #faf5ef;
   --accent: #d97706;
-  --accent-light: #fdf2e9;
-  --border: #181715;
-  --border-muted: #e7e3db;
+  --accent-light: #1c1917;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-muted: rgba(255, 255, 255, 0.04);
 }
 
 @theme inline {
@@ -16,7 +16,7 @@
   --color-accent-light: var(--accent-light);
   --color-border-warm: var(--border-muted);
   --font-sans: var(--font-inter), system-ui, sans-serif;
-  --font-pixel: var(--font-pixel), monospace;
+  --font-pixel: var(--font-display), system-ui, sans-serif;
 }
 
 body {
@@ -270,66 +270,74 @@ body {
 }
 
 /* ========================================================
-   PIXEL UI SYSTEM — Borders / Shadows / Buttons
+   PREMIUM MODERN UI SYSTEM — Borders / Shadows / Buttons
    ======================================================== */
 
 .border-pixel {
-  border: 2px solid var(--border);
+  border: 1px solid var(--border);
+  border-radius: 8px;
 }
 
 .border-pixel-double {
-  border: 4px double var(--border);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 12px;
+  box-shadow: 0 0 30px rgba(217, 119, 6, 0.04);
 }
 
 .shadow-pixel {
-  box-shadow: 4px 4px 0px 0px var(--border);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.6), 0 1px 1px 0 rgba(255, 255, 255, 0.05) inset;
 }
 
 .shadow-pixel-lg {
-  box-shadow: 8px 8px 0px 0px var(--border);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.8), 0 1px 2px 0 rgba(255, 255, 255, 0.08) inset;
 }
 
 .shadow-pixel-sm {
-  box-shadow: 2px 2px 0px 0px var(--border);
+  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.4);
 }
 
-/* Tactile pixel buttons */
+/* Highly tactile premium buttons */
 .btn-pixel {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-family: var(--font-pixel);
-  font-size: 0.75rem;
-  font-weight: 400;
+  font-size: 0.72rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.75rem 1.5rem;
-  background-color: var(--background);
-  border: 2px solid var(--border);
-  box-shadow: 4px 4px 0px var(--border);
+  letter-spacing: 0.08em;
+  padding: 0.65rem 1.25rem;
+  background-color: rgba(255, 255, 255, 0.02);
+  color: #faf5ef;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   user-select: none;
 }
 
 .btn-pixel:hover {
-  transform: translate(-1px, -1px);
-  box-shadow: 5px 5px 0px var(--border);
-  background-color: var(--accent-light);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+  border-color: var(--accent);
+  background-color: rgba(255, 255, 255, 0.07);
 }
 
 .btn-pixel:active {
-  transform: translate(3px, 3px);
-  box-shadow: 1px 1px 0px var(--border);
+  transform: translateY(1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .btn-pixel-primary {
-  background-color: var(--accent);
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
   color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
 .btn-pixel-primary:hover {
-  background-color: #c25e00;
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 0 15px rgba(217, 119, 6, 0.35);
   color: #ffffff;
 }
 

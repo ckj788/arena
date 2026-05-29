@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Silkscreen } from "next/font/google";
+import { Inter, Outfit } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
@@ -8,9 +8,9 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const silkscreen = Silkscreen({
-  weight: "400",
-  variable: "--font-pixel",
+const outfit = Outfit({
+  weight: ["300", "400", "500", "600", "700", "800", "900"],
+  variable: "--font-display",
   subsets: ["latin"],
 });
 
@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${silkscreen.variable} h-full antialiased`}
+      className={`${inter.variable} ${outfit.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
