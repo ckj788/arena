@@ -85,6 +85,7 @@ export default function Home() {
   const [userLoggedIn, setUserLoggedIn] = useState(false);
   const [mockUserTwitter, setMockUserTwitter] = useState("");
   const [userAuthType, setUserAuthType] = useState<"google" | "github" | null>(null);
+  const [userSupabaseId, setUserSupabaseId] = useState<string>("");
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // Real-time Supabase Authentication session listener
@@ -99,6 +100,7 @@ export default function Home() {
             setUserLoggedIn(true);
             setMockUserTwitter(parsed.mockUserTwitter);
             setUserAuthType(parsed.userAuthType);
+            setUserSupabaseId(parsed.userSupabaseId || "");
           }
         } catch (e) {
           console.warn("Failed to parse sandbox session from localStorage:", e);
@@ -270,6 +272,7 @@ export default function Home() {
 
   const handleUserSession = (authUser: any) => {
     setUserLoggedIn(true);
+    setUserSupabaseId(authUser.id || "");
     const provider = authUser.app_metadata?.provider || authUser.identities?.[0]?.provider || "github";
     setUserAuthType(provider === "google" ? "google" : "github");
     
@@ -288,23 +291,27 @@ export default function Home() {
       localStorage.setItem("ship_duel_sandbox_user", JSON.stringify({
         userLoggedIn: true,
         mockUserTwitter: username,
-        userAuthType: provider === "google" ? "google" : "github"
+        userAuthType: provider === "google" ? "google" : "github",
+        userSupabaseId: authUser.id || ""
       }));
     }
   };
 
   const handleSandboxLogin = (provider: "google" | "github") => {
     const mockUser = provider === "google" ? "Google_Hacker_Sandbox" : "@GitHub_Indie_Sandbox";
+    const mockId = provider === "google" ? "mock_google_supabase_id" : "mock_github_supabase_id";
     setUserLoggedIn(true);
     setMockUserTwitter(mockUser);
     setUserAuthType(provider);
+    setUserSupabaseId(mockId);
     setIsAuthOpen(false);
     
     if (typeof window !== "undefined") {
       localStorage.setItem("ship_duel_sandbox_user", JSON.stringify({
         userLoggedIn: true,
         mockUserTwitter: mockUser,
-        userAuthType: provider
+        userAuthType: provider,
+        userSupabaseId: mockId
       }));
     }
   };
@@ -322,6 +329,7 @@ export default function Home() {
     setUserLoggedIn(false);
     setMockUserTwitter("");
     setUserAuthType(null);
+    setUserSupabaseId("");
     if (typeof window !== "undefined") {
       localStorage.removeItem("ship_duel_sandbox_user");
     }
@@ -785,7 +793,8 @@ export default function Home() {
       submittedAt: new Date().toISOString(),
       queueStatus: "waiting",
       votesCount: 0,
-      creatorUsername: mockUserTwitter
+      creatorUsername: mockUserTwitter,
+      creator_uid: userSupabaseId
     } as any;
 
     const updated = [...products, newProd];
@@ -998,7 +1007,12 @@ export default function Home() {
     setVoteError("");
   };
 
-  const isProductOwner = (p: Product, userTwitter: string) => {
+  const isProductOwner = (p: Product, userTwitter: string, userSubId?: string) => {
+    // 1. Primary Secure Check: Immutable Supabase Auth User ID matching (100% secure)
+    if (userSubId && (p as any).creator_uid && (p as any).creator_uid === userSubId) {
+      return true;
+    }
+
     if (!userTwitter) return false;
     const cleanTwitter = userTwitter.replace(/^@/, "").trim().toLowerCase();
     const cleanMakerTwitter = p.makerTwitter ? p.makerTwitter.replace(/^@/, "").trim().toLowerCase() : "";
@@ -1019,7 +1033,7 @@ export default function Home() {
       alert("Authentication Required!\n\nPlease link and verify your identity before exporting critiques.");
       return;
     }
-    const isOwner = isProductOwner(product, mockUserTwitter);
+    const isOwner = isProductOwner(product, mockUserTwitter, userSupabaseId);
     if (!isOwner) {
       alert("Access Denied!\n\nYou can only export critiques for your own registered products to respect developer privacy.");
       return;
@@ -1781,7 +1795,7 @@ export default function Home() {
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             {(() => {
-                              const isOwner = userLoggedIn && mockUserTwitter && isProductOwner(p, mockUserTwitter);
+                              const isOwner = userLoggedIn && mockUserTwitter && isProductOwner(p, mockUserTwitter, userSupabaseId);
                               return isOwner ? (
                                 <button
                                   onClick={() => handleExportCritiquesCsv(p)}
@@ -1811,7 +1825,7 @@ export default function Home() {
             <>
               {/* GLADIATOR DASHBOARD FOR COMPETITORS */}
               {userLoggedIn && mockUserTwitter && (() => {
-                const myShips = getLeaderboardData().filter(p => isProductOwner(p, mockUserTwitter));
+                const myShips = getLeaderboardData().filter(p => isProductOwner(p, mockUserTwitter, userSupabaseId));
                 
                 return (
                   <div className="bg-[#181715]/90 border-2 border-[#d97706]/40 p-6 mb-8 text-[#faf5ef] shadow-pixel-md text-left">
@@ -1915,6 +1929,46 @@ export default function Home() {
                         })}
                       </div>
                     )}
+
+                    {/* Permanent Historical Archive Section */}
+                    <div className="border-t border-dashed border-stone-850 mt-6 pt-6 text-left">
+                      <h4 className="font-pixel text-4xs text-[#d97706] uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                        📜 HISTORICAL ARCHIVES & CRITIQUE VAULT
+                      </h4>
+                      <p className="text-5xs font-sans text-stone-400 mb-4 leading-relaxed">
+                        Even after tournament slates are reset or 7-day rounds expire, your historical peer critiques are securely archived. Access and export your dual critiques at any time in the future.
+                      </p>
+                      {myShips.length === 0 ? (
+                        <p className="text-5xs font-mono text-stone-500 italic uppercase">
+                          No archived projects found in the colosseum records.
+                        </p>
+                      ) : (
+                        <div className="space-y-2.5">
+                          {myShips.map(ship => (
+                            <div key={`archived_${ship.id}`} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#11100f] border border-[#d97706]/10 p-3 shadow-pixel-xs gap-3">
+                              <div className="flex items-center space-x-3">
+                                <span className="text-base">{ship.logo}</span>
+                                <div>
+                                  <span className="font-pixel text-3xs uppercase block text-[#faf5ef]">{ship.title}</span>
+                                  <span className="text-5xs font-mono text-stone-500 uppercase">
+                                    Submitted: {new Date(ship.submittedAt).toLocaleDateString()} | Total AP Score: {ship.points || 0}
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleExportCritiquesCsv(ship)}
+                                className="inline-flex items-center space-x-1.5 bg-stone-900 border border-stone-800 text-stone-300 px-3 py-1 text-5xs font-pixel rounded-none hover:bg-stone-800 hover:text-white transition-all cursor-pointer font-bold uppercase shadow-pixel-xs self-end sm:self-auto"
+                                title="Export archived critiques as CSV"
+                              >
+                                <span>📥 DOWNLOAD CSV ARCHIVE</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 );
               })()}
