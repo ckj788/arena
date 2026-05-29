@@ -33,8 +33,6 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
-  const [isRealtimeSimulating, setIsRealtimeSimulating] = useState(false);
-  const [simIntervalId, setSimIntervalId] = useState<any>(null);
 
   // Window scroll position tracking state
   const [scrollY, setScrollY] = useState(0);
@@ -613,7 +611,6 @@ export default function Home() {
         setActiveRoundRemainingMs(ms);
         
         if (ms <= 0) {
-          setIsRealtimeSimulating(false);
           const advanced = advanceTournamentRound(bracket);
           
           if (advanced.status === "completed" && advanced.winner) {
@@ -657,39 +654,6 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [bracket, activeMatch]);
 
-  // Realtime simulation logic (offline sandbox votes)
-  useEffect(() => {
-    if (isRealtimeSimulating && bracket) {
-      const interval = setInterval(() => {
-        setBracket(prev => {
-          if (!prev) return null;
-          const updated = injectMockVotes(prev);
-          if (activeMatch) {
-            let freshMatch = null;
-            const round = getActiveRound(updated);
-            if (round === 1) freshMatch = updated.round1.find(m => m.id === activeMatch.id);
-            else if (round === 2) freshMatch = updated.round2.find(m => m.id === activeMatch.id);
-            else if (round === 3) freshMatch = updated.round3.find(m => m.id === activeMatch.id);
-            else if (round === 4) freshMatch = updated.round4.find(m => m.id === activeMatch.id);
-            if (freshMatch) {
-              setActiveMatch(freshMatch);
-            }
-          }
-          return updated;
-        });
-      }, 1500);
-      setSimIntervalId(interval);
-    } else {
-      if (simIntervalId) {
-        clearInterval(simIntervalId);
-        setSimIntervalId(null);
-      }
-    }
-    return () => {
-      if (simIntervalId) clearInterval(simIntervalId);
-    };
-  }, [isRealtimeSimulating, activeMatch]);
-
   // Reset Sandbox
   const handleReset = () => {
     localStorage.clear();
@@ -697,7 +661,6 @@ export default function Home() {
     setProducts(freshProds);
     setBracket(null);
     setActiveMatch(null);
-    setIsRealtimeSimulating(false);
     setIsSubmitOpen(false);
     setVotingMatch(null);
     setVotingTarget(null);
@@ -845,7 +808,6 @@ export default function Home() {
   // Advance Round
   const handleAdvanceRound = () => {
     if (!bracket) return;
-    setIsRealtimeSimulating(false);
     
     let updated;
     if (bracket.status === "preparing") {
@@ -2289,20 +2251,7 @@ export default function Home() {
                                 }]`}
                           </span>
                         </div>
-                        <div className="flex items-center space-x-3">
-                          {bracket.status === "active" && (
-                            <button
-                              onClick={() => setIsRealtimeSimulating(!isRealtimeSimulating)}
-                              className={`font-pixel text-3xs px-3 py-1.5 border border-pixel ${
-                                isRealtimeSimulating
-                                  ? "bg-red-100 text-red-700 animate-pulse"
-                                  : "bg-[#faf5ef] text-stone-600 hover:bg-[#fdf2e9]"
-                              }`}
-                            >
-                              {isRealtimeSimulating ? "⏸ Stop Realtime Simulation" : "⚡ Simulate Realtime Votes"}
-                            </button>
-                          )}
-                        </div>
+
                       </div>
 
                   {/* ACTIVE 1V1 DUEL MATCHUP STAGE CARD */}
