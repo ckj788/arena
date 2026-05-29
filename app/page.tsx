@@ -1315,43 +1315,66 @@ export default function Home() {
   };
 
   const getLeaderboardData = () => {
-    return products.map(p => {
-      let bracketVotes = 0;
-      let wins = 0;
-      if (bracket) {
-        const allMatches = [
-          ...bracket.round1,
-          ...bracket.round2,
-          ...bracket.round3,
-          ...bracket.round4
-        ];
-        allMatches.forEach(m => {
-          if (m.productA.id === p.id) {
-            bracketVotes += m.votesA;
-            if (m.winnerId === p.id) wins += 1;
+    // If the active bracket is completed, show the completed competitors on the leaderboard so users can see the final standing of the season.
+    // Otherwise, filter to show only the current season's active/waiting competitors to keep it clean.
+    const showCompleted = bracket && bracket.status === "completed";
+
+    return products
+      .filter(p => {
+        if (showCompleted) {
+          // Show only products that participated in the completed bracket
+          if (bracket) {
+            const allMatches = [
+              ...bracket.round1,
+              ...bracket.round2,
+              ...bracket.round3,
+              ...bracket.round4
+            ];
+            return allMatches.some(m => m.productA.id === p.id || m.productB.id === p.id);
           }
-          if (m.productB.id === p.id) {
-            bracketVotes += m.votesB;
-            if (m.winnerId === p.id) wins += 1;
-          }
-        });
-      }
-      
-      const isShiplogActive = p.queueStatus === "active" || p.id === "p1" || p.id === "p5" || p.id === "p11";
-      const shiplogBonus = isShiplogActive ? 50 : 0;
-      const points = bracketVotes + (wins * 150) + shiplogBonus;
-      
-      return {
-        ...p,
-        wins,
-        bracketVotes,
-        points
-      };
-    }).sort((a, b) => b.points - a.points);
+        }
+        // During preparing/active, show only current season active/waiting products
+        return p.queueStatus === "active" || p.queueStatus === "waiting";
+      })
+      .map(p => {
+        let bracketVotes = 0;
+        let wins = 0;
+        if (bracket) {
+          const allMatches = [
+            ...bracket.round1,
+            ...bracket.round2,
+            ...bracket.round3,
+            ...bracket.round4
+          ];
+          allMatches.forEach(m => {
+            if (m.productA.id === p.id) {
+              bracketVotes += m.votesA;
+              if (m.winnerId === p.id) wins += 1;
+            }
+            if (m.productB.id === p.id) {
+              bracketVotes += m.votesB;
+              if (m.winnerId === p.id) wins += 1;
+            }
+          });
+        }
+        
+        const isShiplogActive = p.queueStatus === "active" || p.id === "p1" || p.id === "p5" || p.id === "p11";
+        const shiplogBonus = isShiplogActive ? 50 : 0;
+        const points = bracketVotes + (wins * 150) + shiplogBonus;
+        
+        return {
+          ...p,
+          wins,
+          bracketVotes,
+          points
+        };
+      }).sort((a, b) => b.points - a.points);
   };
 
   const activeRoundNum = bracket ? getActiveRound(bracket) : 0;
   const waitingProducts = products.filter(p => p.queueStatus === "waiting");
+  const currentSeasonNum = pastChampions.length + 1;
+  const currentSeasonStr = String(currentSeasonNum).padStart(2, "0");
 
   return (
     <div className={`flex-1 bg-[#121110] text-[#181715] font-sans selection:bg-[#fdf2e9] crt-screen min-h-screen relative ${isShaking ? "animate-arena-shake" : ""}`}>
@@ -1543,7 +1566,7 @@ export default function Home() {
               ) : (
                 <div className="py-4 text-center">
                   <span className="text-3xl block mb-2">🛡️</span>
-                  <span className="font-pixel text-4xs text-stone-500 uppercase block mb-1">Season 01 Active</span>
+                  <span className="font-pixel text-4xs text-stone-500 uppercase block mb-1">Season {currentSeasonStr} Active</span>
                   <p className="text-5xs font-mono text-stone-400 leading-relaxed px-2">
                     No champion has conquered the arena yet. Be the first to secure eternal glory!
                   </p>
@@ -1790,7 +1813,7 @@ export default function Home() {
                ======================================================== */
             <div className="bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel-lg p-6 sm:p-10 text-[#181715] animate-scale-in">
               <div className="flex justify-between items-center mb-6 border-b-2 border-pixel pb-3">
-                <h3 className="font-pixel text-xs uppercase text-[#181715]">GLOBAL AP RANKINGS (SEASON 01)</h3>
+                <h3 className="font-pixel text-xs uppercase text-[#181715]">GLOBAL AP RANKINGS (SEASON {currentSeasonStr})</h3>
                 <span className="text-3xs font-pixel text-[#d97706]">ARENA POINTS = VOTES + (WINS * 150)</span>
               </div>
 
@@ -2452,7 +2475,7 @@ export default function Home() {
 
                       {/* Header Badge */}
                       <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-300 text-[#d97706] font-pixel text-3xs px-4 py-1.5 uppercase mb-6 shadow-pixel-xs animate-pixel-bounce">
-                        <span>🏆</span> <span>SEASON 01 COLOSEUM CHAMPION</span> <span>🏆</span>
+                        <span>🏆</span> <span>SEASON {currentSeasonStr} COLOSEUM CHAMPION</span> <span>🏆</span>
                       </div>
 
                       {/* Winner Info */}
