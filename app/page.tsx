@@ -914,16 +914,10 @@ export default function Home() {
 
     const round = getActiveRound(bracket);
 
-    // Limit to one vote per user per round (across all matches in the active round)
-    let roundMatches: Match[] = [];
-    if (round === 1) roundMatches = bracket.round1;
-    else if (round === 2) roundMatches = bracket.round2;
-    else if (round === 3) roundMatches = bracket.round3;
-    else if (round === 4) roundMatches = bracket.round4;
-
-    const alreadyVoted = roundMatches.some(m => m.votedUserIds && m.votedUserIds.includes(mockUserTwitter));
-    if (alreadyVoted) {
-      setVoteError("Voting Limit Reached! To ensure fair play, each user is limited to casting exactly ONE vote in total per tournament round.");
+    // Limit to one vote per user per separate 1v1 matchup (within a round)
+    const alreadyVotedOnThisMatch = votingMatch.votedUserIds && votingMatch.votedUserIds.includes(mockUserTwitter);
+    if (alreadyVotedOnThisMatch) {
+      setVoteError("Voting Limit Reached! To ensure fair play, you can only cast ONE vote per separate 1v1 matchup.");
       return;
     }
     const voteForA = votingTarget.id === votingMatch.productA.id;
