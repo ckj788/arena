@@ -11,6 +11,8 @@ export interface Product {
   submittedAt: string;
   queueStatus: "waiting" | "active" | "completed";
   votesCount: number;
+  creatorUsername?: string;
+  creator_uid?: string;
 }
 
 export interface Match {

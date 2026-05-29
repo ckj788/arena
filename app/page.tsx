@@ -768,6 +768,22 @@ export default function Home() {
       return;
     }
 
+    // Limit to one product per person in the current season (waiting or active)
+    const hasExisting = products.some(p => {
+      if (p.queueStatus !== "waiting" && p.queueStatus !== "active") return false;
+      if (userSupabaseId && p.creator_uid === userSupabaseId) return true;
+      if (mockUserTwitter && p.creatorUsername && p.creatorUsername.toLowerCase() === mockUserTwitter.toLowerCase()) return true;
+      const inputTwitter = newTwitter ? newTwitter.replace(/^@/, "").toLowerCase() : "";
+      const existingTwitter = p.makerTwitter ? p.makerTwitter.replace(/^@/, "").toLowerCase() : "";
+      if (inputTwitter && inputTwitter !== "anonymous" && inputTwitter === existingTwitter) return true;
+      return false;
+    });
+
+    if (hasExisting) {
+      alert("Submission Limit Exceeded!\n\nTo ensure fair play, each maker is allowed only ONE product in the waiting list or active queue per tournament cycle.");
+      return;
+    }
+
     const newProd: Product = {
       id: `p_user_${Date.now()}`,
       title: newTitle,
@@ -897,6 +913,19 @@ export default function Home() {
     if (!bracket || !votingMatch || !votingTarget) return;
 
     const round = getActiveRound(bracket);
+
+    // Limit to one vote per user per round (across all matches in the active round)
+    let roundMatches: Match[] = [];
+    if (round === 1) roundMatches = bracket.round1;
+    else if (round === 2) roundMatches = bracket.round2;
+    else if (round === 3) roundMatches = bracket.round3;
+    else if (round === 4) roundMatches = bracket.round4;
+
+    const alreadyVoted = roundMatches.some(m => m.votedUserIds && m.votedUserIds.includes(mockUserTwitter));
+    if (alreadyVoted) {
+      setVoteError("Voting Limit Reached! To ensure fair play, each user is limited to casting exactly ONE vote in total per tournament round.");
+      return;
+    }
     const voteForA = votingTarget.id === votingMatch.productA.id;
 
     const updateVotes = (matches: Match[]): Match[] => {
@@ -1545,6 +1574,16 @@ export default function Home() {
                           </p>
                         </div>
                       </div>
+                      
+                      <a 
+                        href={reigning.url} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                      >
+                        <span>🌐 LIVE DEMO URL</span>
+                        <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                      </a>
                       
                       <div className="flex items-center justify-between border-t border-dashed border-stone-300 pt-3 text-4xs font-mono text-stone-600 mb-2">
                         <div className="flex items-center space-x-1.5">
