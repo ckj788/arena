@@ -585,7 +585,7 @@ export default function Home() {
     const timer = setInterval(() => {
       // A. Active bracket countdown and automatic round settlement
       if (bracket && bracket.status === "preparing") {
-        const ms = getMillisecondsToNextNYMidnight();
+        const ms = getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
         setCountdownToMidnightMs(ms);
         
         if (ms <= 0) {
