@@ -496,7 +496,7 @@ export default function Home() {
             // If a newer query request has already been dispatched, discard this stale response immediately
             // to completely prevent out-of-order latency rollbacks/pullbacks in GUI!
             if (reqTime < latestRequestTimeRef.current) {
-              console.warn("⚠️ [SHIP OR DUEL] Discarded out-of-order stale fetchCloudBracket response.");
+              console.warn("⚠️ [INDIE CLASH] Discarded out-of-order stale fetchCloudBracket response.");
               return;
             }
 
@@ -506,7 +506,7 @@ export default function Home() {
               // is still "preparing", do NOT let the stale database state overwrite our local advanced state.
               const localStatus = latestBracketRef.current?.status;
               if (b.status === "preparing" && (localStatus === "active" || localStatus === "completed")) {
-                console.warn("⚠️ [SHIP OR DUEL] Ignored stale 'preparing' database status to prevent downgrade race condition.");
+                console.warn("⚠️ [INDIE CLASH] Ignored stale 'preparing' database status to prevent downgrade race condition.");
               } else {
                 setBracket(b);
               }
@@ -1488,17 +1488,34 @@ export default function Home() {
           <div className="max-w-xl relative z-20">
             <div className="flex flex-col">
               <h1 className="font-sans font-black tracking-tighter leading-[0.85] text-[#faf5ef] text-6xl sm:text-7xl md:text-8xl flex flex-col animate-hero-title">
-                <span className="drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">SHIP</span>
-                <span className="text-[#dc2626] drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">OR DUEL</span>
+                <span className="drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">INDIE</span>
+                <span className="text-[#dc2626] drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">CLASH</span>
               </h1>
               <p className="text-[#dc2626] font-mono text-2xs font-bold tracking-widest mt-4 uppercase animate-hero-sub">
-                miss the launch date, get fed to the lions.
+                1v1 head-to-head product duels & peer critiques.
               </p>
             </div>
             
             <p className="text-[#e7e3db] font-sans text-xs sm:text-sm mt-6 leading-relaxed max-w-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] animate-hero-sub">
-              The ultimate 1v1 tournament arena for creators. Duel openly, collect genuine double-sided peer critiques, minimize vote manipulation, and rise to the top of the leaderboard.
+              Enter the colosseum where launched indie products battle in bracket-style tournaments. Vote on live duels by trading deep, constructive reviews. No bots, no blind upvotes—just authentic developer feedback, exposure, and leaderboard glory.
             </p>
+
+            {/* 3-Step Action Guide */}
+            <div className="mt-6 border-2 border-dashed border-[#d97706]/40 bg-[#181715]/90 p-4 font-mono text-4xs text-stone-300 space-y-2 uppercase leading-normal shadow-pixel-xs select-none max-w-md animate-hero-sub">
+              <span className="text-3xs font-pixel text-[#d97706] block mb-1">🛡️ HOW TO PLAY:</span>
+              <div className="flex items-start space-x-2">
+                <span className="text-[#d97706] font-bold shrink-0">1. 🔑 LINK IDENTITY:</span>
+                <span>Verify your account via Google or GitHub in 1-click.</span>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-[#d97706] font-bold shrink-0">2. ⚔️ ENTER ARENA:</span>
+                <span>Submit your product link & custom logo to waitlist.</span>
+              </div>
+              <div className="flex items-start space-x-2">
+                <span className="text-[#d97706] font-bold shrink-0">3. 🛡️ DUEL & VOTE:</span>
+                <span>Cast votes on live 1v1 matchups by trading reviews!</span>
+              </div>
+            </div>
 
             {/* Dual Core CTAs */}
             <div className="mt-8 flex flex-wrap gap-4 items-center animate-hero-cta">
@@ -3588,7 +3605,7 @@ export default function Home() {
               <div>
                 <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">1. Scope & Commitment</h4>
                 <p className="text-stone-350">
-                  At Ship or Duel (operated by @MaberFate), we respect your privacy. This policy outlines how we handle data for our 1v1 tournament arena website. We are committed to data minimization and user security.
+                  At Indie Clash (operated by @MaberFate), we respect your privacy. This policy outlines how we handle data for our 1v1 tournament arena website. We are committed to data minimization and user security.
                 </p>
               </div>
 
@@ -3637,7 +3654,7 @@ export default function Home() {
               <div>
                 <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">4. Data Sharing & Retention</h4>
                 <p className="text-stone-350">
-                  We do not sell, rent, or lease your personal information. Your profile details, submitted critiques, and project links are publicly displayed as part of the core Ship or Duel experience. All transaction sessions are handled via encrypted Supabase storage.
+                  We do not sell, rent, or lease your personal information. Your profile details, submitted critiques, and project links are publicly displayed as part of the core Indie Clash experience. All transaction sessions are handled via encrypted Supabase storage.
                 </p>
               </div>
 
@@ -3651,7 +3668,7 @@ export default function Home() {
             </div>
 
             <div className="mt-6 text-right border-t border-stone-850 pt-4 flex justify-between items-center">
-              <span className="text-5xs font-mono text-stone-555 uppercase">SHIP OR DUEL PROTOCOL v1.0</span>
+              <span className="text-5xs font-mono text-stone-555 uppercase">INDIE CLASH PROTOCOL v1.0</span>
               <button
                 onClick={() => setIsPrivacyOpen(false)}
                 className="btn-pixel py-2.5 px-6 text-3xs font-pixel shadow-pixel-xs transition-all bg-[#1c1917] text-white border-2 hover:bg-stone-900 rounded-lg cursor-pointer"
@@ -3699,14 +3716,14 @@ export default function Home() {
               <div>
                 <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">1. Acceptance of Terms</h4>
                 <p className="text-stone-350">
-                  By accessing and using Ship or Duel (located at this website, created by @MaberFate), you agree to be bound by these Terms of Use. If you do not agree, please discontinue use immediately.
+                  By accessing and using Indie Clash (located at this website, created by @MaberFate), you agree to be bound by these Terms of Use. If you do not agree, please discontinue use immediately.
                 </p>
               </div>
 
               <div>
                 <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">2. Description of Service</h4>
                 <p className="text-stone-350">
-                  Ship or Duel is a 1v1 product tournament bracket platform. Users submit project details, connect identity via OAuth, and participate in peer-critique voting to rank products in live battles.
+                  Indie Clash is a 1v1 product tournament bracket platform. Users submit project details, connect identity via OAuth, and participate in peer-critique voting to rank products in live battles.
                 </p>
               </div>
 
@@ -3734,14 +3751,14 @@ export default function Home() {
               <div>
                 <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">4. Intellectual Property & Submissions</h4>
                 <p className="text-stone-350">
-                  You retain ownership of all intellectual property rights to the products you submit. By submitting a product, you grant Ship or Duel a worldwide, non-exclusive, royalty-free license to display your product details (title, tagline, emoji, screenshots, maker info, and URL) publicly in the arena.
+                  You retain ownership of all intellectual property rights to the products you submit. By submitting a product, you grant Indie Clash a worldwide, non-exclusive, royalty-free license to display your product details (title, tagline, emoji, screenshots, maker info, and URL) publicly in the arena.
                 </p>
               </div>
 
               <div>
                 <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">5. Limitation of Liability</h4>
                 <p className="text-stone-350">
-                  Ship or Duel is provided "as is" and "as available". We do not guarantee uninterrupted service or error-free matchups. We reserve the right to modify, pause, or terminate tournament systems, brackets, or database values at our sole discretion without notice.
+                  Indie Clash is provided "as is" and "as available". We do not guarantee uninterrupted service or error-free matchups. We reserve the right to modify, pause, or terminate tournament systems, brackets, or database values at our sole discretion without notice.
                 </p>
               </div>
 

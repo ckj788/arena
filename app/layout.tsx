@@ -15,8 +15,8 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "THE ARENA — H2H Product Tournament",
-  description: "Solo builders compete in 1v1 pixel brackets. Ship fast, duel in public, and get real feedback.",
+  title: "INDIE CLASH — 1v1 Product Tournament Arena",
+  description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
 };
 
 export default function RootLayout({
