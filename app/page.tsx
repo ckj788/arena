@@ -3352,7 +3352,15 @@ export default function Home() {
             </div>
 
             <button
-              onClick={() => setIsSuccessOpen(false)}
+              onClick={() => {
+                setIsSuccessOpen(false);
+                setTimeout(() => {
+                  const element = document.getElementById("tournament-dashboard");
+                  if (element) {
+                    element.scrollIntoView({ behavior: "smooth" });
+                  }
+                }, 100);
+              }}
               className="btn-pixel btn-pixel-primary w-full py-2.5 text-3xs tracking-wider"
             >
               ENTER THE ARENA ➔
