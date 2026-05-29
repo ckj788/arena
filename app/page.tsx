@@ -1007,6 +1007,15 @@ export default function Home() {
     setVoteError("");
   };
 
+  const renderLogo = (logoStr: string, className = "w-6 h-6 object-contain") => {
+    if (!logoStr) return null;
+    const isImg = logoStr.startsWith("data:image") || logoStr.startsWith("http") || logoStr.startsWith("/");
+    if (isImg) {
+      return <img src={logoStr} alt="Logo" className={`${className} inline-block shrink-0 rounded-md object-contain`} />;
+    }
+    return <span className="inline-block shrink-0">{logoStr}</span>;
+  };
+
   const isProductOwner = (p: Product, userTwitter: string, userSubId?: string) => {
     // 1. Primary Secure Check: Immutable Supabase Auth User ID matching (100% secure)
     if (userSubId && (p as any).creator_uid && (p as any).creator_uid === userSubId) {
@@ -1743,7 +1752,7 @@ export default function Home() {
                           </td>
                           <td className="py-3.5 px-4">
                             <div className="flex items-center space-x-3">
-                              <span className="text-xl shrink-0">{p.logo}</span>
+                              {renderLogo(p.logo, "w-6 h-6")}
                               <div className="min-w-0">
                                 <a 
                                   href={p.url} 
@@ -1891,7 +1900,7 @@ export default function Home() {
                               <div>
                                 <div className="flex justify-between items-start mb-2">
                                   <div className="flex items-center space-x-2">
-                                    <span className="text-xl">{ship.logo}</span>
+                                    {renderLogo(ship.logo, "w-6 h-6")}
                                     <div>
                                       <h4 className="font-pixel text-2xs uppercase text-[#faf5ef]">{ship.title}</h4>
                                       <span className={`inline-block text-5xs font-pixel px-1.5 py-0.5 border uppercase ${statusColor} mt-1`}>
@@ -1947,7 +1956,7 @@ export default function Home() {
                           {myShips.map(ship => (
                             <div key={`archived_${ship.id}`} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#11100f] border border-[#d97706]/10 p-3 shadow-pixel-xs gap-3">
                               <div className="flex items-center space-x-3">
-                                <span className="text-base">{ship.logo}</span>
+                                {renderLogo(ship.logo, "w-5 h-5")}
                                 <div>
                                   <span className="font-pixel text-3xs uppercase block text-[#faf5ef]">{ship.title}</span>
                                   <span className="text-5xs font-mono text-stone-500 uppercase">
@@ -2030,7 +2039,7 @@ export default function Home() {
                           <div key={p.id} className="p-5 border-2 border-pixel bg-[#faf5ef]/90 hover:bg-[#faf5ef] backdrop-blur-xs transition-all duration-200 flex flex-col justify-between shadow-pixel-sm">
                             <div>
                               <div className="flex justify-between items-start mb-3">
-                                <span className="text-2xl">{p.logo}</span>
+                                {renderLogo(p.logo, "w-8 h-8")}
                                 <span className="bg-[#fdf2e9] border border-pixel text-[#d97706] text-3xs font-pixel px-2 py-0.5 uppercase">
                                   SHIP: {p.shipTimeframe}
                                 </span>
@@ -2118,7 +2127,7 @@ export default function Home() {
                             <div key={p.id} className="p-5 border-2 border-pixel bg-[#faf5ef]/90 backdrop-blur-xs flex flex-col justify-between shadow-pixel-sm opacity-90">
                               <div>
                                 <div className="flex justify-between items-start mb-3">
-                                  <span className="text-2xl">{p.logo}</span>
+                                  {renderLogo(p.logo, "w-8 h-8")}
                                   <span className="bg-[#fdf2e9] border border-pixel text-[#d97706] text-3xs font-pixel px-2 py-0.5 uppercase">
                                     SHIP: {p.shipTimeframe}
                                   </span>
@@ -2238,7 +2247,7 @@ export default function Home() {
                         <div className="md:col-span-2 p-5 border-2 border-pixel bg-stone-50 flex flex-col justify-between min-h-[220px]">
                           <div>
                             <div className="flex justify-between items-start mb-3">
-                              <span className="text-3xl">{activeMatch.productA.logo}</span>
+                              {renderLogo(activeMatch.productA.logo, "w-10 h-10")}
                               <span className="bg-[#fdf2e9] border border-pixel text-[#d97706] text-4xs font-pixel px-2 py-0.5 uppercase">
                                 SHIP: {activeMatch.productA.shipTimeframe}
                               </span>
@@ -2333,7 +2342,7 @@ export default function Home() {
                         <div className="md:col-span-2 p-5 border-2 border-pixel bg-stone-50 flex flex-col justify-between min-h-[220px]">
                           <div>
                             <div className="flex justify-between items-start mb-3">
-                              <span className="text-3xl">{activeMatch.productB.logo}</span>
+                              {renderLogo(activeMatch.productB.logo, "w-10 h-10")}
                               <span className="bg-[#fdf2e9] border border-pixel text-[#d97706] text-4xs font-pixel px-2 py-0.5 uppercase">
                                 SHIP: {activeMatch.productB.shipTimeframe}
                               </span>
@@ -2808,16 +2817,62 @@ export default function Home() {
 
                 <div>
                   <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
-                    Emoji Icon *
+                    Product Logo * (Max 2MB)
                   </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="🚀"
-                    value={newLogo}
-                    onChange={(e) => setNewLogo(e.target.value)}
-                    className="px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all w-20 text-center text-xl"
-                  />
+                  <div className="flex items-center space-x-4">
+                    <label 
+                      htmlFor="logo-upload" 
+                      className="cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-stone-850 hover:border-[#d97706]/85 bg-stone-900 w-24 h-24 rounded-lg transition-all shadow-inner relative overflow-hidden group select-none"
+                    >
+                      {newLogo ? (
+                        newLogo.startsWith("data:image") || newLogo.startsWith("http") ? (
+                          <img src={newLogo} alt="Preview" className="w-full h-full object-contain p-2" />
+                        ) : (
+                          <span className="text-3xl animate-pixel-bounce">{newLogo}</span>
+                        )
+                      ) : (
+                        <span className="text-3xl text-stone-600">➕</span>
+                      )}
+                      
+                      {/* Subtle hover overlay */}
+                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <span className="text-5xs font-pixel uppercase text-stone-300">Upload</span>
+                      </div>
+                    </label>
+                    
+                    <input
+                      type="file"
+                      id="logo-upload"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // Enforce 2MB size limit
+                          if (file.size > 2 * 1024 * 1024) {
+                            alert("File size exceeds the 2MB limit!\n\nPlease choose a smaller image (under 2MB) to ensure smooth performance.");
+                            e.target.value = "";
+                            return;
+                          }
+                          
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            if (event.target?.result) {
+                              setNewLogo(event.target.result as string);
+                            }
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    
+                    <div className="text-left">
+                      <span className="text-5xs font-pixel text-[#d97706] uppercase block mb-1">Image Specs</span>
+                      <p className="text-5xs text-stone-400 leading-normal max-w-[200px]">
+                        PNG, JPG, or SVG image. If skipped, your project will start with the default booster rocket (🚀).
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="pt-4">
