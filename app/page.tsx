@@ -1358,9 +1358,7 @@ export default function Home() {
           });
         }
         
-        const isShiplogActive = p.queueStatus === "active" || p.id === "p1" || p.id === "p5" || p.id === "p11";
-        const shiplogBonus = isShiplogActive ? 50 : 0;
-        const points = bracketVotes + (wins * 150) + shiplogBonus;
+        const points = bracketVotes + (wins * 150);
         
         return {
           ...p,
@@ -1530,7 +1528,9 @@ export default function Home() {
                   return (
                     <>
                       <div className="flex items-start space-x-3 mb-4">
-                        <span className="text-3xl shrink-0 mt-1">{reigning.logo}</span>
+                        <span className="text-3xl shrink-0 mt-1 flex items-center justify-center">
+                          {renderLogo(reigning.logo, "w-8 h-8")}
+                        </span>
                         <div>
                           <a 
                             href={reigning.url} 
@@ -1827,7 +1827,6 @@ export default function Home() {
                       <th className="py-3 px-4 text-center hidden sm:table-cell">Wins</th>
                       <th className="py-3 px-4 text-center">Votes</th>
                       <th className="py-3 px-4 text-center">AP Score</th>
-                      <th className="py-3 px-4 text-center">Shiplog Link</th>
                       <th className="py-3 px-4 text-center">Critiques</th>
                     </tr>
                   </thead>
@@ -1835,7 +1834,6 @@ export default function Home() {
                     {getLeaderboardData().map((p, idx) => {
                       const isTop3 = idx < 3;
                       const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}`;
-                      const isShiplogActive = p.queueStatus === "active" || p.id === "p1" || p.id === "p5" || p.id === "p11";
                       return (
                         <tr key={p.id} className={`hover:bg-stone-50 transition-all ${isTop3 ? "bg-[#fdf2e9]/20 font-semibold" : ""}`}>
                           <td className="py-3.5 px-4 text-center font-pixel text-xs text-[#d97706]">
@@ -1878,20 +1876,6 @@ export default function Home() {
                           </td>
                           <td className="py-3.5 px-4 text-center font-pixel text-3xs text-[#d97706]">
                             {p.points} AP
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            {isShiplogActive ? (
-                              <a 
-                                href="https://www.ship-or-die.com/" 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="inline-flex items-center space-x-1 bg-emerald-50 border border-emerald-300 text-emerald-700 px-2 py-0.5 text-3xs font-pixel rounded-none hover:bg-emerald-100 hover:border-emerald-500 transition-all"
-                              >
-                                <span>🔥 ACTIVE</span>
-                              </a>
-                            ) : (
-                              <span className="text-stone-400 text-4xs uppercase">UNLINKED</span>
-                            )}
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             {(() => {
@@ -2140,15 +2124,14 @@ export default function Home() {
                               <p className="text-xs text-stone-500 leading-relaxed mb-4 line-clamp-2">{p.tagline}</p>
                             </div>
 
-                            {/* Display Shiplog status tag */}
                             <a 
                               href={p.url} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs"
+                              className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
                             >
-                              <span>🚀 Shiplog Track: <strong className="text-emerald-700 font-pixel">ACTIVE ✓</strong></span>
-                              <span className="text-4xs text-[#d97706] underline font-pixel">VERIFY ➔</span>
+                              <span>🌐 LIVE DEMO URL</span>
+                              <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
                             </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
@@ -2229,10 +2212,10 @@ export default function Home() {
                                 href={p.url} 
                                 target="_blank" 
                                 rel="noreferrer"
-                                className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs"
+                                className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
                               >
-                                <span>🚀 Shiplog Track: <strong className="text-emerald-700 font-pixel">ACTIVE ✓</strong></span>
-                                <span className="text-4xs text-[#d97706] underline font-pixel">VERIFY ➔</span>
+                                <span>🌐 LIVE DEMO URL</span>
+                                <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
                               </a>
 
                               <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
@@ -2334,10 +2317,10 @@ export default function Home() {
                               href={activeMatch.productA.url} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between"
+                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
                             >
-                              <span>🚀 Shiplog Track: <strong className="text-emerald-700 font-pixel">ACTIVE ✓</strong></span>
-                              <span className="text-5xs text-[#d97706] underline font-pixel">VERIFY</span>
+                              <span>🌐 LIVE DEMO URL</span>
+                              <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
                             </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
@@ -2426,10 +2409,10 @@ export default function Home() {
                               href={activeMatch.productB.url} 
                               target="_blank" 
                               rel="noreferrer"
-                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between"
+                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
                             >
-                              <span>🚀 Shiplog Track: <strong className="text-emerald-700 font-pixel">ACTIVE ✓</strong></span>
-                              <span className="text-5xs text-[#d97706] underline font-pixel">VERIFY</span>
+                              <span>🌐 LIVE DEMO URL</span>
+                              <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
                             </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
@@ -2479,8 +2462,10 @@ export default function Home() {
                       </div>
 
                       {/* Winner Info */}
-                      <h2 className="text-4xl sm:text-5xl font-sans font-black tracking-tighter leading-none text-[#181715] uppercase mb-4">
-                        {bracket.winner.logo} {bracket.winner.title} {bracket.winner.logo}
+                      <h2 className="text-4xl sm:text-5xl font-sans font-black tracking-tighter leading-none text-[#181715] uppercase mb-4 flex items-center justify-center flex-wrap gap-2">
+                        {renderLogo(bracket.winner.logo, "w-12 h-12")}
+                        <span>{bracket.winner.title}</span>
+                        {renderLogo(bracket.winner.logo, "w-12 h-12")}
                       </h2>
                       <p className="text-stone-500 font-sans text-xs max-w-lg mx-auto mb-8 font-semibold">
                         {bracket.winner.tagline}
@@ -2517,7 +2502,7 @@ export default function Home() {
                         if (!runnerUp) return null;
                         return (
                           <div className="text-3xs font-mono text-stone-500 uppercase mb-8">
-                            🥈 HONORABLE RUNNER-UP: <span className="font-pixel text-[#181715]">{runnerUp.logo} {runnerUp.title}</span> BY <span className="text-stone-700 font-semibold">{runnerUp.makerTwitter}</span>
+                            🥈 HONORABLE RUNNER-UP: <span className="font-pixel text-[#181715] inline-flex items-center">{renderLogo(runnerUp.logo, "w-4 h-4 mr-1")} {runnerUp.title}</span> BY <span className="text-stone-700 font-semibold">{runnerUp.makerTwitter}</span>
                           </div>
                         );
                       })()}
@@ -2567,15 +2552,15 @@ export default function Home() {
                             }`}
                           >
                             <div className="flex justify-between font-semibold">
-                              <span className={m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                {m.productA.logo} {m.productA.title}
+                              <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
                               </span>
                               <span>{m.votesA}</span>
                             </div>
                             <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
                             <div className="flex justify-between font-semibold">
-                              <span className={m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                {m.productB.logo} {m.productB.title}
+                              <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
                               </span>
                               <span>{m.votesB}</span>
                             </div>
@@ -2600,15 +2585,15 @@ export default function Home() {
                               }`}
                             >
                               <div className="flex justify-between font-semibold">
-                                <span className={m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                  {m.productA.logo} {m.productA.title}
+                                <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                  {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
                                 </span>
                                 <span>{m.votesA}</span>
                               </div>
                               <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
                               <div className="flex justify-between font-semibold">
-                                <span className={m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                  {m.productB.logo} {m.productB.title}
+                                <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                  {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
                                 </span>
                                 <span>{m.votesB}</span>
                               </div>
@@ -2634,15 +2619,15 @@ export default function Home() {
                               }`}
                             >
                               <div className="flex justify-between font-semibold">
-                                <span className={m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                  {m.productA.logo} {m.productA.title}
+                                <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                  {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
                                 </span>
                                 <span>{m.votesA}</span>
                               </div>
                               <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
                               <div className="flex justify-between font-semibold">
-                                <span className={m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                  {m.productB.logo} {m.productB.title}
+                                <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                  {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
                                 </span>
                                 <span>{m.votesB}</span>
                               </div>
@@ -2668,15 +2653,15 @@ export default function Home() {
                               }`}
                             >
                               <div className="flex justify-between font-semibold">
-                                <span className={m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                  {m.productA.logo} {m.productA.title}
+                                <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                  {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
                                 </span>
                                 <span>{m.votesA}</span>
                               </div>
                               <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
                               <div className="flex justify-between font-semibold">
-                                <span className={m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}>
-                                  {m.productB.logo} {m.productB.title}
+                                <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
+                                  {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
                                 </span>
                                 <span>{m.votesB}</span>
                               </div>
@@ -3329,8 +3314,10 @@ export default function Home() {
             </div>
 
             {/* Winner Info */}
-            <h2 className="text-3xl sm:text-4xl font-sans font-black tracking-tighter leading-none uppercase mb-4" style={{ color: '#181715' }}>
-              {championWinner.logo} {championWinner.title} {championWinner.logo}
+            <h2 className="text-3xl sm:text-4xl font-sans font-black tracking-tighter leading-none uppercase mb-4 flex items-center justify-center flex-wrap gap-2" style={{ color: '#181715' }}>
+              {renderLogo(championWinner.logo, "w-10 h-10")}
+              <span>{championWinner.title}</span>
+              {renderLogo(championWinner.logo, "w-10 h-10")}
             </h2>
             <p className="font-sans text-xs max-w-lg mx-auto mb-8 font-semibold" style={{ color: '#78716c' }}>
               {championWinner.tagline}
@@ -3423,7 +3410,9 @@ export default function Home() {
                   >
                     <div>
                       <div className="flex justify-between items-center mb-2">
-                        <span className="text-2xl">{c.logo}</span>
+                        <span className="text-2xl flex items-center justify-center">
+                          {renderLogo(c.logo, "w-8 h-8")}
+                        </span>
                         <span className="border text-5xs font-pixel px-2 py-0.5 uppercase" style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', color: '#d97706' }}>
                           SEASON {String(idx + 1).padStart(2, "0")}
                         </span>
