@@ -2903,9 +2903,43 @@ export default function Home() {
                           }
                           
                           const reader = new FileReader();
-                          reader.onload = (event) => {
-                            if (event.target?.result) {
-                              setNewLogo(event.target.result as string);
+                          reader.onload = () => {
+                            const result = reader.result;
+                            if (result && typeof result === "string") {
+                              const img = new Image();
+                              img.onload = () => {
+                                // Create canvas to resize logo to optimal size (max 128x128)
+                                const canvas = document.createElement("canvas");
+                                const MAX_WIDTH = 128;
+                                const MAX_HEIGHT = 128;
+                                let width = img.width;
+                                let height = img.height;
+
+                                if (width > height) {
+                                  if (width > MAX_WIDTH) {
+                                    height *= MAX_WIDTH / width;
+                                    width = MAX_WIDTH;
+                                  }
+                                } else {
+                                  if (height > MAX_HEIGHT) {
+                                    width *= MAX_HEIGHT / height;
+                                    height = MAX_HEIGHT;
+                                  }
+                                }
+
+                                canvas.width = width;
+                                canvas.height = height;
+                                const ctx = canvas.getContext("2d");
+                                if (ctx) {
+                                  ctx.drawImage(img, 0, 0, width, height);
+                                  // Compress as lightweight JPEG
+                                  const resizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
+                                  setNewLogo(resizedBase64);
+                                } else {
+                                  setNewLogo(result);
+                                }
+                              };
+                              img.src = result;
                             }
                           };
                           reader.readAsDataURL(file);

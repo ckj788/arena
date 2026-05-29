@@ -12,7 +12,9 @@ export function loadProducts(): Product[] {
   if (typeof window === "undefined") return [];
   const data = localStorage.getItem(PRODUCTS_KEY);
   if (!data) {
-    localStorage.setItem(PRODUCTS_KEY, JSON.stringify([]));
+    try {
+      localStorage.setItem(PRODUCTS_KEY, JSON.stringify([]));
+    } catch (e) {}
     return [];
   }
   try {
@@ -24,7 +26,23 @@ export function loadProducts(): Product[] {
 
 export function saveProducts(products: Product[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  try {
+    localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
+  } catch (e) {
+    console.warn("localStorage quota exceeded for products list. Clearing large logo cache to optimize storage.");
+    // Fallback: Strip large Base64 logos to fit within quota
+    const optimized = products.map(p => {
+      if (p.logo && p.logo.startsWith("data:image") && p.logo.length > 30000) {
+        return { ...p, logo: "🚀" };
+      }
+      return p;
+    });
+    try {
+      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(optimized));
+    } catch (err) {
+      console.error("Failed to save products to localStorage even after optimization:", err);
+    }
+  }
 }
 
 export function loadBracket(): Bracket | null {
@@ -41,9 +59,45 @@ export function loadBracket(): Bracket | null {
 export function saveBracket(bracket: Bracket | null) {
   if (typeof window === "undefined") return;
   if (bracket === null) {
-    localStorage.removeItem(BRACKET_KEY);
+    try {
+      localStorage.removeItem(BRACKET_KEY);
+    } catch (e) {}
   } else {
-    localStorage.setItem(BRACKET_KEY, JSON.stringify(bracket));
+    try {
+      localStorage.setItem(BRACKET_KEY, JSON.stringify(bracket));
+    } catch (e) {
+      console.warn("localStorage quota exceeded for bracket. Clearing large logo cache to optimize storage.");
+      
+      const optimizeProduct = (p: Product): Product => {
+        if (p.logo && p.logo.startsWith("data:image") && p.logo.length > 30000) {
+          return { ...p, logo: "🚀" };
+        }
+        return p;
+      };
+
+      const optimizeMatch = (m: Match): Match => {
+        return {
+          ...m,
+          productA: optimizeProduct(m.productA),
+          productB: optimizeProduct(m.productB)
+        };
+      };
+
+      const optimizedBracket: Bracket = {
+        ...bracket,
+        round1: bracket.round1.map(optimizeMatch),
+        round2: bracket.round2 ? bracket.round2.map(optimizeMatch) : [],
+        round3: bracket.round3 ? bracket.round3.map(optimizeMatch) : [],
+        round4: bracket.round4 ? bracket.round4.map(optimizeMatch) : [],
+        winner: bracket.winner ? optimizeProduct(bracket.winner) : undefined
+      };
+
+      try {
+        localStorage.setItem(BRACKET_KEY, JSON.stringify(optimizedBracket));
+      } catch (err) {
+        console.error("Failed to save bracket to localStorage even after optimization:", err);
+      }
+    }
   }
 }
 
@@ -524,7 +578,22 @@ export function loadLocalPastChampions(): Product[] {
 
 export function saveLocalPastChampions(champs: Product[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(PAST_CHAMPS_KEY, JSON.stringify(champs));
+  try {
+    localStorage.setItem(PAST_CHAMPS_KEY, JSON.stringify(champs));
+  } catch (e) {
+    console.warn("localStorage quota exceeded for past champions. Clearing large logo cache to optimize storage.");
+    const optimized = champs.map(c => {
+      if (c.logo && c.logo.startsWith("data:image") && c.logo.length > 30000) {
+        return { ...c, logo: "🚀" };
+      }
+      return c;
+    });
+    try {
+      localStorage.setItem(PAST_CHAMPS_KEY, JSON.stringify(optimized));
+    } catch (err) {
+      console.error("Failed to save past champions to localStorage even after optimization:", err);
+    }
+  }
 }
 
 // 6. 获取云端所有历史完结赛季的冠军项目
