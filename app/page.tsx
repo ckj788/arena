@@ -2266,7 +2266,7 @@ export default function Home() {
               </div>
 
               {/* Functional Dual Google & GitHub Auth Card inside Submit Drawer */}
-              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex items-center justify-between shadow-pixel-sm mb-6 rounded-lg">
+              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex flex-col gap-3 shadow-pixel-sm mb-6 rounded-lg text-left">
                 <div className="flex items-center space-x-3">
                   <span className="w-8 h-8 bg-stone-900 border border-stone-800 flex items-center justify-center text-sm font-pixel rounded-md">
                     {userAuthType === "github" ? "🐙" : "🔑"}
@@ -2283,14 +2283,14 @@ export default function Home() {
                   </div>
                 </div>
                 {!userLoggedIn ? (
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2 w-full">
                     <button
                       type="button"
                       onClick={() => {
                         setTempAuthType("google");
                         setIsAuthOpen(true);
                       }}
-                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
+                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link Google
                     </button>
@@ -2300,7 +2300,7 @@ export default function Home() {
                         setTempAuthType("github");
                         setIsAuthOpen(true);
                       }}
-                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
+                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link GitHub
                     </button>
@@ -2309,7 +2309,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer"
+                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer self-start"
                   >
                     Disconnect
                   </button>
@@ -2449,7 +2449,7 @@ export default function Home() {
 
             <form onSubmit={handleVoteSubmit} className="space-y-4">
               {/* Functional Dual Google & GitHub Auth Card */}
-              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex items-center justify-between shadow-pixel-sm rounded-lg">
+              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex flex-col gap-3 shadow-pixel-sm rounded-lg text-left">
                 <div className="flex items-center space-x-3">
                   <span className="w-8 h-8 bg-stone-900 border border-stone-800 flex items-center justify-center text-sm font-pixel rounded-md">
                     {userAuthType === "github" ? "🐙" : "🔑"}
@@ -2466,14 +2466,14 @@ export default function Home() {
                   </div>
                 </div>
                 {!userLoggedIn ? (
-                  <div className="flex space-x-2">
+                  <div className="flex gap-2 w-full">
                     <button
                       type="button"
                       onClick={() => {
                         setTempAuthType("google");
                         setIsAuthOpen(true);
                       }}
-                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
+                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link Google
                     </button>
@@ -2483,7 +2483,7 @@ export default function Home() {
                         setTempAuthType("github");
                         setIsAuthOpen(true);
                       }}
-                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
+                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link GitHub
                     </button>
@@ -2492,7 +2492,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer"
+                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer self-start"
                   >
                     Disconnect
                   </button>

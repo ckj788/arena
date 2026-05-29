@@ -51,33 +51,21 @@ export function getMillisecondsToNextNYMidnight(startedAt?: string): number {
 }
 
 // 3. 根据 3-2-1-1 规则，获取每轮赛事的规定时长（单位：毫秒）
-// 🚀 [TESTING DEPLOYMENT BYPASS]: 将原本的 3天-2天-1天-1天 缩短为 3分钟-2分钟-1分钟-1分钟
-// 方便全套轮次与晋级流程在一小时内完整跑通！
+// 已恢复为天数时间配置：3天、2天、1天、1天
 export function getRoundDurationMs(roundNumber: number): number {
-  const ONE_MINUTE_MS = 60 * 1000;
-  switch (roundNumber) {
-    case 1:
-      return 3 * ONE_MINUTE_MS; // 3 分钟
-    case 2:
-      return 2 * ONE_MINUTE_MS; // 2 分钟
-    case 3:
-      return 1 * ONE_MINUTE_MS; // 1 分钟
-    case 4:
-      return 1 * ONE_MINUTE_MS; // 1 分钟
-    default:
-      return 1 * ONE_MINUTE_MS;
-  }
-  
-  /* 原版天数时间配置：
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   switch (roundNumber) {
-    case 1: return 3 * ONE_DAY_MS;
-    case 2: return 2 * ONE_DAY_MS;
-    case 3: return 1 * ONE_DAY_MS;
-    case 4: return 1 * ONE_DAY_MS;
-    default: return 1 * ONE_DAY_MS;
+    case 1:
+      return 3 * ONE_DAY_MS; // 3天
+    case 2:
+      return 2 * ONE_DAY_MS; // 2天
+    case 3:
+      return 1 * ONE_DAY_MS; // 1天
+    case 4:
+      return 1 * ONE_DAY_MS; // 1天
+    default:
+      return 1 * ONE_DAY_MS;
   }
-  */
 }
 
 // 4. 获取当前轮次的剩余截止时间（单位：毫秒）
