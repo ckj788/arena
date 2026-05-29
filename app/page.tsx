@@ -788,7 +788,8 @@ export default function Home() {
       shipTimeframe: newTimeframe,
       makerName: newMaker || "Anonymous Maker",
       makerTwitter: newTwitter ? (newTwitter.startsWith("@") ? newTwitter : `@${newTwitter}`) : "@anonymous",
-      makerAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces",
+      makerAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces" + 
+        (userLoggedIn ? `#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}` : ""),
       logo: newLogo,
       submittedAt: new Date().toISOString(),
       queueStatus: "waiting",
@@ -1034,7 +1035,20 @@ export default function Home() {
       } catch (e) {}
     }
 
-    // 2. Primary Secure Check: Immutable Supabase Auth User ID matching (100% secure)
+    // 2. Primary Secure Check: Parse creator identity bound permanently inside makerAvatar URL query/hash fragment
+    if (p.makerAvatar && p.makerAvatar.includes("#")) {
+      try {
+        const hash = p.makerAvatar.split("#")[1];
+        const params = new URLSearchParams(hash);
+        const creator = params.get("creator");
+        const uid = params.get("uid");
+        
+        if (userSubId && uid && uid === userSubId) return true;
+        if (userTwitter && creator && creator.replace(/^@/, "").toLowerCase() === userTwitter.replace(/^@/, "").toLowerCase()) return true;
+      } catch (e) {}
+    }
+
+    // 3. Secondary Secure Check: Immutable Supabase Auth User ID matching (100% secure)
     if (userSubId && (p as any).creator_uid && (p as any).creator_uid === userSubId) {
       return true;
     }
