@@ -1491,7 +1491,7 @@ export default function Home() {
                 <span className="drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">INDIE</span>
                 <span className="text-[#dc2626] drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">CLASH</span>
               </h1>
-              <p className="text-[#fbbf24] font-mono text-2xs font-bold tracking-widest mt-4 uppercase animate-hero-sub drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
+              <p className="text-[#faf5ef] font-mono text-2xs font-bold tracking-widest mt-4 uppercase animate-hero-sub drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
                 1v1 head-to-head product duels & peer critiques.
               </p>
             </div>
