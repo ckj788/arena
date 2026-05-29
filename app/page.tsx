@@ -64,6 +64,8 @@ export default function Home() {
 
   // Submit Drawer State
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
+  const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
+  const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newTagline, setNewTagline] = useState("");
   const [newUrl, setNewUrl] = useState("");
@@ -1038,7 +1040,7 @@ export default function Home() {
           ACT 1: IMMERSIVE HERO ARENA (First Fold)
          ======================================================== */}
       <section 
-        className="w-full h-screen relative flex flex-col justify-between overflow-hidden border-b-4 border-pixel"
+        className="w-full h-screen relative flex flex-col justify-between overflow-hidden"
         style={{
           backgroundImage: "linear-gradient(to bottom, rgba(24, 23, 21, 0.45) 0%, rgba(24, 23, 21, 0.15) 30%, rgba(24, 23, 21, 0.35) 75%, rgba(24, 23, 21, 0.85) 100%), url('/colosseum_arena_pixel.png')",
           backgroundSize: "cover",
@@ -1310,9 +1312,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Glow sweep lines */}
-          <div className="absolute top-0 left-0 right-0 glow-line" />
-          <div className="absolute bottom-0 left-0 right-0 glow-line" />
+          {/* Smooth seamless transition boundary */}
         </div>
       </section>
 
@@ -2206,22 +2206,41 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Narrative commentary danmakus stream bar at the bottom boundary of dashboard */}
-      <div className="w-full bg-[#181715] border-t-2 border-pixel py-3 overflow-hidden select-none relative z-10 font-pixel text-4xs text-[#faf5ef]">
-        <div className="danmaku-stream flex space-x-12 animate-danmaku-roll">
-          {danmakus.map((comment, index) => (
-            <span key={index} className="inline-block shrink-0 uppercase tracking-widest bg-stone-900 px-3 py-1 border border-stone-850">
-              💬 {comment}
-            </span>
-          ))}
-          {/* Duplicate to guarantee continuous roll loop */}
-          {danmakus.map((comment, index) => (
-            <span key={`dup-${index}`} className="inline-block shrink-0 uppercase tracking-widest bg-stone-900 px-3 py-1 border border-stone-850">
-              💬 {comment}
-            </span>
-          ))}
+
+
+      {/* Premium Footer with Creator Credit and Policy Links */}
+      <footer className="w-full bg-[#0c0c0b] border-t border-stone-900 py-10 px-6 max-w-7xl mx-auto z-10 relative select-none text-center">
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="text-3xs font-mono text-stone-500 uppercase tracking-widest">
+            © {new Date().getFullYear()} THE ARENA. All Rights Reserved.
+          </div>
+          <div className="flex items-center space-x-2 text-3xs font-pixel uppercase">
+            <span className="text-stone-400">Created by</span>
+            <a 
+              href="https://x.com/MaberFate" 
+              target="_blank" 
+              rel="noreferrer"
+              className="text-[#d97706] hover:underline font-bold"
+            >
+              @MaberFate
+            </a>
+          </div>
+          <div className="flex space-x-6 text-3xs font-mono uppercase">
+            <button 
+              onClick={() => setIsPrivacyOpen(true)}
+              className="text-stone-500 hover:text-stone-300 transition-all cursor-pointer hover:underline bg-transparent border-none p-0"
+            >
+              Privacy Policy
+            </button>
+            <button 
+              onClick={() => setIsTermsOpen(true)}
+              className="text-stone-500 hover:text-stone-300 transition-all cursor-pointer hover:underline bg-transparent border-none p-0"
+            >
+              Terms of Use
+            </button>
+          </div>
         </div>
-      </div>
+      </footer>
 
       </div>
 
@@ -2229,37 +2248,37 @@ export default function Home() {
           Tactile Slide-over Drawer for new submissions
          ======================================================== */}
       {isSubmitOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-xs animate-fade-in">
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs animate-fade-in">
           <div 
             className="fixed inset-0" 
             onClick={() => setIsSubmitOpen(false)}
           />
-          <div className="relative w-full max-w-md h-full bg-[#faf5ef]/95 backdrop-blur-md border-l-4 border-pixel shadow-2xl p-6 sm:p-10 flex flex-col justify-between overflow-y-auto animate-slide-in text-[#181715]">
+          <div className="relative w-full max-w-md h-full bg-[#131312]/95 backdrop-blur-md border-l border-stone-850 shadow-2xl p-6 sm:p-10 flex flex-col justify-between overflow-y-auto animate-slide-in text-[#faf5ef]">
             <div>
-              <div className="flex justify-between items-center mb-8 border-b-2 border-pixel pb-4">
-                <h2 className="text-base sm:text-lg font-pixel uppercase text-[#181715]">SUBMIT_PROJECT</h2>
+              <div className="flex justify-between items-center mb-8 border-b border-stone-850 pb-4">
+                <h2 className="text-base sm:text-lg font-pixel uppercase text-[#faf5ef]">SUBMIT_PROJECT</h2>
                 <button 
                   onClick={() => setIsSubmitOpen(false)}
-                  className="text-stone-405 hover:text-stone-700 text-xl font-bold font-mono"
+                  className="text-stone-400 hover:text-stone-200 text-xl font-bold font-mono transition-all cursor-pointer"
                 >
                   ✕
                 </button>
               </div>
 
               {/* Functional Dual Google & GitHub Auth Card inside Submit Drawer */}
-              <div className="p-3 bg-[#faf5ef]/80 border-2 border-pixel flex items-center justify-between shadow-pixel-sm mb-6">
+              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex items-center justify-between shadow-pixel-sm mb-6 rounded-lg">
                 <div className="flex items-center space-x-3">
-                  <span className="w-8 h-8 bg-stone-100 border border-pixel flex items-center justify-center text-sm font-pixel">
+                  <span className="w-8 h-8 bg-stone-900 border border-stone-800 flex items-center justify-center text-sm font-pixel rounded-md">
                     {userAuthType === "github" ? "🐙" : "🔑"}
                   </span>
                   <div>
-                    <span className="text-3xs font-pixel block text-stone-500">IDENTITY VERIFICATION</span>
+                    <span className="text-3xs font-pixel block text-stone-400">IDENTITY VERIFICATION</span>
                     {userLoggedIn ? (
                       <span className="text-3xs font-pixel text-[#d97706]">
                         {mockUserTwitter} <span className="text-stone-400 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                       </span>
                     ) : (
-                      <span className="text-3xs text-red-650 font-pixel uppercase font-bold text-3xs">Unverified</span>
+                      <span className="text-3xs text-red-500 font-pixel uppercase font-bold">Unverified</span>
                     )}
                   </div>
                 </div>
@@ -2271,7 +2290,7 @@ export default function Home() {
                         setTempAuthType("google");
                         setIsAuthOpen(true);
                       }}
-                      className="btn-pixel py-1.5 px-3 text-3xs"
+                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link Google
                     </button>
@@ -2281,7 +2300,7 @@ export default function Home() {
                         setTempAuthType("github");
                         setIsAuthOpen(true);
                       }}
-                      className="btn-pixel py-1.5 px-3 text-3xs"
+                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link GitHub
                     </button>
@@ -2290,7 +2309,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-stone-400 hover:text-stone-700 text-3xs underline font-pixel font-bold"
+                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer"
                   >
                     Disconnect
                   </button>
@@ -2299,7 +2318,7 @@ export default function Home() {
 
               <form onSubmit={handleSubmitProduct} className="space-y-6">
                 <div>
-                  <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
+                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
                     Product Title *
                   </label>
                   <input
@@ -2308,12 +2327,12 @@ export default function Home() {
                     placeholder="e.g. SiteShot 📸"
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-pixel rounded-none bg-white text-sm focus:outline-none"
+                    className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
+                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
                     One-Sentence Tagline *
                   </label>
                   <input
@@ -2322,12 +2341,12 @@ export default function Home() {
                     placeholder="e.g. High-def screenshot API with full-page scrolling..."
                     value={newTagline}
                     onChange={(e) => setNewTagline(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-pixel rounded-none bg-white text-sm focus:outline-none"
+                    className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
+                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
                     Demo URL *
                   </label>
                   <input
@@ -2336,35 +2355,15 @@ export default function Home() {
                     placeholder="https://siteshot.net"
                     value={newUrl}
                     onChange={(e) => setNewUrl(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-pixel rounded-none bg-white text-sm focus:outline-none"
+                    className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
-                    Ship Duration *
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {["24h", "48h", "7d"].map((t) => (
-                      <button
-                        key={t}
-                        type="button"
-                        onClick={() => setNewTimeframe(t as any)}
-                        className={`py-2 text-xs border-2 border-pixel font-pixel ${
-                          newTimeframe === t 
-                            ? "bg-[#d97706] text-white" 
-                            : "bg-white text-[#181715] hover:bg-[#fdf2e9]"
-                        }`}
-                      >
-                        {t}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
+                    <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
                       Maker Name
                     </label>
                     <input
@@ -2372,11 +2371,11 @@ export default function Home() {
                       placeholder="Sarah"
                       value={newMaker}
                       onChange={(e) => setNewMaker(e.target.value)}
-                      className="w-full px-3 py-2 border-2 border-pixel rounded-none bg-white text-sm focus:outline-none"
+                      className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
+                    <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
                       Twitter (X)
                     </label>
                     <input
@@ -2384,13 +2383,13 @@ export default function Home() {
                       placeholder="@sarah_dev"
                       value={newTwitter}
                       onChange={(e) => setNewTwitter(e.target.value)}
-                      className="w-full px-3 py-2 border-2 border-pixel rounded-none bg-white text-sm focus:outline-none"
+                      className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
+                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
                     Emoji Icon *
                   </label>
                   <input
@@ -2399,14 +2398,14 @@ export default function Home() {
                     placeholder="🚀"
                     value={newLogo}
                     onChange={(e) => setNewLogo(e.target.value)}
-                    className="w-full px-3 py-2 border-2 border-pixel rounded-none bg-white text-sm focus:outline-none w-20 text-center text-xl"
+                    className="px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all w-20 text-center text-xl"
                   />
                 </div>
 
                 <div className="pt-4">
                   <button
                     type="submit"
-                    className="btn-pixel btn-pixel-primary w-full py-3 text-xs tracking-wider"
+                    className="btn-pixel btn-pixel-primary w-full py-3 text-xs tracking-wider cursor-pointer"
                   >
                     Submit Project (Stage 1: $0)
                   </button>
@@ -2414,7 +2413,7 @@ export default function Home() {
               </form>
             </div>
 
-            <div className="text-3xs text-stone-400 mt-6 border-t border-stone-200 pt-4 font-mono">
+            <div className="text-3xs text-stone-550 mt-6 border-t border-stone-850 pt-4 font-mono">
               * Note: In Stage 1, submissions are 100% free. Once 16 products are queued, the tournament system begins automatically.
             </div>
           </div>
@@ -2425,7 +2424,7 @@ export default function Home() {
           Dual-Input Voting Modal
          ======================================================== */}
       {votingMatch && votingTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-xs animate-scale-in text-[#181715]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-scale-in text-[#faf5ef]">
           <div 
             className="fixed inset-0" 
             onClick={() => {
@@ -2436,33 +2435,33 @@ export default function Home() {
               setVoteError("");
             }}
           />
-          <div className="relative w-full max-w-md bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-6 sm:p-8 rounded-none z-10">
-            <h3 className="font-pixel text-xs uppercase mb-1 text-[#181715]">
+          <div className="relative w-full max-w-md bg-[#131312]/95 border border-stone-850 shadow-2xl p-6 sm:p-8 rounded-xl z-10">
+            <h3 className="font-pixel text-xs uppercase mb-1 text-[#faf5ef]">
               Dueling Vote Box
             </h3>
             <span className="text-3xs font-pixel text-[#d97706] block mb-3">
               VOTING FOR: {votingTarget.title}
             </span>
-            
-            <p className="text-xs text-stone-500 mb-5 leading-relaxed">
+
+            <p className="text-xs text-stone-400 mb-5 leading-relaxed">
               We enforce a **Dual Feedback Loop**. To register your vote, you must bind your account and write positive critique for the winner AND constructive advice for the loser. **Every competitor leaves with real value.**
             </p>
 
             <form onSubmit={handleVoteSubmit} className="space-y-4">
               {/* Functional Dual Google & GitHub Auth Card */}
-              <div className="p-3 bg-[#faf5ef]/80 border-2 border-pixel flex items-center justify-between shadow-pixel-sm">
+              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex items-center justify-between shadow-pixel-sm rounded-lg">
                 <div className="flex items-center space-x-3">
-                  <span className="w-8 h-8 bg-stone-100 border border-pixel flex items-center justify-center text-sm font-pixel">
+                  <span className="w-8 h-8 bg-stone-900 border border-stone-800 flex items-center justify-center text-sm font-pixel rounded-md">
                     {userAuthType === "github" ? "🐙" : "🔑"}
                   </span>
                   <div>
-                    <span className="text-3xs font-pixel block text-stone-500">AUTHORIZATION</span>
+                    <span className="text-3xs font-pixel block text-stone-400">AUTHORIZATION</span>
                     {userLoggedIn ? (
                       <span className="text-3xs font-pixel text-[#d97706]">
                         {mockUserTwitter} <span className="text-stone-400 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                       </span>
                     ) : (
-                      <span className="text-3xs text-red-650 font-pixel uppercase font-bold text-3xs">Unauthenticated</span>
+                      <span className="text-3xs text-red-500 font-pixel uppercase font-bold">Unauthenticated</span>
                     )}
                   </div>
                 </div>
@@ -2474,7 +2473,7 @@ export default function Home() {
                         setTempAuthType("google");
                         setIsAuthOpen(true);
                       }}
-                      className="btn-pixel py-1.5 px-3 text-3xs"
+                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link Google
                     </button>
@@ -2484,7 +2483,7 @@ export default function Home() {
                         setTempAuthType("github");
                         setIsAuthOpen(true);
                       }}
-                      className="btn-pixel py-1.5 px-3 text-3xs"
+                      className="flex items-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
                     >
                       Link GitHub
                     </button>
@@ -2493,7 +2492,7 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-stone-400 hover:text-stone-700 text-3xs underline font-pixel font-bold"
+                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer"
                   >
                     Disconnect
                   </button>
@@ -2502,7 +2501,7 @@ export default function Home() {
 
               {/* Input 1: Why vote for winner */}
               <div>
-                <label className="block text-3xs font-pixel text-stone-500 mb-1.5 uppercase">
+                <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
                   1. Why are you voting for {votingTarget.title}? (min 10 chars) *
                 </label>
                 <textarea
@@ -2511,11 +2510,11 @@ export default function Home() {
                   placeholder="e.g., The core user interface is incredibly fast and intuitive."
                   value={voteWinnerFeedback}
                   onChange={(e) => setVoteWinnerFeedback(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-pixel rounded-none bg-white text-sm focus:outline-none"
+                  className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
                 />
                 <div className="flex justify-between text-3xs font-mono text-stone-400 mt-1">
                   <span>Chars: {voteWinnerFeedback.length}</span>
-                  <span className={voteWinnerFeedback.length >= 10 ? "text-emerald-600 font-semibold" : "text-amber-600 font-semibold"}>
+                  <span className={voteWinnerFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-amber-500 font-semibold"}>
                     {voteWinnerFeedback.length >= 10 ? "✓ Ready" : `Need ${Math.max(0, 10 - voteWinnerFeedback.length)} more`}
                   </span>
                 </div>
@@ -2532,23 +2531,23 @@ export default function Home() {
                   placeholder="e.g., The tagline needs more clarity; should clarify if it exports in SVG."
                   value={voteLoserFeedback}
                   onChange={(e) => setVoteLoserFeedback(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-[#d97706] rounded-none bg-white text-sm focus:outline-none"
+                  className="w-full px-3 py-2 border border-amber-600/40 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
                 />
                 <div className="flex justify-between text-3xs font-mono text-stone-400 mt-1">
                   <span>Chars: {voteLoserFeedback.length}</span>
-                  <span className={voteLoserFeedback.length >= 10 ? "text-emerald-600 font-semibold" : "text-orange-600 font-semibold"}>
+                  <span className={voteLoserFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-orange-500 font-semibold"}>
                     {voteLoserFeedback.length >= 10 ? "✓ Ready" : `Need ${Math.max(0, 10 - voteLoserFeedback.length)} more`}
                   </span>
                 </div>
               </div>
 
               {voteError && (
-                <div className="p-2.5 bg-red-50 text-red-600 text-3xs border border-red-200 font-mono">
+                <div className="p-2.5 bg-red-950/30 text-red-400 text-3xs border border-red-900/50 font-mono">
                   [ERROR]: {voteError}
                 </div>
               )}
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-stone-200 mt-5">
+              <div className="flex justify-end space-x-3 pt-3 border-t border-stone-850 mt-5">
                 <button
                   type="button"
                   onClick={() => {
@@ -2558,13 +2557,13 @@ export default function Home() {
                     setVoteLoserFeedback("");
                     setVoteError("");
                   }}
-                  className="btn-pixel py-1.5 px-3 text-3xs"
+                  className="btn-pixel py-1.5 px-3 text-3xs cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-pixel btn-pixel-primary py-1.5 px-4 text-3xs"
+                  className="btn-pixel btn-pixel-primary py-1.5 px-4 text-3xs cursor-pointer"
                 >
                   Submit Dual Vote
                 </button>
@@ -2697,7 +2696,7 @@ export default function Home() {
                     alert("Sandbox Mock: Google authorization linked successfully!");
                   }
                 }}
-                className="btn-pixel w-full py-3 text-3xs font-pixel border flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                className="w-full py-3 text-3xs font-pixel flex items-center justify-center space-x-2 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 rounded-md transition-all cursor-pointer shadow-pixel-md font-bold"
               >
                 <span className="text-sm">🔑</span> <span>CONNECT WITH GOOGLE</span>
               </button>
@@ -2722,7 +2721,7 @@ export default function Home() {
                     alert("Sandbox Mock: GitHub authorization linked successfully!");
                   }
                 }}
-                className="btn-pixel w-full py-3 text-3xs font-pixel border flex items-center justify-center space-x-2 transition-all cursor-pointer"
+                className="w-full py-3 text-3xs font-pixel flex items-center justify-center space-x-2 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 rounded-md transition-all cursor-pointer shadow-pixel-md font-bold"
               >
                 <span className="text-sm">🐙</span> <span>CONNECT WITH GITHUB</span>
               </button>
@@ -2945,7 +2944,221 @@ export default function Home() {
                 ⚔️ CLOSE GALLERY
               </button>
             </div>
+          </div>
+        </div>
+      )}
 
+      {/* ========================================================
+          Privacy Policy Modal (Premium Retro-Dark Dialog)
+         ======================================================== */}
+      {isPrivacyOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in text-[#faf5ef]" style={{ zIndex: 150 }}>
+          <div 
+            className="fixed inset-0" 
+            onClick={() => setIsPrivacyOpen(false)}
+          />
+          <div className="relative w-full max-w-2xl bg-[#0f0e0d]/98 border-2 border-pixel shadow-[0_25px_60px_-15px_rgba(217,119,6,0.15)] p-6 sm:p-8 rounded-2xl z-10 animate-scale-in text-left" style={{ borderColor: '#d97706' }}>
+            <button 
+              onClick={() => setIsPrivacyOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center border border-stone-850 font-pixel text-xs transition-all cursor-pointer text-stone-400 hover:text-stone-200 hover:border-stone-600 bg-[#181715] rounded-lg shadow-sm"
+            >
+              ✕
+            </button>
+            <div className="flex items-center space-x-3 mb-6 border-b border-stone-850 pb-4">
+              <span className="text-2xl animate-pixel-bounce">🛡️</span>
+              <div>
+                <h3 className="font-pixel text-xs sm:text-sm uppercase tracking-wider text-[#d97706] leading-none mb-1">
+                  Privacy Policy
+                </h3>
+                <span className="text-5xs font-mono text-stone-500 uppercase tracking-widest block">SECURE SYSTEM MATCH DATA</span>
+              </div>
+            </div>
+            
+            <div className="max-h-[55vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-stone-300 space-y-5 leading-relaxed">
+              <div className="bg-[#181715] border border-stone-850 px-4 py-2.5 rounded-lg mb-2 flex items-center justify-between">
+                <span className="text-3xs font-mono text-stone-400">STATUS: ACTIVE // VERIFIED</span>
+                <span className="text-3xs font-mono text-[#d97706] font-bold">UPDATED: MAY 29, 2026</span>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">1. Scope & Commitment</h4>
+                <p className="text-stone-350">
+                  At Ship or Duel (operated by @MaberFate), we respect your privacy. This policy outlines how we handle data for our 1v1 tournament arena website. We are committed to data minimization and user security.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">2. Information We Collect</h4>
+                <div className="bg-[#181715] border border-stone-850 p-4 rounded-lg space-y-3">
+                  <div>
+                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-3xs px-2 py-0.5 rounded-md mb-1 font-bold">OAUTH ACCOUNT METADATA</span>
+                    <p className="text-stone-350 text-3xs leading-relaxed">
+                      When you connect via Google or GitHub OAuth, we collect your verified email address, public profile name, avatar image URL, and auth provider details. This is necessary to verify your identity.
+                    </p>
+                  </div>
+                  <div>
+                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-3xs px-2 py-0.5 rounded-md mb-1 font-bold">PROJECT SUBMISSION DATA</span>
+                    <p className="text-stone-350 text-3xs leading-relaxed">
+                      If you submit an indie product, we collect the title, tagline, logo/emoji, maker Twitter/X handle, and live demo URL.
+                    </p>
+                  </div>
+                  <div>
+                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-3xs px-2 py-0.5 rounded-md mb-1 font-bold">CRITIQUES & PUBLIC VOTES</span>
+                    <p className="text-stone-350 text-3xs leading-relaxed">
+                      To participate in the arena voting process, you must submit a constructive critique. We store and publicly display the critique texts you write, alongside your voting selection.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">3. How We Use Your Data</h4>
+                <ul className="space-y-2 text-stone-350">
+                  <li className="flex items-start space-x-2">
+                    <span className="text-[#d97706] mt-0.5 shrink-0">✔</span>
+                    <span><strong>Spam & Vote Rigging Prevention:</strong> Connected accounts help us prevent bots, duplicate voting, and coordinated manipulation rings.</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-[#d97706] mt-0.5 shrink-0">✔</span>
+                    <span><strong>Public Duel Transparency:</strong> Constructive critiques are published on the battle whiteboard. The identity linked to your account may be shown next to your feedback.</span>
+                  </li>
+                  <li className="flex items-start space-x-2">
+                    <span className="text-[#d97706] mt-0.5 shrink-0">✔</span>
+                    <span><strong>Tournament Operation:</strong> We use project details for matching, voting updates, rankings, and historical champion boards.</span>
+                  </li>
+                </ul>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">4. Data Sharing & Retention</h4>
+                <p className="text-stone-350">
+                  We do not sell, rent, or lease your personal information. Your profile details, submitted critiques, and project links are publicly displayed as part of the core Ship or Duel experience. All transaction sessions are handled via encrypted Supabase storage.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">5. Contact Us</h4>
+                <p className="text-stone-350">
+                  For any privacy inquiries, data deletion requests, or support, reach out to us at:
+                  <a href="mailto:support@maber.xyz" className="text-[#d97706] hover:underline font-bold ml-1">support@maber.xyz</a>.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 text-right border-t border-stone-850 pt-4 flex justify-between items-center">
+              <span className="text-5xs font-mono text-stone-555 uppercase">SHIP OR DUEL PROTOCOL v1.0</span>
+              <button
+                onClick={() => setIsPrivacyOpen(false)}
+                className="btn-pixel py-2.5 px-6 text-3xs font-pixel shadow-pixel-xs transition-all bg-[#1c1917] text-white border-2 hover:bg-stone-900 rounded-lg cursor-pointer"
+                style={{ borderColor: '#d97706' }}
+              >
+                ACCEPT & CLOSE
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          Terms of Use Modal (Premium Retro-Dark Dialog)
+         ======================================================== */}
+      {isTermsOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in text-[#faf5ef]" style={{ zIndex: 150 }}>
+          <div 
+            className="fixed inset-0" 
+            onClick={() => setIsTermsOpen(false)}
+          />
+          <div className="relative w-full max-w-2xl bg-[#0f0e0d]/98 border-2 border-pixel shadow-[0_25px_60px_-15px_rgba(217,119,6,0.15)] p-6 sm:p-8 rounded-2xl z-10 animate-scale-in text-left" style={{ borderColor: '#d97706' }}>
+            <button 
+              onClick={() => setIsTermsOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center border border-stone-850 font-pixel text-xs transition-all cursor-pointer text-stone-400 hover:text-stone-200 hover:border-stone-600 bg-[#181715] rounded-lg shadow-sm"
+            >
+              ✕
+            </button>
+            <div className="flex items-center space-x-3 mb-6 border-b border-stone-850 pb-4">
+              <span className="text-2xl animate-pixel-bounce">📜</span>
+              <div>
+                <h3 className="font-pixel text-xs sm:text-sm uppercase tracking-wider text-[#d97706] leading-none mb-1">
+                  Terms of Use
+                </h3>
+                <span className="text-5xs font-mono text-stone-500 uppercase tracking-widest block">ARENA DEPLOY RULES & POLICY</span>
+              </div>
+            </div>
+            
+            <div className="max-h-[55vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-stone-300 space-y-5 leading-relaxed">
+              <div className="bg-[#181715] border border-stone-850 px-4 py-2.5 rounded-lg mb-2 flex items-center justify-between">
+                <span className="text-3xs font-mono text-stone-400">LICENSE AGREEMENT: PUBLIC ACCESS</span>
+                <span className="text-3xs font-mono text-[#d97706] font-bold">UPDATED: MAY 29, 2026</span>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">1. Acceptance of Terms</h4>
+                <p className="text-stone-350">
+                  By accessing and using Ship or Duel (located at this website, created by @MaberFate), you agree to be bound by these Terms of Use. If you do not agree, please discontinue use immediately.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">2. Description of Service</h4>
+                <p className="text-stone-350">
+                  Ship or Duel is a 1v1 product tournament bracket platform. Users submit project details, connect identity via OAuth, and participate in peer-critique voting to rank products in live battles.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">3. Battle Arena Fair Play Policy</h4>
+                <div className="bg-[#181715] border border-stone-850 p-4 rounded-lg space-y-3 text-3xs text-stone-350 leading-relaxed">
+                  <div>
+                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#dc2626] font-mono text-4xs px-2 py-0.5 rounded-md mb-1 font-bold">ZERO TOLERANCE: BOT ACTIVITY</span>
+                    <p>You may not use automated scripts, bots, or fake accounts to generate votes or project queues.</p>
+                  </div>
+                  <div>
+                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#dc2626] font-mono text-4xs px-2 py-0.5 rounded-md mb-1 font-bold">ZERO TOLERANCE: COORDINATED MANIPULATION</span>
+                    <p>Coordinated upvote manipulation, review exchanges, or purchasing of votes is strictly prohibited.</p>
+                  </div>
+                  <div>
+                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-4xs px-2 py-0.5 rounded-md mb-1 font-bold">REQUIRED: DUAL CRITIQUE LOCK</span>
+                    <p>You must leave a constructive critique of at least 10 characters summarizing positive points for the winner and actionable feedback for the runner-up. Low-effort or spam text will invalidate the vote.</p>
+                  </div>
+                  <p className="text-amber-500 font-bold border-t border-stone-800 pt-2 font-pixel text-4xs uppercase">
+                    ※ Violation results in permanent disqualification of products from current brackets & hall of valor.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">4. Intellectual Property & Submissions</h4>
+                <p className="text-stone-350">
+                  You retain ownership of all intellectual property rights to the products you submit. By submitting a product, you grant Ship or Duel a worldwide, non-exclusive, royalty-free license to display your product details (title, tagline, emoji, screenshots, maker info, and URL) publicly in the arena.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">5. Limitation of Liability</h4>
+                <p className="text-stone-350">
+                  Ship or Duel is provided "as is" and "as available". We do not guarantee uninterrupted service or error-free matchups. We reserve the right to modify, pause, or terminate tournament systems, brackets, or database values at our sole discretion without notice.
+                </p>
+              </div>
+
+              <div>
+                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">6. Contact & Support</h4>
+                <p className="text-stone-350">
+                  If you have questions, reports of abuse, or need support, contact our team at:
+                  <a href="mailto:support@maber.xyz" className="text-[#d97706] hover:underline font-bold ml-1">support@maber.xyz</a>.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-6 text-right border-t border-stone-850 pt-4 flex justify-between items-center">
+              <span className="text-5xs font-mono text-stone-555 uppercase">ARENA CORE CODE CONDITIONS v1.0</span>
+              <button
+                onClick={() => setIsTermsOpen(false)}
+                className="btn-pixel py-2.5 px-6 text-3xs font-pixel shadow-pixel-xs transition-all bg-[#1c1917] text-white border-2 hover:bg-stone-900 rounded-lg cursor-pointer"
+                style={{ borderColor: '#d97706' }}
+              >
+                ACCEPT & CLOSE
+              </button>
+            </div>
           </div>
         </div>
       )}
