@@ -801,6 +801,15 @@ export default function Home() {
     setProducts(updated);
     saveProducts(updated);
 
+    // Save project ID to local browser's claimed products list for 100% reliable local claim
+    if (typeof window !== "undefined") {
+      try {
+        const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
+        myIds.push(newProd.id);
+        localStorage.setItem("my_arena_products", JSON.stringify(myIds));
+      } catch (e) {}
+    }
+
     if (supabase) {
       upsertCloudProduct(newProd);
     }
@@ -1017,16 +1026,28 @@ export default function Home() {
   };
 
   const isProductOwner = (p: Product, userTwitter: string, userSubId?: string) => {
-    // 1. Primary Secure Check: Immutable Supabase Auth User ID matching (100% secure)
+    // 1. Local Browser Claim Check: If this product was submitted from this browser (100% reliable locally)
+    if (typeof window !== "undefined") {
+      try {
+        const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
+        if (myIds.includes(p.id)) return true;
+      } catch (e) {}
+    }
+
+    // 2. Primary Secure Check: Immutable Supabase Auth User ID matching (100% secure)
     if (userSubId && (p as any).creator_uid && (p as any).creator_uid === userSubId) {
       return true;
     }
 
     if (!userTwitter) return false;
-    const cleanTwitter = userTwitter.replace(/^@/, "").trim().toLowerCase();
-    const cleanMakerTwitter = p.makerTwitter ? p.makerTwitter.replace(/^@/, "").trim().toLowerCase() : "";
-    const cleanMakerName = p.makerName ? p.makerName.trim().toLowerCase() : "";
-    const cleanCreator = (p as any).creatorUsername ? (p as any).creatorUsername.replace(/^@/, "").trim().toLowerCase() : "";
+    
+    // Normalize string: removes all spaces, punctuation, @, and non-alphanumeric characters
+    const normalize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, "").trim().toLowerCase();
+    
+    const cleanTwitter = normalize(userTwitter);
+    const cleanMakerTwitter = p.makerTwitter ? normalize(p.makerTwitter) : "";
+    const cleanMakerName = p.makerName ? normalize(p.makerName) : "";
+    const cleanCreator = (p as any).creatorUsername ? normalize((p as any).creatorUsername) : "";
     
     return (
       (cleanMakerTwitter && cleanMakerTwitter === cleanTwitter) ||
