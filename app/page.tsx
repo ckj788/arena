@@ -1943,6 +1943,13 @@ export default function Home() {
               {/* GLADIATOR DASHBOARD FOR COMPETITORS */}
               {userLoggedIn && mockUserTwitter && (() => {
                 const myShips = getLeaderboardData().filter(p => isProductOwner(p, mockUserTwitter, userSupabaseId));
+                const archivedShips = products
+                  .filter(p => isProductOwner(p, mockUserTwitter, userSupabaseId))
+                  .map(p => {
+                    const activeMatch = getLeaderboardData().find(x => x.id === p.id);
+                    if (activeMatch) return activeMatch;
+                    return { ...p, wins: 0, bracketVotes: p.votesCount, points: p.votesCount } as any;
+                  });
                 
                 return (
                   <div className="bg-[#181715]/90 border-2 border-[#d97706]/40 p-6 mb-8 text-[#faf5ef] shadow-pixel-md text-left">
@@ -2052,13 +2059,13 @@ export default function Home() {
                       <p className="text-5xs font-sans text-stone-400 mb-4 leading-relaxed">
                         Even after tournament slates are reset or 7-day rounds expire, your historical peer critiques are securely archived. Access and export your dual critiques at any time in the future.
                       </p>
-                      {myShips.length === 0 ? (
+                      {archivedShips.length === 0 ? (
                         <p className="text-5xs font-mono text-stone-500 italic uppercase">
                           No archived projects found in the colosseum records.
                         </p>
                       ) : (
                         <div className="space-y-2.5">
-                          {myShips.map(ship => (
+                          {archivedShips.map(ship => (
                             <div key={`archived_${ship.id}`} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#11100f] border border-[#d97706]/10 p-3 shadow-pixel-xs gap-3">
                               <div className="flex items-center space-x-3">
                                 {renderLogo(ship.logo, "w-5 h-5")}
