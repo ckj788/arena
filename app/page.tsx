@@ -1496,40 +1496,33 @@ export default function Home() {
               </p>
             </div>
             
-            <p className="text-[#e7e3db] font-sans text-xs sm:text-sm mt-6 leading-relaxed max-w-md drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)] animate-hero-sub">
-              Enter the colosseum where launched indie products battle in bracket-style tournaments. Vote on live duels by trading deep, constructive reviews. No bots, no blind upvotes—just authentic developer feedback, exposure, and leaderboard glory.
-            </p>
-
             {/* 3-Step Action Guide */}
-            <div className="mt-6 border-2 border-dashed border-[#d97706]/40 bg-[#181715]/90 p-4 font-mono text-4xs text-stone-300 space-y-2 uppercase leading-normal shadow-pixel-xs select-none max-w-md animate-hero-sub">
-              <span className="text-3xs font-pixel text-[#d97706] block mb-1">🛡️ HOW TO PLAY:</span>
+            <div className="mt-8 border-2 border-dashed border-[#d97706]/40 bg-[#181715]/90 p-4 sm:p-5 font-mono text-xs sm:text-sm text-stone-300 space-y-3.5 uppercase leading-normal shadow-pixel-xs select-none max-w-md animate-hero-sub">
+              <span className="text-sm font-pixel text-[#d97706] block mb-2">🛡️ HOW TO PLAY:</span>
               <div className="flex items-start space-x-2">
-                <span className="text-[#d97706] font-bold shrink-0">1. 🔑 LINK IDENTITY:</span>
-                <span>Verify your account via Google or GitHub in 1-click.</span>
+                <span className="text-[#d97706] font-bold shrink-0">1. 🔑 LINK IDENTITY</span>
               </div>
               <div className="flex items-start space-x-2">
-                <span className="text-[#d97706] font-bold shrink-0">2. ⚔️ ENTER ARENA:</span>
-                <span>Submit your product link & custom logo to waitlist.</span>
+                <span className="text-[#d97706] font-bold shrink-0">2. ⚔️ ENTER ARENA</span>
               </div>
               <div className="flex items-start space-x-2">
-                <span className="text-[#d97706] font-bold shrink-0">3. 🛡️ DUEL & VOTE:</span>
-                <span>Cast votes on live 1v1 matchups by trading reviews!</span>
+                <span className="text-[#d97706] font-bold shrink-0">3. 🛡️ DUEL & VOTE</span>
               </div>
             </div>
 
             {/* Dual Core CTAs */}
-            <div className="mt-8 flex flex-wrap gap-4 items-center animate-hero-cta">
+            <div className="mt-8 max-w-md w-full animate-hero-cta">
               {!bracket ? (
                 <button
                   onClick={() => setIsSubmitOpen(true)}
-                  className="btn-pixel btn-pixel-primary py-3.5 px-8 text-2xs tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715]"
+                  className="btn-pixel btn-pixel-primary w-full py-4 px-8 text-xs sm:text-sm tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715] font-black"
                 >
                   ➕ SUBMIT MATCH REQUEST →
                 </button>
               ) : (
                 <button
                   onClick={scrollToDuel}
-                  className="btn-pixel btn-pixel-primary py-3.5 px-8 text-2xs tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715]"
+                  className="btn-pixel btn-pixel-primary w-full py-4 px-8 text-xs sm:text-sm tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715] font-black"
                 >
                   ⚔️ VOTE IN LIVE DUEL →
                 </button>
