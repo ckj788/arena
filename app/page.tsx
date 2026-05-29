@@ -1200,33 +1200,41 @@ export default function Home() {
       }
 
       if (critiques.length === 0) {
-        // Fallback: automatically generate beautiful simulated mock critiques for verification,
-        // without showing any annoying browser alert popups or confirm dialogs!
-        const mockAdjectives = ["clean", "intuitive", "lightning-fast", "extremely polished", "highly responsive"];
-        const mockAdvices = [
-          "Add SVG download option",
-          "Optimize mobile responsive views",
-          "Add a search filter option",
-          "Speed up initial load times",
-          "Provide detailed onboarding tooltips"
-        ];
+        const confirmMock = window.confirm(
+          "Notice:\n\n" +
+          "Your product has not received any votes or peer critiques in the colosseum records yet!\n\n" +
+          "Would you like to export simulated mock critiques instead so you can instantly verify the CSV formatting?"
+        );
         
-        critiques = [
-          {
-            voter: "@john_dev",
-            provider: "github",
-            role: "Winner (Voted For)",
-            text: `The UI is incredibly ${mockAdjectives[Math.floor(Math.random() * mockAdjectives.length)]}. Love the aesthetic!`,
-            date: new Date().toLocaleDateString()
-          },
-          {
-            voter: "@sarah_builder",
-            provider: "google",
-            role: "Loser (Opponent Voted For)",
-            text: `Needs optimization: ${mockAdvices[Math.floor(Math.random() * mockAdvices.length)]} for better conversion.`,
-            date: new Date().toLocaleDateString()
-          }
-        ];
+        if (confirmMock) {
+          const mockAdjectives = ["clean", "intuitive", "lightning-fast", "extremely polished", "highly responsive"];
+          const mockAdvices = [
+            "Add SVG download option",
+            "Optimize mobile responsive views",
+            "Add a search filter option",
+            "Speed up initial load times",
+            "Provide detailed onboarding tooltips"
+          ];
+          
+          critiques = [
+            {
+              voter: "@john_dev",
+              provider: "github",
+              role: "Winner (Voted For)",
+              text: `The UI is incredibly ${mockAdjectives[Math.floor(Math.random() * mockAdjectives.length)]}. Love the aesthetic!`,
+              date: new Date().toLocaleDateString()
+            },
+            {
+              voter: "@sarah_builder",
+              provider: "google",
+              role: "Loser (Opponent Voted For)",
+              text: `Needs optimization: ${mockAdvices[Math.floor(Math.random() * mockAdvices.length)]} for better conversion.`,
+              date: new Date().toLocaleDateString()
+            }
+          ];
+        } else {
+          return;
+        }
       }
 
       // 3. Compile CSV content
