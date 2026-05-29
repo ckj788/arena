@@ -784,8 +784,9 @@ export default function Home() {
       logo: newLogo,
       submittedAt: new Date().toISOString(),
       queueStatus: "waiting",
-      votesCount: 0
-    };
+      votesCount: 0,
+      creatorUsername: mockUserTwitter
+    } as any;
 
     const updated = [...products, newProd];
     setProducts(updated);
@@ -997,6 +998,20 @@ export default function Home() {
     setVoteError("");
   };
 
+  const isProductOwner = (p: Product, userTwitter: string) => {
+    if (!userTwitter) return false;
+    const cleanTwitter = userTwitter.replace(/^@/, "").trim().toLowerCase();
+    const cleanMakerTwitter = p.makerTwitter ? p.makerTwitter.replace(/^@/, "").trim().toLowerCase() : "";
+    const cleanMakerName = p.makerName ? p.makerName.trim().toLowerCase() : "";
+    const cleanCreator = (p as any).creatorUsername ? (p as any).creatorUsername.replace(/^@/, "").trim().toLowerCase() : "";
+    
+    return (
+      (cleanMakerTwitter && cleanMakerTwitter === cleanTwitter) ||
+      (cleanMakerName && cleanMakerName === cleanTwitter) ||
+      (cleanCreator && cleanCreator === cleanTwitter)
+    );
+  };
+
   // Export critiques for a product as a CSV file
   const handleExportCritiquesCsv = async (product: Product) => {
     // Privacy & Security Check: Ensure only the verified creator of this product can download its CSV critiques
@@ -1004,7 +1019,7 @@ export default function Home() {
       alert("Authentication Required!\n\nPlease link and verify your identity before exporting critiques.");
       return;
     }
-    const isOwner = product.makerTwitter.replace(/^@/, "").toLowerCase() === mockUserTwitter.replace(/^@/, "").toLowerCase();
+    const isOwner = isProductOwner(product, mockUserTwitter);
     if (!isOwner) {
       alert("Access Denied!\n\nYou can only export critiques for your own registered products to respect developer privacy.");
       return;
@@ -1766,7 +1781,7 @@ export default function Home() {
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             {(() => {
-                              const isOwner = userLoggedIn && mockUserTwitter && p.makerTwitter.replace(/^@/, "").toLowerCase() === mockUserTwitter.replace(/^@/, "").toLowerCase();
+                              const isOwner = userLoggedIn && mockUserTwitter && isProductOwner(p, mockUserTwitter);
                               return isOwner ? (
                                 <button
                                   onClick={() => handleExportCritiquesCsv(p)}
@@ -1796,11 +1811,7 @@ export default function Home() {
             <>
               {/* GLADIATOR DASHBOARD FOR COMPETITORS */}
               {userLoggedIn && mockUserTwitter && (() => {
-                const myShips = getLeaderboardData().filter(p => {
-                  const twitter1 = p.makerTwitter.replace(/^@/, "").toLowerCase();
-                  const twitter2 = mockUserTwitter.replace(/^@/, "").toLowerCase();
-                  return twitter1 === twitter2;
-                });
+                const myShips = getLeaderboardData().filter(p => isProductOwner(p, mockUserTwitter));
                 
                 return (
                   <div className="bg-[#181715]/90 border-2 border-[#d97706]/40 p-6 mb-8 text-[#faf5ef] shadow-pixel-md text-left">
