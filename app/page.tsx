@@ -1187,8 +1187,40 @@ export default function Home() {
       }
 
       if (critiques.length === 0) {
-        alert("This product has not received any votes or critiques yet in the active duels.");
-        return;
+        const confirmMock = window.confirm(
+          "Your product has connected to the database successfully, but it has not received any votes or critiques yet in the active duels!\n\n" +
+          "Would you like to export simulated mock critiques so you can instantly verify the CSV formatting?"
+        );
+        
+        if (confirmMock) {
+          const mockAdjectives = ["clean", "intuitive", "lightning-fast", "extremely polished", "highly responsive"];
+          const mockAdvices = [
+            "Add SVG download option",
+            "Optimize mobile responsive views",
+            "Add a search filter option",
+            "Speed up initial load times",
+            "Provide detailed onboarding tooltips"
+          ];
+          
+          critiques = [
+            {
+              voter: "@john_dev",
+              provider: "github",
+              role: "Winner (Voted For)",
+              text: `The UI is incredibly ${mockAdjectives[Math.floor(Math.random() * mockAdjectives.length)]}. Love the aesthetic!`,
+              date: new Date().toLocaleDateString()
+            },
+            {
+              voter: "@sarah_builder",
+              provider: "google",
+              role: "Loser (Opponent Voted For)",
+              text: `Needs optimization: ${mockAdvices[Math.floor(Math.random() * mockAdvices.length)]} for better conversion.`,
+              date: new Date().toLocaleDateString()
+            }
+          ];
+        } else {
+          return;
+        }
       }
 
       // 3. Compile CSV content
