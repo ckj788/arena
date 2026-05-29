@@ -361,6 +361,9 @@ export default function Home() {
     latestBracketRef.current = bracket;
   }, [bracket]);
 
+  const syncDebounceTimeoutRef = useRef<any>(null);
+  const latestRequestTimeRef = useRef<number>(0);
+
 
 
   // Act refs & trigger states for scroll effects
@@ -478,49 +481,68 @@ export default function Home() {
         { event: "*", schema: "public", table: "shipandbattle_matches" },
         async (payload) => {
           console.log("Realtime Match sync trigger received:", payload);
-          const b = await fetchCloudBracket();
-          if (b) {
-            // Guard against database replication latency/WAL race conditions during Force Start:
-            // If the local state is already "active" or "completed", but the database fetched state 
-            // is still "preparing", do NOT let the stale database state overwrite our local advanced state.
-            const localStatus = latestBracketRef.current?.status;
-            if (b.status === "preparing" && (localStatus === "active" || localStatus === "completed")) {
-              console.warn("⚠️ [SHIP OR DUEL] Ignored stale 'preparing' database status to prevent downgrade race condition.");
-            } else {
-              setBracket(b);
+          
+          // Debounce parallel realtime triggers to prevent WAL replication race conditions and network query spams
+          if (syncDebounceTimeoutRef.current) {
+            clearTimeout(syncDebounceTimeoutRef.current);
+          }
+
+          syncDebounceTimeoutRef.current = setTimeout(async () => {
+            const reqTime = Date.now();
+            latestRequestTimeRef.current = reqTime;
+
+            const b = await fetchCloudBracket();
+            
+            // If a newer query request has already been dispatched, discard this stale response immediately
+            // to completely prevent out-of-order latency rollbacks/pullbacks in GUI!
+            if (reqTime < latestRequestTimeRef.current) {
+              console.warn("⚠️ [SHIP OR DUEL] Discarded out-of-order stale fetchCloudBracket response.");
+              return;
             }
-            // If the updated match is our currently viewed match, sync its states
-            if (activeMatch && payload.new) {
-              const row = payload.new as any;
-              if (activeMatch.id === row.shipandbattle_id) {
-                // Find products A and B in in-memory state
-                const prodA = products.find(p => p.id === row.shipandbattle_product_a_id);
-                const prodB = products.find(p => p.id === row.shipandbattle_product_b_id);
-                if (prodA && prodB) {
-                  setActiveMatch({
-                    id: row.shipandbattle_id,
-                    roundNumber: row.shipandbattle_round_number,
-                    productA: prodA,
-                    productB: prodB,
-                    votesA: row.shipandbattle_votes_a,
-                    votesB: row.shipandbattle_votes_b,
-                    winnerId: row.shipandbattle_winner_id || undefined,
-                    votedUserIds: row.shipandbattle_voted_user_ids || []
-                  });
+
+            if (b) {
+              // Guard against database replication latency/WAL race conditions during Force Start:
+              // If the local state is already "active" or "completed", but the database fetched state 
+              // is still "preparing", do NOT let the stale database state overwrite our local advanced state.
+              const localStatus = latestBracketRef.current?.status;
+              if (b.status === "preparing" && (localStatus === "active" || localStatus === "completed")) {
+                console.warn("⚠️ [SHIP OR DUEL] Ignored stale 'preparing' database status to prevent downgrade race condition.");
+              } else {
+                setBracket(b);
+              }
+              // If the updated match is our currently viewed match, sync its states
+              if (activeMatch && payload.new) {
+                const row = payload.new as any;
+                if (activeMatch.id === row.shipandbattle_id) {
+                  // Find products A and B in in-memory state
+                  const prodA = products.find(p => p.id === row.shipandbattle_product_a_id);
+                  const prodB = products.find(p => p.id === row.shipandbattle_product_b_id);
+                  if (prodA && prodB) {
+                    setActiveMatch({
+                      id: row.shipandbattle_id,
+                      roundNumber: row.shipandbattle_round_number,
+                      productA: prodA,
+                      productB: prodB,
+                      votesA: row.shipandbattle_votes_a,
+                      votesB: row.shipandbattle_votes_b,
+                      winnerId: row.shipandbattle_winner_id || undefined,
+                      votedUserIds: row.shipandbattle_voted_user_ids || []
+                    });
+                  }
                 }
               }
+              // Trigger 1v1 Battle Screen Clash Rumble
+              setIsShaking(true);
+              setIsSwordsClashing(true);
+              setTimeout(() => {
+                setIsShaking(false);
+                setIsSwordsClashing(false);
+              }, 450);
+            } else {
+              // Cloud bracket transitioned to null (completed/cleared), run sync to catch state shift
+              syncCloudData();
             }
-            // Trigger 1v1 Battle Screen Clash Rumble
-            setIsShaking(true);
-            setIsSwordsClashing(true);
-            setTimeout(() => {
-              setIsShaking(false);
-              setIsSwordsClashing(false);
-            }, 450);
-          } else {
-            // Cloud bracket transitioned to null (completed/cleared), run sync to catch state shift
-            syncCloudData();
-          }
+          }, 150);
         }
       )
       .subscribe();
@@ -546,6 +568,9 @@ export default function Home() {
       if (supabase) {
         supabase.removeChannel(matchesChannel);
         supabase.removeChannel(votesChannel);
+      }
+      if (syncDebounceTimeoutRef.current) {
+        clearTimeout(syncDebounceTimeoutRef.current);
       }
     };
   }, [activeMatch, products]);
