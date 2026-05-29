@@ -36,18 +36,10 @@ export function getNewYorkTime(): Date {
 // 🚀 [TESTING DEPLOYMENT BYPASS]: 为了在 Vercel 部署后极速跑通全套流程，我们将原本等待至纽约零点的限制缩短为 10 秒倒计时！
 // 若要恢复原本的纽约零点限制，只需取消注释原版代码。
 export function getMillisecondsToNextNYMidnight(startedAt?: string): number {
-  if (startedAt) {
-    const elapsed = Date.now() - new Date(startedAt).getTime();
-    return Math.max(0, 10 * 1000 - elapsed);
-  }
-  return 10 * 1000; // ⚡️ 绕过纽约零点限制，10 秒内自动启动首轮对决！
-  
-  /* 原版纽约时间零点限制：
   const nyNow = getNewYorkTime();
   const nyMidnight = new Date(nyNow);
   nyMidnight.setHours(24, 0, 0, 0); 
   return nyMidnight.getTime() - nyNow.getTime();
-  */
 }
 
 // 3. 根据 3-2-1-1 规则，获取每轮赛事的规定时长（单位：毫秒）
