@@ -84,6 +84,7 @@ export default function Home() {
   const [mockUserTwitter, setMockUserTwitter] = useState("");
   const [userAuthType, setUserAuthType] = useState<"google" | "github" | null>(null);
   const [userSupabaseId, setUserSupabaseId] = useState<string>("");
+  const [userEmail, setUserEmail] = useState<string>("");
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
   // Real-time Supabase Authentication session listener
@@ -99,6 +100,7 @@ export default function Home() {
             setMockUserTwitter(parsed.mockUserTwitter);
             setUserAuthType(parsed.userAuthType);
             setUserSupabaseId(parsed.userSupabaseId || "");
+            setUserEmail(parsed.userEmail || "");
           }
         } catch (e) {
           console.warn("Failed to parse sandbox session from localStorage:", e);
@@ -271,6 +273,7 @@ export default function Home() {
   const handleUserSession = (authUser: any) => {
     setUserLoggedIn(true);
     setUserSupabaseId(authUser.id || "");
+    setUserEmail(authUser.email || "");
     const provider = authUser.app_metadata?.provider || authUser.identities?.[0]?.provider || "github";
     setUserAuthType(provider === "google" ? "google" : "github");
     
@@ -290,7 +293,8 @@ export default function Home() {
         userLoggedIn: true,
         mockUserTwitter: username,
         userAuthType: provider === "google" ? "google" : "github",
-        userSupabaseId: authUser.id || ""
+        userSupabaseId: authUser.id || "",
+        userEmail: authUser.email || ""
       }));
     }
   };
@@ -328,6 +332,7 @@ export default function Home() {
     setMockUserTwitter("");
     setUserAuthType(null);
     setUserSupabaseId("");
+    setUserEmail("");
     if (typeof window !== "undefined") {
       localStorage.removeItem("ship_duel_sandbox_user");
     }
@@ -769,6 +774,7 @@ export default function Home() {
     }
 
     // Limit to one product per person in the current season (waiting or active)
+    const isAdmin = userEmail && ["zyc729@outlook.com", "easoncheung9@gmail.com"].includes(userEmail.toLowerCase());
     const hasExisting = products.some(p => {
       if (p.queueStatus !== "waiting" && p.queueStatus !== "active") return false;
       if (userSupabaseId && p.creator_uid === userSupabaseId) return true;
@@ -779,7 +785,7 @@ export default function Home() {
       return false;
     });
 
-    if (hasExisting) {
+    if (hasExisting && !isAdmin) {
       alert("Submission Limit Exceeded!\n\nTo ensure fair play, each maker is allowed only ONE product in the waiting list or active queue per tournament cycle.");
       return;
     }
@@ -1041,6 +1047,10 @@ export default function Home() {
   };
 
   const isProductOwner = (p: Product, userTwitter: string, userSubId?: string) => {
+    // Admin bypass: allow admins to export/manage all products
+    const isAdmin = userEmail && ["zyc729@outlook.com", "easoncheung9@gmail.com"].includes(userEmail.toLowerCase());
+    if (isAdmin) return true;
+
     // 1. Local Browser Claim Check: If this product was submitted from this browser (100% reliable locally)
     if (typeof window !== "undefined") {
       try {
