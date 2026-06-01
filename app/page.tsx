@@ -1439,6 +1439,12 @@ export default function Home() {
           ))}
         </div>
 
+        {/* Global High-Visibility Announcement Bar at the absolute top */}
+        <div className="w-full bg-[#d97706] text-[#181715] font-pixel text-4xs uppercase tracking-widest py-3 px-6 text-center relative z-30 flex justify-center items-center gap-2 select-none shadow-sm font-bold border-b border-[#faf5ef]/10">
+          <span className="w-1.5 h-1.5 bg-[#181715] rounded-full animate-pulse shrink-0"></span>
+          <span className="leading-tight">⚡️ {products.length} VERIFIED PRODUCTS DEPLOYED TO THE ARENA. SUBMIT YOUR PRODUCT TO DUEL NOW ➔</span>
+        </div>
+
         {/* 8-Bit Pixel-Art Elegant Header inside First Fold */}
         <header className="border-b border-stone-850 py-5 px-6 sm:px-12 flex justify-between items-center bg-[#181715]/75 backdrop-blur-xs relative z-20 text-[#faf5ef] shadow-sm">
           <div className="flex items-center space-x-4">
@@ -1493,15 +1499,6 @@ export default function Home() {
         >
           {/* Left Column: Slogan and details */}
           <div className="max-w-xl relative z-20">
-            {/* Active Stat Badge above the main title */}
-            <div className="inline-flex items-center space-x-2 bg-[#d97706]/10 border border-[#d97706]/35 px-3 py-1.5 mb-5 shadow-pixel-xs select-none animate-hero-title relative">
-              <span className="w-1.5 h-1.5 bg-[#d97706] animate-ping rounded-full inline-block"></span>
-              <span className="w-1.5 h-1.5 bg-[#d97706] rounded-full absolute left-3"></span>
-              <span className="font-pixel text-[#faf5ef] text-4xs uppercase tracking-wider pl-3.5">
-                ⚡️ ARENA STATUS: <span className="text-[#d97706] font-bold">{products.length} STARTUPS</span> HAVE ENTERED THE DUEL
-              </span>
-            </div>
-
             <div className="flex flex-col">
               <h1 className="font-sans font-black tracking-tighter leading-[0.85] text-[#faf5ef] text-6xl sm:text-7xl md:text-8xl flex flex-col animate-hero-title">
                 <span className="drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">INDIE</span>
@@ -1519,14 +1516,14 @@ export default function Home() {
                   onClick={() => setIsSubmitOpen(true)}
                   className="btn-pixel btn-pixel-primary w-full py-4 px-8 text-xs sm:text-sm tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715] font-black"
                 >
-                  ⚔️ 提交你的产品入场决斗 →
+                  ⚔️ SUBMIT YOUR PRODUCT →
                 </button>
               ) : (
                 <button
                   onClick={scrollToDuel}
                   className="btn-pixel btn-pixel-primary w-full py-4 px-8 text-xs sm:text-sm tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715] font-black"
                 >
-                  ⚔️ 立即参与投票决斗 →
+                  ⚔️ VOTE IN LIVE DUEL →
                 </button>
               )}
             </div>
