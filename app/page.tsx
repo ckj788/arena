@@ -1047,10 +1047,6 @@ export default function Home() {
   };
 
   const isProductOwner = (p: Product, userTwitter: string, userSubId?: string) => {
-    // Admin bypass: allow admins to export/manage all products
-    const isAdmin = userEmail && ["zyc729@outlook.com", "easoncheung9@gmail.com"].includes(userEmail.toLowerCase());
-    if (isAdmin) return true;
-
     // 1. Local Browser Claim Check: If this product was submitted from this browser (100% reliable locally)
     if (typeof window !== "undefined") {
       try {
@@ -1101,7 +1097,8 @@ export default function Home() {
       alert("Authentication Required!\n\nPlease link and verify your identity before exporting critiques.");
       return;
     }
-    const isOwner = isProductOwner(product, mockUserTwitter, userSupabaseId);
+    const isAdmin = userEmail && ["zyc729@outlook.com", "easoncheung9@gmail.com"].includes(userEmail.toLowerCase());
+    const isOwner = isProductOwner(product, mockUserTwitter, userSupabaseId) || isAdmin;
     if (!isOwner) {
       alert("Access Denied!\n\nYou can only export critiques for your own registered products to respect developer privacy.");
       return;
@@ -1932,7 +1929,8 @@ export default function Home() {
                           </td>
                           <td className="py-3.5 px-4 text-center">
                             {(() => {
-                              const isOwner = userLoggedIn && mockUserTwitter && isProductOwner(p, mockUserTwitter, userSupabaseId);
+                              const isAdmin = userEmail && ["zyc729@outlook.com", "easoncheung9@gmail.com"].includes(userEmail.toLowerCase());
+                              const isOwner = userLoggedIn && mockUserTwitter && (isProductOwner(p, mockUserTwitter, userSupabaseId) || isAdmin);
                               return isOwner ? (
                                 <button
                                   onClick={() => handleExportCritiquesCsv(p)}
