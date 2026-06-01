@@ -1503,6 +1503,19 @@ export default function Home() {
               </p>
             </div>
             
+            {/* Arena Gladiator Stats Counter */}
+            <div className="mt-5 flex items-center space-x-3 bg-[#181715]/90 border border-stone-850 px-4 py-2.5 max-w-md shadow-pixel-sm animate-hero-sub select-none">
+              <div className="flex items-center justify-center bg-[#d97706]/10 border border-[#d97706]/30 w-8 h-8 rounded-none shrink-0 font-pixel text-[#d97706] text-xs">
+                ⚔️
+              </div>
+              <div className="font-mono text-3xs uppercase tracking-wider text-stone-400">
+                <span className="block text-[#faf5ef] font-pixel text-xs leading-none mb-0.5">
+                  {products.length} STARTUPS
+                </span>
+                have entered the arena to duel
+              </div>
+            </div>
+
             {/* 3-Step Action Guide */}
             <div className="mt-8 border-2 border-dashed border-[#d97706]/40 bg-[#181715]/90 p-4 sm:p-5 font-mono text-xs sm:text-sm text-stone-300 space-y-3.5 uppercase leading-normal shadow-pixel-xs select-none max-w-md animate-hero-sub">
               <span className="text-sm font-pixel text-[#d97706] block mb-2">🛡️ HOW TO PLAY:</span>
