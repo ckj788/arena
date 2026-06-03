@@ -553,14 +553,39 @@ export async function fetchCloudBracket(): Promise<Bracket | null> {
   };
 }
 
-// 5. 永久清除云端对局数据并重置
+// 5. 永久清除云端对局数据并重置（对 SEO 友好：保留产品和评价，仅重置活跃对局树）
 export async function clearCloudData(): Promise<void> {
   if (!supabase) return;
-  // 直接清空各关联表
-  await supabase.from("shipandbattle_votes").delete().neq("shipandbattle_feedback_winner", "NONSENSE_STRING_TRIGGER");
-  await supabase.from("shipandbattle_matches").delete().neq("shipandbattle_round_number", -100);
-  await supabase.from("shipandbattle_brackets").delete().neq("shipandbattle_status", "NONSENSE_STRING_TRIGGER");
-  await supabase.from("shipandbattle_products").delete().neq("shipandbattle_title", "NONSENSE_STRING_TRIGGER");
+
+  // A. 获取当前未完成（活跃/集结中）的 Bracket ID
+  const { data: activeBrackets } = await supabase
+    .from("shipandbattle_brackets")
+    .select("shipandbattle_id")
+    .in("shipandbattle_status", ["preparing", "active"]);
+
+  if (activeBrackets && activeBrackets.length > 0) {
+    const activeIds = activeBrackets.map(b => b.shipandbattle_id);
+
+    // B. 清除这些活跃对局关联的场次（已完成 completed 的对局和场次保留以维持 versus 页面 SEO）
+    await supabase
+      .from("shipandbattle_matches")
+      .delete()
+      .in("shipandbattle_bracket_id", activeIds);
+
+    // C. 清除这些活跃的 Bracket 树
+    await supabase
+      .from("shipandbattle_brackets")
+      .delete()
+      .in("shipandbattle_id", activeIds);
+  }
+
+  // D. 将当前正在对决中（active）的产品状态还原为排队中（waiting），避免选手状态孤立
+  await supabase
+    .from("shipandbattle_products")
+    .update({ shipandbattle_queue_status: "waiting" })
+    .eq("shipandbattle_queue_status", "active");
+
+  // 对 SEO 友好：绝对不删除历史产品表 shipandbattle_products 和历史评价表 shipandbattle_votes
 }
 
 const PAST_CHAMPS_KEY = "arena_past_champions_v1";
