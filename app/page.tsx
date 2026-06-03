@@ -1916,9 +1916,7 @@ export default function Home() {
                               {renderLogo(p.logo, "w-6 h-6")}
                               <div className="min-w-0">
                                 <a 
-                                  href={p.url} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
+                                  href={`/reviews/${p.id}`} 
                                   className="font-pixel text-stone-900 hover:text-[#d97706] hover:underline block uppercase truncate"
                                 >
                                   {p.title}
@@ -2054,14 +2052,22 @@ export default function Home() {
                                 <div className="text-5xs font-pixel text-stone-500 uppercase">
                                   Votes: <span className="text-[#faf5ef] font-mono">{ship.bracketVotes || 0}</span> | Wins: <span className="text-[#faf5ef] font-mono font-bold">{ship.wins || 0}</span>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleExportCritiquesCsv(ship)}
-                                  className="inline-flex items-center space-x-1.5 bg-[#d97706] border border-[#d97706] text-white px-3 py-1 text-4xs font-pixel rounded-none hover:bg-[#c25e00] hover:border-[#c25e00] transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
-                                  title="Export critiques as CSV"
-                                >
-                                  <span>📥 EXPORT MY ARENA CRITIQUES (CSV)</span>
-                                </button>
+                                <div className="flex gap-2">
+                                  <a 
+                                    href={`/reviews/${ship.id}`} 
+                                    className="inline-flex items-center space-x-1.5 bg-[#faf5ef] border border-pixel text-stone-900 px-3 py-1 text-4xs font-pixel rounded-none hover:bg-[#fff9f2] transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
+                                  >
+                                    <span>🛡️ VIEW MY SEO REVIEW PAGE</span>
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleExportCritiquesCsv(ship)}
+                                    className="inline-flex items-center space-x-1.5 bg-[#d97706] border border-[#d97706] text-white px-3 py-1 text-4xs font-pixel rounded-none hover:bg-[#c25e00] hover:border-[#c25e00] transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
+                                    title="Export critiques as CSV"
+                                  >
+                                    <span>📥 EXPORT MY ARENA CRITIQUES (CSV)</span>
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -2094,14 +2100,22 @@ export default function Home() {
                                   </span>
                                 </div>
                               </div>
-                              <button
-                                type="button"
-                                onClick={() => handleExportCritiquesCsv(ship)}
-                                className="inline-flex items-center space-x-1.5 bg-stone-900 border border-stone-800 text-stone-300 px-3 py-1 text-5xs font-pixel rounded-none hover:bg-stone-800 hover:text-white transition-all cursor-pointer font-bold uppercase shadow-pixel-xs self-end sm:self-auto"
-                                title="Export archived critiques as CSV"
-                              >
-                                <span>📥 DOWNLOAD CSV ARCHIVE</span>
-                              </button>
+                              <div className="flex gap-2 self-end sm:self-auto">
+                                <a 
+                                  href={`/reviews/${ship.id}`} 
+                                  className="inline-flex items-center space-x-1.5 bg-stone-900 border border-stone-800 text-stone-300 px-3 py-1 text-5xs font-pixel rounded-none hover:bg-stone-800 hover:text-white transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
+                                >
+                                  <span>🛡️ VIEW SEO PAGE</span>
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => handleExportCritiquesCsv(ship)}
+                                  className="inline-flex items-center space-x-1.5 bg-stone-900 border border-stone-800 text-stone-300 px-3 py-1 text-5xs font-pixel rounded-none hover:bg-stone-800 hover:text-white transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
+                                  title="Export archived critiques as CSV"
+                                >
+                                  <span>📥 DOWNLOAD CSV ARCHIVE</span>
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -2182,15 +2196,24 @@ export default function Home() {
                               <p className="text-xs text-stone-500 leading-relaxed mb-4 line-clamp-2">{p.tagline}</p>
                             </div>
 
-                            <a 
-                              href={p.url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                            >
-                              <span>🌐 LIVE DEMO URL</span>
-                              <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                            </a>
+                            <div className="flex flex-col gap-2 mb-4">
+                              <a 
+                                href={p.url} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                              >
+                                <span>🌐 LIVE DEMO URL</span>
+                                <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                              </a>
+                              <a 
+                                href={`/reviews/${p.id}`} 
+                                className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                              >
+                                <span>📝 SEO CRITIQUES & REVIEWS</span>
+                                <span className="text-4xs text-[#d97706] underline font-pixel">view reviews ➔</span>
+                              </a>
+                            </div>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
                               <div className="flex items-center space-x-2">
@@ -2266,15 +2289,24 @@ export default function Home() {
                                 <p className="text-xs text-stone-500 leading-relaxed mb-4 line-clamp-2">{p.tagline}</p>
                               </div>
 
-                              <a 
-                                href={p.url} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                              >
-                                <span>🌐 LIVE DEMO URL</span>
-                                <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                              </a>
+                              <div className="flex flex-col gap-2 mb-4">
+                                <a 
+                                  href={p.url} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                                >
+                                  <span>🌐 LIVE DEMO URL</span>
+                                  <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                                </a>
+                                <a 
+                                  href={`/reviews/${p.id}`} 
+                                  className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                                >
+                                  <span>📝 SEO CRITIQUES & REVIEWS</span>
+                                  <span className="text-4xs text-[#d97706] underline font-pixel">view reviews ➔</span>
+                                </a>
+                              </div>
 
                               <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
                                 <div className="flex items-center space-x-2">
@@ -2370,7 +2402,7 @@ export default function Home() {
                             <p className="text-3xs text-stone-500 font-sans leading-relaxed mb-4">{activeMatch.productA.tagline}</p>
                           </div>
 
-                          <div className="flex flex-col space-y-3">
+                          <div className="flex flex-col space-y-2">
                             <a 
                               href={activeMatch.productA.url} 
                               target="_blank" 
@@ -2379,6 +2411,13 @@ export default function Home() {
                             >
                               <span>🌐 LIVE DEMO URL</span>
                               <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                            </a>
+                            <a 
+                              href={`/reviews/${activeMatch.productA.id}`}
+                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
+                            >
+                              <span>📝 SEO REVIEWS & STATS</span>
+                              <span className="text-5xs text-[#d97706] underline font-pixel">view reviews ➔</span>
                             </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
@@ -2429,10 +2468,17 @@ export default function Home() {
                           </div>
 
                           {/* Score labels */}
-                          <div className="flex justify-between w-full font-pixel text-4xs text-stone-500">
+                          <div className="flex justify-between w-full font-pixel text-4xs text-stone-500 mb-1">
                             <span>{getPercentages(activeMatch).pctA}% ({activeMatch.votesA}P)</span>
                             <span>{getPercentages(activeMatch).pctB}% ({activeMatch.votesB}P)</span>
                           </div>
+                          
+                          <a 
+                            href={`/versus/${activeMatch.productA.id}-vs-${activeMatch.productB.id}`}
+                            className="text-[9px] font-pixel text-[#d97706] hover:underline uppercase block text-center mt-1 animate-pulse"
+                          >
+                            ⚔️ View Dynamic Duel Page
+                          </a>
 
                           {activeMatch.winnerId && (
                             <div className="bg-emerald-50 border border-emerald-300 text-emerald-700 px-3 py-1 text-4xs font-pixel uppercase shadow-pixel-xs mt-2">
@@ -2462,7 +2508,7 @@ export default function Home() {
                             <p className="text-3xs text-stone-500 font-sans leading-relaxed mb-4">{activeMatch.productB.tagline}</p>
                           </div>
 
-                          <div className="flex flex-col space-y-3">
+                          <div className="flex flex-col space-y-2">
                             <a 
                               href={activeMatch.productB.url} 
                               target="_blank" 
@@ -2471,6 +2517,13 @@ export default function Home() {
                             >
                               <span>🌐 LIVE DEMO URL</span>
                               <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                            </a>
+                            <a 
+                              href={`/reviews/${activeMatch.productB.id}`}
+                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
+                            >
+                              <span>📝 SEO REVIEWS & STATS</span>
+                              <span className="text-5xs text-[#d97706] underline font-pixel">view reviews ➔</span>
                             </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">

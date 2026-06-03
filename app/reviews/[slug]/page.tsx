@@ -293,15 +293,76 @@ export default async function ReviewPage({ params }: Props) {
                 ({product.makerTwitter})
               </a>
             </div>
-            <a 
-              href={product.url}
-              target="_blank"
-              className="px-4 py-2 rounded-xl bg-[#ffbe18] text-black font-extrabold hover:scale-105 hover:bg-[#e0a612] transition shadow-md"
-            >
-              Visit Startup Website ➔
-            </a>
+            <div className="flex gap-3">
+              <a 
+                href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out the founder critiques and 1v1 duel stats for ${product.title} on @IndieClash! ⚔️\n\nhttps://www.indieclash.com/reviews/${product.id}`)}`}
+                target="_blank"
+                className="px-4 py-2 rounded-xl border border-[#ffbe18]/30 hover:border-[#ffbe18]/60 hover:bg-[#ffbe18]/5 text-[#ffbe18] font-bold text-sm transition font-mono flex items-center gap-1.5"
+              >
+                📢 Share on X
+              </a>
+              <a 
+                href={product.url}
+                target="_blank"
+                className="px-4 py-2 rounded-xl bg-[#ffbe18] text-black font-extrabold hover:scale-105 hover:bg-[#e0a612] transition shadow-md"
+              >
+                Visit Startup Website ➔
+              </a>
+            </div>
           </div>
         </div>
+
+        {/* 🏆 Embed Backlink Badge Widget */}
+        <section className="bg-[#120d09]/40 border border-[#ffbe18]/25 p-6 sm:p-8 rounded-3xl mb-12 shadow-2xl relative overflow-hidden backdrop-blur-md">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-[#ffbe18]/5 rounded-full blur-3xl pointer-events-none" />
+          <h2 className="text-xl font-extrabold text-white mb-2 flex items-center gap-2">
+            🏆 Claim Your Badge & Boost Your SEO Rank
+          </h2>
+          <p className="text-xs text-[#faf5ef]/70 mb-6 font-light leading-relaxed">
+            Showcase your startup's performance in the Indie Clash arena. Place this live badge on your website or GitHub README to increase search authority and drive traffic back to your critiques feed.
+          </p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-black/40 p-5 rounded-2xl border border-white/5 items-center">
+            {/* Badge preview */}
+            <div className="md:col-span-4 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-white/5 pb-6 md:pb-0 md:pr-6 shrink-0 text-center">
+              <span className="text-[10px] font-mono text-[#faf5ef]/40 mb-2 uppercase tracking-widest block">Badge Preview</span>
+              <a 
+                href={`https://www.indieclash.com/reviews/${product.id}`}
+                target="_blank"
+                className="inline-block transition-transform hover:scale-105"
+              >
+                <img 
+                  src={`https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Indie_Clash-Voted_on_Arena-ffbe18?style=flat-square`} 
+                  alt="Voted on Indie Clash" 
+                  className="rounded-sm object-contain"
+                />
+              </a>
+            </div>
+            
+            {/* Embed Code Copy */}
+            <div className="md:col-span-8 space-y-4">
+              <div>
+                <span className="text-[10px] font-mono text-[#faf5ef]/40 mb-1.5 uppercase tracking-widest block">HTML Embed Code (for website homepage/footer)</span>
+                <textarea 
+                  readOnly
+                  value={`<a href="https://www.indieclash.com/reviews/${product.id}" target="_blank"><img src="https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Indie_Clash-Voted_on_Arena-ffbe18?style=flat-square" alt="Voted on Indie Clash" /></a>`}
+                  className="w-full h-14 bg-black/60 border border-white/10 rounded-xl p-2 text-[10px] font-mono text-[#faf5ef]/80 focus:outline-none focus:border-[#ffbe18]/40 select-all leading-normal"
+                />
+              </div>
+              <div>
+                <span className="text-[10px] font-mono text-[#faf5ef]/40 mb-1.5 uppercase tracking-widest block">Markdown Code (for GitHub README)</span>
+                <textarea 
+                  readOnly
+                  value={`[![Voted on Indie Clash](https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Indie_Clash-Voted_on_Arena-ffbe18?style=flat-square)](https://www.indieclash.com/reviews/${product.id})`}
+                  className="w-full h-14 bg-black/60 border border-white/10 rounded-xl p-2 text-[10px] font-mono text-[#faf5ef]/80 focus:outline-none focus:border-[#ffbe18]/40 select-all leading-normal"
+                />
+              </div>
+              <div className="text-[10px] text-[#ffbe18] font-mono text-right italic">
+                💡 Hint: Click inside any box to select code, then copy and paste!
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* 🛡️ The Critique Feed */}
         <section className="space-y-6 mb-12">
