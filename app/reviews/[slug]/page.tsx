@@ -39,7 +39,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: `${title} Reviews & Constructive Critiques | INDIE CLASH`,
       description: `Read verified founder reviews and critiques for ${title}. Compare win rates and see how it performs in live 1v1 startup duels.`,
-      url: `https://arena-chi-coral.vercel.app/reviews/${slug}`,
+      url: `https://www.indieclash.com/reviews/${slug}`,
       siteName: "INDIE CLASH",
       images: [
         {

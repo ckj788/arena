@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { SEED_PRODUCTS } from "@/lib/mockData";
 
 export async function GET() {
-  const baseUrl = "https://arena-chi-coral.vercel.app";
+  const baseUrl = "https://www.indieclash.com";
   
   const urls: string[] = [
     `<url><loc>${baseUrl}/</loc><changefreq>daily</changefreq><priority>1.0</priority></url>`,

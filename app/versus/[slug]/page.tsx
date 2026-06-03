@@ -47,7 +47,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title: `${titleA} vs ${titleB} — Who Wins this Startup Duel?`,
       description: `Compare ${titleA} and ${titleB} features, ship timeframes, and developer votes. Trade deep peer reviews on INDIE CLASH.`,
-      url: `https://arena-chi-coral.vercel.app/versus/${slug}`,
+      url: `https://www.indieclash.com/versus/${slug}`,
       siteName: "INDIE CLASH",
       images: [
         {
