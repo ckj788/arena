@@ -2186,9 +2186,7 @@ export default function Home() {
                                 {renderLogo(p.logo, "w-8 h-8")}
                               </div>
                               <a 
-                                href={p.url} 
-                                target="_blank" 
-                                rel="noreferrer" 
+                                href={`/reviews/${p.id}`} 
                                 className="font-pixel text-xs text-[#181715] hover:text-[#d97706] hover:underline mb-2 uppercase block"
                               >
                                 {p.title}
@@ -2196,24 +2194,15 @@ export default function Home() {
                               <p className="text-xs text-stone-500 leading-relaxed mb-4 line-clamp-2">{p.tagline}</p>
                             </div>
 
-                            <div className="flex flex-col gap-2 mb-4">
-                              <a 
-                                href={p.url} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                              >
-                                <span>🌐 LIVE DEMO URL</span>
-                                <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                              </a>
-                              <a 
-                                href={`/reviews/${p.id}`} 
-                                className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                              >
-                                <span>📝 SEO CRITIQUES & REVIEWS</span>
-                                <span className="text-4xs text-[#d97706] underline font-pixel">view reviews ➔</span>
-                              </a>
-                            </div>
+                            <a 
+                              href={p.url} 
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                            >
+                              <span>🌐 LIVE DEMO URL</span>
+                              <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                            </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
                               <div className="flex items-center space-x-2">
@@ -2279,9 +2268,7 @@ export default function Home() {
                                   {renderLogo(p.logo, "w-8 h-8")}
                                 </div>
                                 <a 
-                                  href={p.url} 
-                                  target="_blank" 
-                                  rel="noreferrer" 
+                                  href={`/reviews/${p.id}`} 
                                   className="font-pixel text-xs text-[#181715] hover:text-[#d97706] hover:underline mb-2 uppercase block"
                                 >
                                   {p.title}
@@ -2289,24 +2276,15 @@ export default function Home() {
                                 <p className="text-xs text-stone-500 leading-relaxed mb-4 line-clamp-2">{p.tagline}</p>
                               </div>
 
-                              <div className="flex flex-col gap-2 mb-4">
-                                <a 
-                                  href={p.url} 
-                                  target="_blank" 
-                                  rel="noreferrer"
-                                  className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                                >
-                                  <span>🌐 LIVE DEMO URL</span>
-                                  <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                                </a>
-                                <a 
-                                  href={`/reviews/${p.id}`} 
-                                  className="bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                                >
-                                  <span>📝 SEO CRITIQUES & REVIEWS</span>
-                                  <span className="text-4xs text-[#d97706] underline font-pixel">view reviews ➔</span>
-                                </a>
-                              </div>
+                              <a 
+                                href={p.url} 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                              >
+                                <span>🌐 LIVE DEMO URL</span>
+                                <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                              </a>
 
                               <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
                                 <div className="flex items-center space-x-2">
@@ -2392,9 +2370,7 @@ export default function Home() {
                               {renderLogo(activeMatch.productA.logo, "w-10 h-10")}
                             </div>
                             <a 
-                              href={activeMatch.productA.url} 
-                              target="_blank" 
-                              rel="noreferrer" 
+                              href={`/reviews/${activeMatch.productA.id}`} 
                               className="font-pixel text-sm text-stone-900 hover:text-[#d97706] hover:underline block uppercase mb-1"
                             >
                               {activeMatch.productA.title}
@@ -2402,7 +2378,7 @@ export default function Home() {
                             <p className="text-3xs text-stone-500 font-sans leading-relaxed mb-4">{activeMatch.productA.tagline}</p>
                           </div>
 
-                          <div className="flex flex-col space-y-2">
+                          <div className="flex flex-col space-y-3">
                             <a 
                               href={activeMatch.productA.url} 
                               target="_blank" 
@@ -2411,13 +2387,6 @@ export default function Home() {
                             >
                               <span>🌐 LIVE DEMO URL</span>
                               <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                            </a>
-                            <a 
-                              href={`/reviews/${activeMatch.productA.id}`}
-                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
-                            >
-                              <span>📝 SEO REVIEWS & STATS</span>
-                              <span className="text-5xs text-[#d97706] underline font-pixel">view reviews ➔</span>
                             </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
@@ -2498,9 +2467,7 @@ export default function Home() {
                               {renderLogo(activeMatch.productB.logo, "w-10 h-10")}
                             </div>
                             <a 
-                              href={activeMatch.productB.url} 
-                              target="_blank" 
-                              rel="noreferrer" 
+                              href={`/reviews/${activeMatch.productB.id}`} 
                               className="font-pixel text-sm text-stone-900 hover:text-[#d97706] hover:underline block uppercase mb-1"
                             >
                               {activeMatch.productB.title}
@@ -2508,7 +2475,7 @@ export default function Home() {
                             <p className="text-3xs text-stone-500 font-sans leading-relaxed mb-4">{activeMatch.productB.tagline}</p>
                           </div>
 
-                          <div className="flex flex-col space-y-2">
+                          <div className="flex flex-col space-y-3">
                             <a 
                               href={activeMatch.productB.url} 
                               target="_blank" 
@@ -2517,13 +2484,6 @@ export default function Home() {
                             >
                               <span>🌐 LIVE DEMO URL</span>
                               <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                            </a>
-                            <a 
-                              href={`/reviews/${activeMatch.productB.id}`}
-                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
-                            >
-                              <span>📝 SEO REVIEWS & STATS</span>
-                              <span className="text-5xs text-[#d97706] underline font-pixel">view reviews ➔</span>
                             </a>
 
                             <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
