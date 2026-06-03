@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabaseClient";
 import { SEED_PRODUCTS } from "@/lib/mockData";
 
+export const dynamic = "force-dynamic";
+
 export async function GET() {
   const baseUrl = "https://www.indieclash.com";
   
@@ -90,7 +92,7 @@ export async function GET() {
   return new Response(sitemapXml.trim(), {
     headers: {
       "Content-Type": "application/xml",
-      "Cache-Control": "public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400",
+      "Cache-Control": "public, max-age=60, s-maxage=60, stale-while-revalidate=600",
     },
   });
 }
