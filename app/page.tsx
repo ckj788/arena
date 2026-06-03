@@ -790,11 +790,42 @@ export default function Home() {
       return;
     }
 
+    const normalizedUrl = newUrl.startsWith("http") ? newUrl : `https://${newUrl}`;
+
+    // Generate clean semantic URL slug from product website domain
+    let parsedSlug = "product";
+    try {
+      const parsedUrl = new URL(normalizedUrl);
+      let host = parsedUrl.hostname.toLowerCase();
+      host = host.replace(/^www\./, "");
+      const hostParts = host.split(".");
+      if (hostParts.length > 2 && ["app", "dev", "www", "play", "get", "use", "try", "go", "my"].includes(hostParts[0])) {
+        parsedSlug = hostParts[1];
+      } else {
+        parsedSlug = hostParts[0];
+      }
+      parsedSlug = parsedSlug.replace(/[^a-z0-9-]/g, "");
+    } catch (e) {
+      parsedSlug = newTitle.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+    }
+    if (!parsedSlug) {
+      parsedSlug = `product-${Date.now()}`;
+    }
+
+    // Ensure 100% uniqueness in DB to prevent primary key collision
+    let uniqueSlug = parsedSlug;
+    let collisionCount = 1;
+    while (products.some(p => p.id.toLowerCase() === uniqueSlug.toLowerCase())) {
+      uniqueSlug = `${parsedSlug}-${Math.random().toString(36).substring(2, 5)}`;
+      collisionCount++;
+      if (collisionCount > 10) break;
+    }
+
     const newProd: Product = {
-      id: `p_user_${Date.now()}`,
+      id: uniqueSlug,
       title: newTitle,
       tagline: newTagline,
-      url: newUrl.startsWith("http") ? newUrl : `https://${newUrl}`,
+      url: normalizedUrl,
       shipTimeframe: newTimeframe,
       makerName: newMaker || "Anonymous Maker",
       makerTwitter: newTwitter ? (newTwitter.startsWith("@") ? newTwitter : `@${newTwitter}`) : "@anonymous",
