@@ -69,6 +69,25 @@ export async function GET(request: Request) {
       };
     }
 
+    const renderOgLogo = (logoStr: string) => {
+      if (!logoStr) return null;
+      const isImg = logoStr.startsWith("data:image") || logoStr.startsWith("http") || logoStr.startsWith("/");
+      if (isImg) {
+        return (
+          <img
+            src={logoStr}
+            alt="Logo"
+            style={{
+              width: "110px",
+              height: "110px",
+              borderRadius: "16px",
+            }}
+          />
+        );
+      }
+      return <span style={{ fontSize: "80px" }}>{logoStr}</span>;
+    };
+
     // Generate dynamic 1200x630 layout
     return new ImageResponse(
       (
@@ -136,9 +155,10 @@ export async function GET(request: Request) {
                   alignItems: "center",
                   justifyContent: "center",
                   boxShadow: "0 8px 16px rgba(0,0,0,0.4)",
+                  overflow: "hidden",
                 }}
               >
-                {productA.logo}
+                {renderOgLogo(productA.logo)}
               </div>
               <span
                 style={{
@@ -199,9 +219,10 @@ export async function GET(request: Request) {
                   alignItems: "center",
                   justifyContent: "center",
                   boxShadow: "0 8px 16px rgba(0,0,0,0.4)",
+                  overflow: "hidden",
                 }}
               >
-                {productB.logo}
+                {renderOgLogo(productB.logo)}
               </div>
               <span
                 style={{

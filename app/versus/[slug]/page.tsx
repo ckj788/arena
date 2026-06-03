@@ -96,6 +96,15 @@ export async function generateStaticParams() {
 
 export const revalidate = 1800; // Settle cache every 30 minutes in background
 
+const renderLogo = (logoStr: string, className = "w-10 h-10 object-contain") => {
+  if (!logoStr) return null;
+  const isImg = logoStr.startsWith("data:image") || logoStr.startsWith("http") || logoStr.startsWith("/");
+  if (isImg) {
+    return <img src={logoStr} alt="Logo" className={`${className} inline-block shrink-0 rounded-md object-contain`} />;
+  }
+  return <span className="inline-block shrink-0 text-4xl">{logoStr}</span>;
+};
+
 export default async function VersusPage({ params }: Props) {
   const { slug } = await params;
   const parts = slug.split("-vs-");
@@ -323,8 +332,8 @@ export default async function VersusPage({ params }: Props) {
             <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/5 rounded-full blur-2xl group-hover:bg-orange-500/10 transition pointer-events-none" />
             
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-4xl shadow-inner">
-                {productA.logo}
+              <div className="w-16 h-16 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shadow-inner overflow-hidden">
+                {renderLogo(productA.logo, "w-10 h-10")}
               </div>
               <div>
                 <h3 className="text-2xl font-bold text-white tracking-tight">{productA.title}</h3>
@@ -371,8 +380,8 @@ export default async function VersusPage({ params }: Props) {
             <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition pointer-events-none" />
 
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-4xl shadow-inner">
-                {productB.logo}
+              <div className="w-16 h-16 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shadow-inner overflow-hidden">
+                {renderLogo(productB.logo, "w-10 h-10")}
               </div>
               <div>
                 <h3 className="text-2xl font-bold text-white tracking-tight">{productB.title}</h3>

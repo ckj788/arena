@@ -86,6 +86,15 @@ export async function generateStaticParams() {
 
 export const revalidate = 1800; // Recache background every 30 minutes
 
+const renderLogo = (logoStr: string, className = "w-12 h-12 object-contain") => {
+  if (!logoStr) return null;
+  const isImg = logoStr.startsWith("data:image") || logoStr.startsWith("http") || logoStr.startsWith("/");
+  if (isImg) {
+    return <img src={logoStr} alt="Logo" className={`${className} inline-block shrink-0 rounded-md object-contain`} />;
+  }
+  return <span className="inline-block shrink-0 text-5xl">{logoStr}</span>;
+};
+
 export default async function ReviewPage({ params }: Props) {
   const { slug } = await params;
 
@@ -236,8 +245,8 @@ export default async function ReviewPage({ params }: Props) {
           <div className="absolute top-0 right-0 w-32 h-32 bg-[#ffbe18]/5 rounded-full blur-3xl pointer-events-none" />
           
           <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left mb-6">
-            <div className="w-20 h-20 rounded-2xl bg-[#ffbe18]/10 border border-[#ffbe18]/20 flex items-center justify-center text-5xl shadow-inner select-none shrink-0">
-              {product.logo}
+            <div className="w-20 h-20 rounded-2xl bg-[#ffbe18]/10 border border-[#ffbe18]/20 flex items-center justify-center shadow-inner select-none shrink-0 overflow-hidden">
+              {renderLogo(product.logo, "w-14 h-14")}
             </div>
             <div>
               <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
