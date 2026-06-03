@@ -1869,7 +1869,6 @@ export default function Home() {
                       <th className="py-3 px-4 text-center hidden sm:table-cell">Wins</th>
                       <th className="py-3 px-4 text-center">Votes</th>
                       <th className="py-3 px-4 text-center">AP Score</th>
-                      <th className="py-3 px-4 text-center">Critiques</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-250 font-mono text-2xs">
@@ -1918,28 +1917,6 @@ export default function Home() {
                           </td>
                           <td className="py-3.5 px-4 text-center font-pixel text-3xs text-[#d97706]">
                             {p.points} AP
-                          </td>
-                          <td className="py-3.5 px-4 text-center">
-                            {(() => {
-                              const isAdmin = userEmail && ["zyc729@outlook.com", "easoncheung9@gmail.com"].includes(userEmail.toLowerCase());
-                              const isOwner = userLoggedIn && mockUserTwitter && (isProductOwner(p, mockUserTwitter, userSupabaseId) || isAdmin);
-                              return isOwner ? (
-                                <button
-                                  onClick={() => handleExportCritiquesCsv(p)}
-                                  className="inline-flex items-center space-x-1 bg-amber-50 border border-amber-300 text-[#d97706] px-2 py-0.5 text-3xs font-pixel rounded-none hover:bg-amber-100 hover:border-amber-500 transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
-                                  title="Export your critiques as CSV"
-                                >
-                                  <span>📥 CSV</span>
-                                </button>
-                              ) : (
-                                <span 
-                                  className="text-stone-400 font-pixel text-4xs uppercase flex items-center justify-center gap-1 select-none" 
-                                  title="Only the verified project owner can export critiques"
-                                >
-                                  🔒 PRIVATE
-                                </span>
-                              );
-                            })()}
                           </td>
                         </tr>
                       );
