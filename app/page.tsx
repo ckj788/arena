@@ -46,6 +46,7 @@ export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [bracket, setBracket] = useState<Bracket | null>(null);
   const [activeMatch, setActiveMatch] = useState<Match | null>(null);
+  const isInitialSyncDone = useRef(false);
 
   // Window scroll position tracking state
   const [scrollY, setScrollY] = useState(0);
@@ -381,6 +382,7 @@ export default function Home() {
 
   // Synchronize state changes to memoryCache and localStorage cache (SWR Sync)
   useEffect(() => {
+    if (!isInitialSyncDone.current) return;
     if (products && products.length > 0) {
       memoryCache.products = products;
       if (typeof window !== "undefined") {
@@ -392,6 +394,7 @@ export default function Home() {
   }, [products]);
 
   useEffect(() => {
+    if (!isInitialSyncDone.current) return;
     memoryCache.bracket = bracket;
     if (typeof window !== "undefined") {
       try {
@@ -401,6 +404,7 @@ export default function Home() {
   }, [bracket]);
 
   useEffect(() => {
+    if (!isInitialSyncDone.current) return;
     if (pastChampions && pastChampions.length > 0) {
       memoryCache.champs = pastChampions;
       if (typeof window !== "undefined") {
@@ -462,26 +466,33 @@ export default function Home() {
     // 3. Skip background fetch if we did one in the last 3 seconds
     const now = Date.now();
     if (memoryCache.products && (now - memoryCache.lastFetchTime < 3000)) {
+      isInitialSyncDone.current = true;
       return;
     }
 
-    // 4. Background revalidation: fetch fresh database records
+    // 4. Background revalidation: fetch fresh database records in parallel
     try {
-      const prods = await fetchCloudProducts();
-      if (prods && prods.length > 0) {
-        setProducts(prods);
-      }
-      
-      const champs = await fetchCloudPastChampions();
-      if (champs) {
-        setPastChampions(champs);
-      }
-      
-      const b = await fetchCloudBracket();
+      const [prods, champs, b] = await Promise.all([
+        fetchCloudProducts(),
+        fetchCloudPastChampions(),
+        fetchCloudBracket()
+      ]);
+
       memoryCache.lastFetchTime = Date.now();
 
+      if (prods && prods.length > 0) {
+        setProducts(prods);
+        memoryCache.products = prods;
+      }
+      
+      if (champs) {
+        setPastChampions(champs);
+        memoryCache.champs = champs;
+      }
+      
       if (b) {
         setBracket(b);
+        memoryCache.bracket = b;
         const round = getActiveRound(b);
         let active = null;
         if (round === 1) active = b.round1.find(m => !m.winnerId) || b.round1[0];
@@ -491,10 +502,19 @@ export default function Home() {
         setActiveMatch(active || null);
       } else {
         setBracket(null);
+        memoryCache.bracket = null;
         setActiveMatch(null);
+      }
+
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
+        } catch (e) {}
       }
     } catch (e) {
       console.error("Error syncing data:", e);
+    } finally {
+      isInitialSyncDone.current = true;
     }
   };
 
