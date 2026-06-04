@@ -1651,134 +1651,239 @@ export default function ArenaClient({
             opacity: Math.max(0, 1 - scrollY / 300),
           }}
         >
-          {/* Left Column: Slogan and details */}
-          <div className="max-w-xl relative z-20">
-            <div className="flex flex-col">
-              <h1 className="font-sans font-black tracking-tighter leading-[0.85] text-[#faf5ef] text-6xl sm:text-7xl md:text-8xl flex flex-col animate-hero-title">
+          {/* Left Column: Slogan and details in a high-quality glassmorphism panel */}
+          <div className="max-w-xl relative z-20 bg-[#141210]/85 backdrop-blur-md border border-stone-850/80 p-6 sm:p-8 rounded-none shadow-pixel-lg animate-hero-title">
+            <div className="flex flex-col text-left">
+              <h1 className="font-sans font-black tracking-tighter leading-[0.85] text-[#faf5ef] text-5xl sm:text-6xl md:text-7xl flex flex-col">
                 <span className="drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">INDIE</span>
                 <span className="text-[#dc2626] drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">CLASH</span>
               </h1>
-              <p className="text-[#faf5ef] font-mono text-2xs font-bold tracking-widest mt-4 uppercase animate-hero-sub drop-shadow-[0_2px_2px_rgba(0,0,0,0.95)]">
-                1v1 head-to-head product duels & peer critiques.
+              <p className="text-[#d97706] font-pixel text-4xs sm:text-3xs font-bold tracking-widest mt-4 uppercase">
+                LAUNCH OR DIE. THE ULTIMATE INDIE PRODUCT BATTLEGROUND.
+              </p>
+              <p className="text-stone-300 font-sans text-2xs font-normal tracking-wide mt-2.5 leading-relaxed">
+                No coordinate rings. No fake upvotes. Deploy your product into the 1v1 arena, duel for survival, and let unfiltered peer feedback decide your fate.
               </p>
             </div>
 
+            {/* Live Ticker banner if match is active */}
+            {bracket && bracket.status === "active" && activeMatch && (
+              <div className="mt-5 bg-[#d97706]/10 border border-[#d97706]/30 px-3.5 py-2 flex items-center justify-between text-5xs font-pixel text-[#d97706] animate-pulse">
+                <span className="flex items-center gap-1.5 font-bold uppercase">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block animate-ping"></span>
+                  🔴 决斗进行中
+                </span>
+                <span className="truncate max-w-[200px] text-stone-200">
+                  {activeMatch.productA.title.toUpperCase()} VS {activeMatch.productB.title.toUpperCase()}
+                </span>
+                <span className="underline select-none cursor-pointer" onClick={scrollToDuel}>前往投票 ➔</span>
+              </div>
+            )}
+
             {/* Dual Core CTAs */}
-            <div className="mt-8 max-w-md w-full animate-hero-cta">
-              {!bracket ? (
-                <button
-                  onClick={() => setIsSubmitOpen(true)}
-                  className="btn-pixel btn-pixel-primary w-full py-4 px-8 text-xs sm:text-sm tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715] font-black"
-                >
-                  ⚔️ SUBMIT YOUR PRODUCT →
-                </button>
-              ) : (
-                <button
-                  onClick={scrollToDuel}
-                  className="btn-pixel btn-pixel-primary w-full py-4 px-8 text-xs sm:text-sm tracking-wider shadow-pixel-lg hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715] font-black"
-                >
-                  ⚔️ VOTE IN LIVE DUEL →
-                </button>
-              )}
+            <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full animate-hero-cta">
+              <button
+                onClick={scrollToDuel}
+                className="btn-pixel flex-1 py-3 px-5 text-4xs font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-stone-900 font-black shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all uppercase cursor-pointer"
+              >
+                ⚔️ {bracket && bracket.status === "active" ? "ENTER THE ARENA / 进入战场" : "WITNESS THE DUEL / 围观决斗"}
+              </button>
+              
+              <button
+                onClick={() => setIsSubmitOpen(true)}
+                className="btn-pixel flex-1 py-3 px-5 text-4xs font-pixel bg-[#1e1c1a] hover:bg-stone-900 text-stone-200 border-2 border-stone-850 hover:border-stone-750 font-black shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all uppercase cursor-pointer"
+              >
+                🛡️ DEPLOY PRODUCT / 派遣出征
+              </button>
             </div>
 
             {/* Premium Trust Badges */}
-            <div className="mt-12 flex flex-wrap gap-4 items-center animate-hero-badge">
-              <span className="flex items-center space-x-2 bg-[#181715]/75 border border-stone-800/80 px-3 py-1.5 text-3xs font-pixel text-stone-200 shadow-pixel-sm">
-                <span>🛡️</span> <span>100% Verifiable & Public</span>
+            <div className="mt-8 flex flex-wrap gap-3 items-center animate-hero-badge">
+              <span className="flex items-center space-x-1.5 bg-[#1e1b19] border border-stone-850 px-2.5 py-1 text-5xs font-pixel text-stone-300">
+                <span>⚔️</span> <span>0% Coordinate Rings / 绝无互刷</span>
               </span>
-              <span className="flex items-center space-x-2 bg-[#181715]/75 border border-stone-800/80 px-3 py-1.5 text-3xs font-pixel text-[#d97706] shadow-pixel-sm">
-                <span>🤖</span> <span>Minimized Vote Rigging</span>
+              <span className="flex items-center space-x-1.5 bg-[#1e1b19] border border-stone-850 px-2.5 py-1 text-5xs font-pixel text-[#d97706]">
+                <span>🛡️</span> <span>Unfiltered Critique / 真实吐槽</span>
               </span>
-              <span className="flex items-center space-x-2 bg-[#181715]/75 border border-stone-800/80 px-3 py-1.5 text-3xs font-pixel text-emerald-500 shadow-pixel-sm">
-                <span>💬</span> <span>Authentic Peer Critique</span>
+              <span className="flex items-center space-x-1.5 bg-[#1e1b19] border border-stone-850 px-2.5 py-1 text-5xs font-pixel text-emerald-500">
+                <span>🔥</span> <span>16 Slots. 1 Winner. / 16强生死战</span>
               </span>
             </div>
           </div>
 
-          {/* Right Column: Reigning Champion Card */}
+          {/* Right Column: Reigning Champion Card or Live Matchup Box */}
           <div className="w-full lg:max-w-sm relative z-20 animate-hero-sub">
-            <div className="bg-[#faf5ef]/90 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-5 text-[#181715] relative overflow-hidden" style={{ borderColor: '#d97706' }}>
-              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-amber-300 via-[#d97706] to-amber-300" />
-              
-              <div className="flex justify-between items-center mb-4 border-b border-pixel pb-2">
-                <span className="text-3xs font-pixel text-[#d97706] uppercase tracking-wider">
-                  🏆 Reigning Champion
-                </span>
-                <span className="text-5xs font-mono text-stone-400">LAST SEASON</span>
-              </div>
-              
-              {pastChampions.length > 0 ? (
-                (() => {
-                  const reigning = pastChampions[pastChampions.length - 1];
-                  return (
-                    <>
-                      <div className="flex items-start space-x-3 mb-4">
-                        <span className="text-3xl shrink-0 mt-1 flex items-center justify-center">
-                          {renderLogo(reigning.logo, "w-8 h-8")}
-                        </span>
-                        <div>
-                          <a 
-                            href={reigning.url} 
-                            target="_blank" 
-                            rel="noreferrer" 
-                            className="font-pixel text-xs text-[#181715] hover:text-[#d97706] hover:underline uppercase block leading-tight"
-                          >
-                            {reigning.title}
-                          </a>
-                          <p className="text-4xs text-stone-500 mt-1.5 line-clamp-2 leading-relaxed font-sans font-medium">
-                            {reigning.tagline}
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <a 
-                        href={reigning.url} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                      >
-                        <span>🌐 LIVE DEMO URL</span>
-                        <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                      </a>
-                      
-                      <div className="flex items-center justify-between border-t border-dashed border-stone-300 pt-3 text-4xs font-mono text-stone-600 mb-2">
-                        <div className="flex items-center space-x-1.5">
-                          <img src={reigning.makerAvatar} alt="Maker" className="w-5 h-5 border border-pixel shrink-0" />
-                          <a 
-                            href={`https://x.com/${reigning.makerTwitter.replace(/^@/, "")}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="hover:text-[#d97706] hover:underline font-bold"
-                          >
-                            {reigning.makerTwitter}
-                          </a>
-                        </div>
-                        <span className="text-5xs uppercase font-pixel bg-amber-50 border border-amber-200 text-[#d97706] px-1 py-0.2">CHAMP</span>
-                      </div>
-                    </>
-                  );
-                })()
-              ) : (
-                <div className="py-4 text-center">
-                  <span className="text-3xl block mb-2">🛡️</span>
-                  <span className="font-pixel text-4xs text-stone-500 uppercase block mb-1">Season {currentSeasonStr} Active</span>
-                  <p className="text-5xs font-mono text-stone-400 leading-relaxed px-2">
-                    No champion has conquered the arena yet. Be the first to secure eternal glory!
-                  </p>
+            {bracket && bracket.status === "active" && activeMatch ? (
+              <div className="bg-[#1e1a17]/95 backdrop-blur-md border-4 border-[#d97706] shadow-pixel-lg p-5 text-[#faf5ef] relative overflow-hidden">
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 via-[#d97706] to-amber-500 animate-pulse" />
+                
+                <div className="flex justify-between items-center mb-4 border-b border-stone-800 pb-2">
+                  <span className="text-3xs font-pixel text-[#d97706] uppercase tracking-wider flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block animate-ping"></span>
+                    ⚡️ LIVE DUEL ACTIVE
+                  </span>
+                  <span className="text-5xs font-mono text-stone-400">ROUND {activeRoundNum}</span>
                 </div>
-              )}
-            </div>
+
+                {/* The Matchup grid */}
+                <div className="grid grid-cols-7 gap-1 items-center mb-4 relative py-2">
+                  {/* Product A */}
+                  <div className="col-span-3 flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-stone-900 border border-stone-800 rounded-md flex items-center justify-center text-2xl mb-1.5 select-none shadow-inner">
+                      {renderLogo(activeMatch.productA.logo, "w-8 h-8")}
+                    </div>
+                    <span className="font-pixel text-4xs uppercase tracking-wide truncate max-w-full text-stone-100 font-bold">
+                      {activeMatch.productA.title}
+                    </span>
+                  </div>
+
+                  {/* VS in the middle */}
+                  <div className="col-span-1 flex flex-col items-center justify-center">
+                    <span className="font-sans font-black text-lg italic text-[#dc2626] drop-shadow-[0_1.5px_0_rgba(0,0,0,0.9)] animate-pixel-bounce">VS</span>
+                  </div>
+
+                  {/* Product B */}
+                  <div className="col-span-3 flex flex-col items-center text-center">
+                    <div className="w-12 h-12 bg-stone-900 border border-stone-800 rounded-md flex items-center justify-center text-2xl mb-1.5 select-none shadow-inner">
+                      {renderLogo(activeMatch.productB.logo, "w-8 h-8")}
+                    </div>
+                    <span className="font-pixel text-4xs uppercase tracking-wide truncate max-w-full text-stone-100 font-bold">
+                      {activeMatch.productB.title}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Realtime Vote Percentage Bar */}
+                {(() => {
+                  const { pctA, pctB } = getPercentages(activeMatch);
+                  return (
+                    <div className="mb-4">
+                      <div className="flex justify-between text-5xs font-mono text-stone-400 mb-1 px-1">
+                        <span>{activeMatch.votesA} Votes ({pctA}%)</span>
+                        <span>{pctB}% ({activeMatch.votesB} Votes)</span>
+                      </div>
+                      <div className="w-full h-3 bg-stone-900 border border-stone-800 rounded-none overflow-hidden flex">
+                        <div className="h-full bg-gradient-to-r from-amber-600 to-[#d97706] transition-all duration-500 ease-out" style={{ width: `${pctA}%` }} />
+                        <div className="h-full bg-stone-850" style={{ width: `${pctB}%` }} />
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* CTA Voting buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      setVotingMatch(activeMatch);
+                      setVotingTarget(activeMatch.productA);
+                      setVoteWinnerFeedback("");
+                      setVoteLoserFeedback("");
+                      setVoteError("");
+                      scrollToDuel();
+                    }}
+                    className="flex-1 py-2.5 px-3 text-5xs tracking-wider font-pixel bg-[#1c1815] border border-stone-700 hover:bg-[#d97706] text-white hover:text-black transition-all cursor-pointer rounded-none font-black"
+                  >
+                    投 {activeMatch.productA.title.toUpperCase()}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setVotingMatch(activeMatch);
+                      setVotingTarget(activeMatch.productB);
+                      setVoteWinnerFeedback("");
+                      setVoteLoserFeedback("");
+                      setVoteError("");
+                      scrollToDuel();
+                    }}
+                    className="flex-1 py-2.5 px-3 text-5xs tracking-wider font-pixel bg-[#1c1815] border border-stone-700 hover:bg-[#d97706] text-white hover:text-black transition-all cursor-pointer rounded-none font-black"
+                  >
+                    投 {activeMatch.productB.title.toUpperCase()}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // High-Quality dark stone reigning champion card
+              <div className="bg-[#1e1a17]/95 backdrop-blur-md border-4 border-stone-850 shadow-pixel-lg p-5 text-[#faf5ef] relative overflow-hidden">
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-stone-800 via-stone-700 to-stone-800" />
+                
+                <div className="flex justify-between items-center mb-4 border-b border-stone-850 pb-2">
+                  <span className="text-3xs font-pixel text-[#d97706] uppercase tracking-wider">
+                    🏆 Reigning Champion
+                  </span>
+                  <span className="text-5xs font-mono text-stone-400">LAST SEASON</span>
+                </div>
+                
+                {pastChampions.length > 0 ? (
+                  (() => {
+                    const reigning = pastChampions[pastChampions.length - 1];
+                    return (
+                      <>
+                        <div className="flex items-start space-x-3 mb-4">
+                          <span className="text-3xl shrink-0 mt-1 flex items-center justify-center bg-stone-900 border border-stone-800 p-1.5 rounded-md">
+                            {renderLogo(reigning.logo, "w-8 h-8")}
+                          </span>
+                          <div>
+                            <a 
+                              href={reigning.url} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              className="font-pixel text-xs text-[#faf5ef] hover:text-[#d97706] hover:underline uppercase block leading-tight font-bold"
+                            >
+                              {reigning.title}
+                            </a>
+                            <p className="text-4xs text-stone-400 mt-1.5 line-clamp-2 leading-relaxed font-sans font-medium">
+                              {reigning.tagline}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <a 
+                          href={reigning.url} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="mb-4 bg-[#1a1715] border border-stone-800 p-2.5 text-3xs font-mono text-stone-300 hover:bg-[#d97706]/10 hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
+                        >
+                          <span>🌐 LIVE DEMO URL</span>
+                          <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
+                        </a>
+                        
+                        <div className="flex items-center justify-between border-t border-dashed border-stone-800 pt-3 text-4xs font-mono text-stone-400 mb-2">
+                          <div className="flex items-center space-x-1.5">
+                            <img src={reigning.makerAvatar} alt="Maker" className="w-5 h-5 border border-stone-800 shrink-0" />
+                            <a 
+                              href={`https://x.com/${reigning.makerTwitter.replace(/^@/, "")}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="hover:text-[#d97706] hover:underline font-bold"
+                            >
+                              {reigning.makerTwitter}
+                            </a>
+                          </div>
+                          <span className="text-5xs uppercase font-pixel bg-[#d97706]/10 border border-[#d97706]/30 text-[#d97706] px-1 py-0.2">CHAMP</span>
+                        </div>
+                      </>
+                    );
+                  })()
+                ) : (
+                  <div className="py-4 text-center">
+                    <span className="text-3xl block mb-2">🛡️</span>
+                    <span className="font-pixel text-4xs text-stone-500 uppercase block mb-1">Season {currentSeasonStr} Active</span>
+                    <p className="text-5xs font-mono text-stone-400 leading-relaxed px-2">
+                      No champion has conquered the arena yet. Be the first to secure eternal glory!
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* View All Past Champions Button below the card */}
             {pastChampions.length > 0 && (
               <button
                 onClick={() => setIsPastChampsOpen(true)}
-                className="btn-pixel w-full py-2.5 mt-3 text-3xs tracking-wider font-pixel transition-all shadow-pixel-sm border-2"
+                className="btn-pixel w-full py-2.5 mt-3 text-3xs tracking-wider font-pixel transition-all shadow-pixel-sm border-2 cursor-pointer"
                 style={{
-                  color: '#181715',
-                  backgroundColor: '#faf5ef',
-                  borderColor: '#181715',
+                  color: '#faf5ef',
+                  backgroundColor: '#1a1715',
+                  borderColor: '#2d2824',
                 }}
               >
                 🏆 VIEW ALL PAST CHAMPIONS
