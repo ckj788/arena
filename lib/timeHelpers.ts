@@ -32,14 +32,41 @@ export function getNewYorkTime(): Date {
   );
 }
 
+// 1.5. 将指定 Date 对象转换为纽约本地时间的 Date 对象
+export function getNewYorkTimeOfDate(date: Date): Date {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "numeric",
+    second: "numeric",
+    hour12: false
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const map = new Map(parts.map(p => [p.type, p.value]));
+  
+  return new Date(
+    Number(map.get("year")),
+    Number(map.get("month")) - 1,
+    Number(map.get("day")),
+    Number(map.get("hour")),
+    Number(map.get("minute")),
+    Number(map.get("second"))
+  );
+}
+
 // 2. 计算距离下一次纽约时间零点（Midnight 00:00:00）的剩余毫秒数
-// 🚀 [TESTING DEPLOYMENT BYPASS]: 为了在 Vercel 部署后极速跑通全套流程，我们将原本等待至纽约零点的限制缩短为 10 秒倒计时！
-// 若要恢复原本的纽约零点限制，只需取消注释原版代码。
+// 如果传入了 startedAt，则以 startedAt（组建时间）的下一天零点为目标
 export function getMillisecondsToNextNYMidnight(startedAt?: string): number {
   const nyNow = getNewYorkTime();
-  const nyMidnight = new Date(nyNow);
-  nyMidnight.setHours(24, 0, 0, 0); 
-  return nyMidnight.getTime() - nyNow.getTime();
+  const baseDate = startedAt ? new Date(startedAt) : new Date();
+  const nyBase = getNewYorkTimeOfDate(baseDate);
+  const nyTargetMidnight = new Date(nyBase);
+  nyTargetMidnight.setHours(24, 0, 0, 0); 
+  return nyTargetMidnight.getTime() - nyNow.getTime();
 }
 
 // 3. 根据 3-2-1-1 规则，获取每轮赛事的规定时长（单位：毫秒）
