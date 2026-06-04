@@ -29,6 +29,19 @@ import {
   formatToHMS
 } from "@/lib/timeHelpers";
 
+// Memory cache for client-side Stale-While-Revalidate (SWR) performance
+let memoryCache: {
+  products: Product[] | null;
+  bracket: Bracket | null;
+  champs: Product[] | null;
+  lastFetchTime: number;
+} = {
+  products: null,
+  bracket: null,
+  champs: null,
+  lastFetchTime: 0
+};
+
 export default function Home() {
   const [products, setProducts] = useState<Product[]>([]);
   const [bracket, setBracket] = useState<Bracket | null>(null);
@@ -366,6 +379,38 @@ export default function Home() {
     latestBracketRef.current = bracket;
   }, [bracket]);
 
+  // Synchronize state changes to memoryCache and localStorage cache (SWR Sync)
+  useEffect(() => {
+    if (products && products.length > 0) {
+      memoryCache.products = products;
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
+        } catch (e) {}
+      }
+    }
+  }, [products]);
+
+  useEffect(() => {
+    memoryCache.bracket = bracket;
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
+      } catch (e) {}
+    }
+  }, [bracket]);
+
+  useEffect(() => {
+    if (pastChampions && pastChampions.length > 0) {
+      memoryCache.champs = pastChampions;
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
+        } catch (e) {}
+      }
+    }
+  }, [pastChampions]);
+
   const syncDebounceTimeoutRef = useRef<any>(null);
   const latestRequestTimeRef = useRef<number>(0);
 
@@ -380,20 +425,60 @@ export default function Home() {
   const [stepsRevealed, setStepsRevealed] = useState(false);
   const [dashRevealed, setDashRevealed] = useState(false);
 
-  // Sync products and bracket from cloud or local storage
+  // Sync products and bracket from cloud or local storage with Stale-While-Revalidate
   const syncCloudData = async () => {
+    // 1. Load cache from localStorage if memory is empty
+    if (!memoryCache.products && typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("indieclash_client_cache");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed) {
+            memoryCache = parsed;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 2. Render cached data instantly in 0ms if it exists
+    if (memoryCache.products && memoryCache.products.length > 0) {
+      setProducts(memoryCache.products);
+    }
+    if (memoryCache.champs && memoryCache.champs.length > 0) {
+      setPastChampions(memoryCache.champs);
+    }
+    if (memoryCache.bracket) {
+      setBracket(memoryCache.bracket);
+      const b = memoryCache.bracket;
+      const round = getActiveRound(b);
+      let active = null;
+      if (round === 1) active = b.round1.find(m => !m.winnerId) || b.round1[0];
+      else if (round === 2) active = b.round2.find(m => !m.winnerId) || b.round2[0];
+      else if (round === 3) active = b.round3.find(m => !m.winnerId) || b.round3[0];
+      else if (round === 4) active = b.round4.find(m => !m.winnerId) || b.round4[0];
+      setActiveMatch(active || null);
+    }
+
+    // 3. Skip background fetch if we did one in the last 3 seconds
+    const now = Date.now();
+    if (memoryCache.products && (now - memoryCache.lastFetchTime < 3000)) {
+      return;
+    }
+
+    // 4. Background revalidation: fetch fresh database records
     try {
       const prods = await fetchCloudProducts();
       if (prods && prods.length > 0) {
         setProducts(prods);
       }
       
-      // Load past champions from cloud database
       const champs = await fetchCloudPastChampions();
-      setPastChampions(champs);
+      if (champs) {
+        setPastChampions(champs);
+      }
       
       const b = await fetchCloudBracket();
-      const previousBracket = latestBracketRef.current;
+      memoryCache.lastFetchTime = Date.now();
 
       if (b) {
         setBracket(b);
