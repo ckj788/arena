@@ -1,10 +1,12 @@
-import React from 'react';
-import { Product } from "@/lib/mockData";
+import React, { useState } from 'react';
+import { Product, Bracket } from "@/lib/mockData";
 
 interface MakerConsoleProps {
   isOpen: boolean;
   onClose: () => void;
   products: Product[];
+  allProducts: Product[];
+  activeBracket: Bracket | null;
   userTwitter: string;
   userSubId: string;
   onPushToQueue: (productId: string) => void;
@@ -17,6 +19,8 @@ export default function MakerConsole({
   isOpen,
   onClose,
   products,
+  allProducts,
+  activeBracket,
   userTwitter,
   userSubId,
   onPushToQueue,
@@ -24,6 +28,8 @@ export default function MakerConsole({
   onExportCsv,
   onSubmitProductClick
 }: MakerConsoleProps) {
+  const [selectedProductForPush, setSelectedProductForPush] = useState<Product | null>(null);
+
   if (!isOpen) return null;
 
   const isProductOwner = (p: Product) => {
@@ -63,6 +69,18 @@ export default function MakerConsole({
   const completedCount = myProducts.filter(p => p.queueStatus === "completed").length;
   const queuedCount = myProducts.filter(p => p.queueStatus === "waiting" && isPushed(p)).length;
   const totalVotesCount = myProducts.reduce((acc, p) => acc + (p.votesCount || 0), 0);
+
+  // Compute global queue for position calculation
+  const globalQueue = allProducts
+    .filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
+    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+  const globalQueueCount = globalQueue.length;
+  const arenaIsLive = activeBracket && (activeBracket.status === "active" || activeBracket.status === "preparing");
+
+  const getQueuePosition = (productId: string): number => {
+    const idx = globalQueue.findIndex(p => p.id === productId);
+    return idx >= 0 ? idx + 1 : -1;
+  };
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12 animate-fade-in-blur space-y-8 min-h-[70vh] text-[#E4E4E7]">
@@ -107,6 +125,47 @@ export default function MakerConsole({
         <div className="bg-[#0b0b0d] p-4 rounded-md border border-white/[0.06] space-y-1">
           <span className="block text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Accumulated Votes</span>
           <span className="text-2xl font-bold text-purple-400 block">{totalVotesCount}</span>
+        </div>
+      </div>
+
+      {/* Arena Status Bar */}
+      <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          {arenaIsLive ? (
+            <>
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block" />
+              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                Arena is <span className="text-amber-400 font-bold">LIVE</span>
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" />
+              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
+                Arena is <span className="text-zinc-300 font-bold">IDLE</span>
+              </span>
+            </>
+          )}
+        </div>
+        <div className="flex items-center gap-4">
+          <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+            Queue: <span className="text-white font-bold">{globalQueueCount}</span> / 16
+          </span>
+          {/* Mini progress bar */}
+          <div className="w-24 h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+            <div 
+              className="h-full rounded-full transition-all duration-500 ease-out"
+              style={{ 
+                width: `${Math.min((globalQueueCount / 16) * 100, 100)}%`,
+                backgroundColor: globalQueueCount >= 16 ? '#34d399' : '#a78bfa'
+              }}
+            />
+          </div>
+          {globalQueueCount >= 16 && !arenaIsLive && (
+            <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider animate-pulse">
+              Ready to launch
+            </span>
+          )}
         </div>
       </div>
 
@@ -185,16 +244,26 @@ export default function MakerConsole({
                             Showcase 👁️
                           </span>
                           <button
-                            onClick={() => onPushToQueue(p.id)}
+                            onClick={() => setSelectedProductForPush(p)}
                             className="py-1.5 px-4 bg-white hover:bg-zinc-200 text-black font-semibold text-[11px] rounded transition duration-150 cursor-pointer"
                           >
                             Push to Arena 🚀
                           </button>
                         </div>
                       ) : (
-                        <span className="px-3 py-1 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 font-mono text-[10px] uppercase tracking-wider rounded flex items-center gap-1 font-bold">
-                          Queued ⏳
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-3 py-1 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 font-mono text-[10px] uppercase tracking-wider rounded flex items-center gap-1 font-bold">
+                            Queued ⏳
+                          </span>
+                          {(() => {
+                            const pos = getQueuePosition(p.id);
+                            return pos > 0 ? (
+                              <span className="px-2 py-1 border border-white/[0.06] bg-white/[0.02] text-zinc-400 font-mono text-[9px] uppercase tracking-wider rounded">
+                                #{pos} in line
+                              </span>
+                            ) : null;
+                          })()}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -204,6 +273,87 @@ export default function MakerConsole({
           )}
         </div>
       </div>
+
+      {/* Enter the Arena Benefit Confirmation Modal */}
+      {selectedProductForPush && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-[#0b0b0d] border border-white/[0.08] rounded-lg p-6 max-w-md w-full shadow-2xl space-y-5 relative animate-zoom-in">
+            {/* Header */}
+            <div className="border-b border-white/[0.06] pb-3 text-center">
+              <h2 className="text-sm font-black tracking-wider text-white uppercase flex items-center justify-center gap-2 font-mono">
+                ⚔️ ENTER THE COLOSSEUM QUEUE
+              </h2>
+              <p className="text-[9px] text-[#ffbe18] font-mono uppercase tracking-wider mt-1">
+                Release & Matchmaking Benefits
+              </p>
+            </div>
+
+            {/* Benefits Content */}
+            <div className="space-y-4 text-left">
+              <p className="text-xs text-zinc-350 leading-relaxed">
+                By pushing <span className="text-white font-bold">{selectedProductForPush.title}</span> into the matchmaking queue, you unlock exclusive launch benefits:
+              </p>
+              
+              <div className="space-y-3 pt-1">
+                <div className="flex gap-3 items-start">
+                  <span className="text-base select-none">🏆</span>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-white uppercase tracking-wide font-sans">7-Day Arena Match Exposure</h4>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed mt-0.5 font-sans">
+                      Get 7 days of high-visibility exposure on the live Colosseum matchups page during the active tournament cycle.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-start">
+                  <span className="text-base select-none">🏛️</span>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-white uppercase tracking-wide font-sans">Hall of Valor Permanence</h4>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed mt-0.5 font-sans">
+                      Only the crowned champion of the season enters the legendary Hall of Valor, permanently saved for eternal glory.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 items-start">
+                  <span className="text-base select-none">💬</span>
+                  <div>
+                    <h4 className="text-xs font-extrabold text-white uppercase tracking-wide font-sans">Honest Peer Feedback</h4>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed mt-0.5 font-sans">
+                      Match against other makers through constructive peer critiques. No bots or vanity upvotes—just authentic review trades.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-[#141417] border border-white/[0.04] p-3 rounded-md">
+                <p className="text-[9px] text-zinc-500 leading-normal font-mono uppercase tracking-wider text-center">
+                  ⚠️ NOTICE: Once matched into a 16-competitor bracket, your product cannot exit. You must campaign and vote to win!
+                </p>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                onClick={() => setSelectedProductForPush(null)}
+                className="px-4 py-2 bg-zinc-900 border border-white/[0.08] hover:bg-white/[0.04] text-zinc-350 hover:text-white font-semibold rounded text-[10px] font-mono uppercase tracking-wider cursor-pointer transition"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  onPushToQueue(selectedProductForPush.id);
+                  setSelectedProductForPush(null);
+                }}
+                className="px-5 py-2 bg-[#ffbe18] hover:bg-[#ffc634] text-black font-extrabold rounded text-[10px] font-mono uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10 transition"
+              >
+                Push to Arena 🚀
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

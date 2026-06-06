@@ -502,6 +502,7 @@ export default function ArenaClient({
   const latestBracketRef = useRef<Bracket | null>(null);
   const isResettingRef = useRef(false);
   const isSyncLockedRef = useRef(false);
+  const isRolloverPendingRef = useRef(false);
   useEffect(() => {
     latestBracketRef.current = bracket;
   }, [bracket]);
@@ -956,7 +957,17 @@ export default function ArenaClient({
             setActiveMatch(null);
             saveBracket(null);
             if (supabase) {
-              saveCloudBracket(advanced).then(() => syncCloudData());
+              saveCloudBracket(advanced).then(() => {
+                syncCloudData();
+                // Auto-rollover: check if next season can start
+                fetchCloudProducts().then(latestProds => {
+                  tryAutoRollover(latestProds);
+                });
+              });
+            } else {
+              // Auto-rollover for local mode
+              const latestProds = loadProducts();
+              tryAutoRollover(latestProds);
             }
           } else {
             setBracket(advanced);
@@ -1086,20 +1097,13 @@ export default function ArenaClient({
 
   // Inject 16 Arena Competitors
   const handleInject16 = () => {
-    const currentWaiting = products.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
-    if (currentWaiting.length >= 16) {
-      alert("The Arena is already full or has active competitors!");
-      return;
-    }
-    
     // Acquire Sync Lock to prevent race condition pullbacks
     isSyncLockedRef.current = true;
     
     let currentProducts = [...products];
     const newAdded: Product[] = [];
-    const countNeeded = 16 - currentWaiting.length;
     
-    for (let i = 0; i < countNeeded; i++) {
+    for (let i = 0; i < 16; i++) {
       const names = ["Oliver", "Emma", "Sophia", "James", "Mia", "Leo", "John", "David", "Grace", "Jack", "Alex", "Zoe", "Ryan", "Chloe", "Luke", "Harper", "Aria", "Ben", "Ava", "Mason"];
       const projects = ["TaskPulse", "Designify", "MailSniper", "ScribeAI", "SchemaForge", "FormFlow", "IconSpark", "DocuGen", "SiteFlow", "SpeedPDF", "LaunchKit", "TypeBoost", "FastAPI", "DevFlow", "CodeSync", "BugSlayer", "GitMap", "FileShrink", "CssGen", "FlexGrid"];
       const taglines = [
@@ -1127,7 +1131,7 @@ export default function ArenaClient({
         makerTwitter: `@${randomName.toLowerCase()}_ship`,
         makerAvatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 500000)}?w=100&h=100&fit=crop&crop=faces`,
         logo: emojis[Math.floor(Math.random() * emojis.length)],
-        submittedAt: new Date().toISOString(),
+        submittedAt: new Date(Date.now() + i * 1000).toISOString(),
         queueStatus: "waiting",
         votesCount: 0
       } as any;
@@ -1165,14 +1169,25 @@ export default function ArenaClient({
     if (supabase) {
       Promise.all(newAdded.map(p => upsertCloudProduct(p))).then(() => {
         pushToast("16 Arena Competitors successfully injected!");
-        setTimeout(startTournament, 300);
+        if (!bracket && !isRolloverPendingRef.current) {
+          setTimeout(startTournament, 300);
+        } else {
+          setTimeout(() => {
+            isSyncLockedRef.current = false;
+            syncCloudData();
+          }, 800);
+        }
       }).catch((err) => {
         isSyncLockedRef.current = false;
         console.error("Error uploading injected competitors:", err);
       });
     } else {
       pushToast("16 Arena Competitors successfully injected!");
-      setTimeout(startTournament, 300);
+      if (!bracket && !isRolloverPendingRef.current) {
+        setTimeout(startTournament, 300);
+      } else {
+        isSyncLockedRef.current = false;
+      }
     }
   };
 
@@ -1311,7 +1326,7 @@ export default function ArenaClient({
 
     const finishSubmit = () => {
       const queuedList = updated.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
-      if (queuedList.length >= 16 && !bracket) {
+      if (queuedList.length >= 16 && !bracket && !isRolloverPendingRef.current) {
         setTimeout(() => {
           setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
           setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
@@ -1385,7 +1400,7 @@ export default function ArenaClient({
 
       // Check if we hit 16 queued products to trigger matchmaking
       const queuedList = updated.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
-      if (queuedList.length >= 16 && !bracket) {
+      if (queuedList.length >= 16 && !bracket && !isRolloverPendingRef.current) {
         setTimeout(() => {
           setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
           setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
@@ -1430,6 +1445,44 @@ export default function ArenaClient({
   };
 
 
+  // Auto-Rollover: After a season completes, check if ≥16 products are queued and auto-start the next season
+  const tryAutoRollover = (currentProducts: Product[]) => {
+    const waitingQueue = currentProducts.filter(
+      p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))
+    );
+    if (waitingQueue.length >= 16) {
+      isRolloverPendingRef.current = true;
+      // Delay slightly so champion modal can show first
+      setTimeout(() => {
+        const latestProducts = [...currentProducts];
+        const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(latestProducts);
+        setProducts(newProds);
+        setBracket(newB);
+        setActiveMatch(newB.round1[0]);
+        pushToast("New season started automatically! 16 products matched.", "success");
+        if (supabase) {
+          Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
+            .then(() => saveCloudBracket(newB))
+            .then(() => {
+              setTimeout(() => {
+                isSyncLockedRef.current = false;
+                isRolloverPendingRef.current = false;
+                syncCloudData();
+              }, 800);
+            }).catch((err) => {
+              isSyncLockedRef.current = false;
+              isRolloverPendingRef.current = false;
+              console.error("Error matching next season in cloud:", err);
+            });
+        } else {
+          isSyncLockedRef.current = false;
+          isRolloverPendingRef.current = false;
+        }
+      }, 3000);
+    } else {
+      isRolloverPendingRef.current = false;
+    }
+  };
 
   // Advance Round
   const handleAdvanceRound = () => {
@@ -1474,12 +1527,21 @@ export default function ArenaClient({
       setActiveMatch(null);
       saveBracket(null);
       if (supabase) {
-        saveCloudBracket(updated).then(finishAdvance).catch((err) => {
+        saveCloudBracket(updated).then(() => {
+          finishAdvance();
+          // Auto-rollover: check if next season can start
+          fetchCloudProducts().then(latestProds => {
+            tryAutoRollover(latestProds);
+          });
+        }).catch((err) => {
           isSyncLockedRef.current = false;
           console.error("Error saving cloud bracket:", err);
         });
       } else {
         isSyncLockedRef.current = false;
+        // Auto-rollover for local mode
+        const latestProds = loadProducts();
+        tryAutoRollover(latestProds);
       }
     } else {
       setBracket(updated);
@@ -2003,7 +2065,11 @@ export default function ArenaClient({
   };
 
   const activeRoundNum = bracket ? getActiveRound(bracket) : 0;
-  const queuedProducts = products.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
+  const queuedProducts = useMemo(() => {
+    return products
+      .filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
+      .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+  }, [products]);
   const lineupProducts = useMemo(() => {
     if (bracket && bracket.round1 && bracket.round1.length > 0) {
       const list: Product[] = [];
@@ -2144,6 +2210,8 @@ export default function ArenaClient({
           isOpen={true}
           onClose={() => setCurrentView('home')}
           products={products}
+          allProducts={products}
+          activeBracket={bracket}
           userTwitter={mockUserTwitter}
           userSubId={userSupabaseId}
           onPushToQueue={handlePushToQueue}
@@ -2338,6 +2406,47 @@ export default function ArenaClient({
             )}
           </div>
 
+          {/* Arena Queue Status Bar */}
+          <div className="mb-8 bg-[#0b0b0d] border border-white/[0.06] rounded-md px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-4">
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                Season <span className="text-white font-bold">{currentSeasonStr}</span>
+              </span>
+              <span className="text-white/10">|</span>
+              {bracket && (bracket.status === "active" || bracket.status === "preparing") ? (
+                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
+                  <span className="text-amber-400 font-bold">LIVE</span>
+                </span>
+              ) : (
+                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 inline-block" />
+                  Accepting entries
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+                Next Season: <span className="text-white font-bold">{Math.min(queuedProducts.length, 16)}</span>/16
+                {queuedProducts.length > 16 && (
+                  <>
+                    {" "}<span className="text-zinc-600">|</span>{" "}
+                    Waitlist: <span className="text-[#ffbe18] font-bold">+{queuedProducts.length - 16}</span> in line ({Math.floor(queuedProducts.length / 16)} season{Math.floor(queuedProducts.length / 16) > 1 ? 's' : ''} queued)
+                  </>
+                )}
+              </span>
+              <div className="w-20 h-1.5 bg-white/[0.04] rounded-full overflow-hidden shrink-0">
+                <div 
+                  className="h-full rounded-full transition-all duration-500 ease-out"
+                  style={{ 
+                    width: `${Math.min((queuedProducts.length / 16) * 100, 100)}%`,
+                    backgroundColor: queuedProducts.length >= 16 ? '#34d399' : '#a78bfa'
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
           {bracket && bracket.status === "active" ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
@@ -2483,7 +2592,18 @@ export default function ArenaClient({
                               <h3 className="text-base font-bold text-white truncate">{duel.productA?.title || "Pending"}</h3>
                               <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productA?.tagline}</p>
                             </div>
-                            <div className="mt-4">
+                            <div className="mt-4 space-y-2">
+                              {duel.productA?.url && (
+                                <a
+                                  href={duel.productA.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Visit Demo 🔗
+                                </a>
+                              )}
                               <button
                                 onClick={() => {
                                   setVotingMatch(duel);
@@ -2528,7 +2648,18 @@ export default function ArenaClient({
                               <h3 className="text-base font-bold text-white truncate">{duel.productB?.title || "Pending"}</h3>
                               <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productB?.tagline}</p>
                             </div>
-                            <div className="mt-4">
+                            <div className="mt-4 space-y-2">
+                              {duel.productB?.url && (
+                                <a
+                                  href={duel.productB.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  Visit Demo 🔗
+                                </a>
+                              )}
                               <button
                                 onClick={() => {
                                   setVotingMatch(duel);
@@ -2679,9 +2810,9 @@ export default function ArenaClient({
                 </div>
               </div>
 
-              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-white">Season Preparing</h2>
+              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-white">Assembling Next Season</h2>
               <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                Once 16 products are enqueued, the head-to-head tournament matchups generate automatically. Submit your startup product and queue it from your console to claim your spot in the roster!
+                Once 16 products are queued, the bracket generates automatically. When a season ends, the next one starts instantly if enough entries are waiting.
               </p>
 
               {/* Roster Slots Grid (Street Fighter style character select) */}

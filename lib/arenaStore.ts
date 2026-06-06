@@ -101,9 +101,10 @@ export function saveBracket(bracket: Bracket | null) {
   }
 }
 
-// 自动生成 16 强配对
 export function buildInitialBracket(products: Product[]): { bracket: Bracket; updatedProducts: Product[] } {
-  const waitingProducts = products.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
+  const waitingProducts = products
+    .filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
+    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
   const activeProducts = waitingProducts.slice(0, 16);
   const round1: Match[] = [];
   for (let i = 0; i < 8; i++) {
