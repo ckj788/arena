@@ -1,7 +1,8 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
 import { SEED_PRODUCTS } from "@/lib/mockData";
+import CopyLink from "@/app/components/CopyLink";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -15,13 +16,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (supabase) {
     const { data: product } = await supabase
-      .from("shipandbattle_products")
-      .select("shipandbattle_title")
-      .eq("shipandbattle_id", slug)
+      .from(`${DB_PREFIX}products`)
+      .select(`${DB_PREFIX}title`)
+      .eq(`${DB_PREFIX}id`, slug)
       .single();
 
     if (product) {
-      title = product.shipandbattle_title;
+      title = (product as any)[`${DB_PREFIX}title`];
     }
   } else {
     const seed = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slug.toLowerCase());
@@ -35,10 +36,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   return {
     title: `${title} Reviews & Constructive Critiques | INDIE CLASH`,
-    description: `Read verified founder reviews and critiques for ${title}. Compare win rates and see how it performs in live 1v1 startup duels.`,
+    description: `Read verified founder reviews and critiques for ${title}. See how it performs in live 1v1 startup duels.`,
     openGraph: {
       title: `${title} Reviews & Constructive Critiques | INDIE CLASH`,
-      description: `Read verified founder reviews and critiques for ${title}. Compare win rates and see how it performs in live 1v1 startup duels.`,
+      description: `Read verified founder reviews and critiques for ${title}. See how it performs in live 1v1 startup duels.`,
       url: `https://www.indieclash.com/reviews/${slug}`,
       siteName: "INDIE CLASH",
       images: [
@@ -54,7 +55,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     twitter: {
       card: "summary_large_image",
       title: `${title} Reviews & Constructive Critiques | INDIE CLASH`,
-      description: `Read verified founder reviews and critiques for ${title}. Compare win rates and see how it performs in live 1v1 startup duels.`,
+      description: `Read verified founder reviews and critiques for ${title}. See how it performs in live 1v1 startup duels.`,
       images: [`/api/og/versus?slug=${slug}`],
     },
   };
@@ -62,26 +63,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 // 2. Pre-generate popular review params at build time (SSG)
 export async function generateStaticParams() {
-  if (!supabase) {
-    return SEED_PRODUCTS.map(p => ({
-      slug: p.id,
-    }));
-  }
-
-  try {
-    const { data: products } = await supabase
-      .from("shipandbattle_products")
-      .select("shipandbattle_id")
-      .limit(50);
-
-    if (!products) return [];
-
-    return products.map(p => ({
-      slug: p.shipandbattle_id,
-    }));
-  } catch (e) {
-    return [];
-  }
+  return SEED_PRODUCTS.map(p => ({
+    slug: p.id,
+  }));
 }
 
 export const revalidate = 1800; // Recache background every 30 minutes
@@ -105,51 +89,52 @@ export default async function ReviewPage({ params }: Props) {
 
   if (supabase) {
     const { data: p } = await supabase
-      .from("shipandbattle_products")
+      .from(`${DB_PREFIX}products`)
       .select("*")
-      .eq("shipandbattle_id", slug)
+      .eq(`${DB_PREFIX}id`, slug)
       .single();
 
     if (p) {
+      const rawP = p as any;
       product = {
-        id: p.shipandbattle_id,
-        title: p.shipandbattle_title,
-        tagline: p.shipandbattle_tagline,
-        url: p.shipandbattle_url,
-        shipTimeframe: p.shipandbattle_ship_timeframe,
-        makerName: p.shipandbattle_maker_name,
-        makerTwitter: p.shipandbattle_maker_twitter,
-        makerAvatar: p.shipandbattle_maker_avatar,
-        logo: p.shipandbattle_logo,
-        votesCount: p.shipandbattle_votes_count,
+        id: rawP[`${DB_PREFIX}id`],
+        title: rawP[`${DB_PREFIX}title`],
+        tagline: rawP[`${DB_PREFIX}tagline`],
+        url: rawP[`${DB_PREFIX}url`],
+        shipTimeframe: rawP[`${DB_PREFIX}ship_timeframe`],
+        makerName: rawP[`${DB_PREFIX}maker_name`],
+        makerTwitter: rawP[`${DB_PREFIX}maker_twitter`],
+        makerAvatar: rawP[`${DB_PREFIX}maker_avatar`],
+        logo: rawP[`${DB_PREFIX}logo`],
+        votesCount: rawP[`${DB_PREFIX}votes_count`],
       };
 
       // Query voter feedback (critiques)
       const { data: votes } = await supabase
-        .from("shipandbattle_votes")
+        .from(`${DB_PREFIX}votes`)
         .select("*")
-        .eq("shipandbattle_voted_product_id", slug)
+        .eq(`${DB_PREFIX}voted_product_id`, slug)
         .limit(20);
 
       if (votes) {
-        reviews = votes.map(v => ({
-          id: v.shipandbattle_id,
-          voter: v.shipandbattle_voter_username,
-          winnerFeedback: v.shipandbattle_feedback_winner,
-          loserFeedback: v.shipandbattle_feedback_loser,
-          createdAt: v.shipandbattle_created_at,
+        reviews = votes.map((v: any) => ({
+          id: v[`${DB_PREFIX}id`],
+          voter: v[`${DB_PREFIX}voter_username`],
+          winnerFeedback: v[`${DB_PREFIX}feedback_winner`],
+          loserFeedback: v[`${DB_PREFIX}feedback_loser`],
+          createdAt: v[`${DB_PREFIX}created_at`],
         }));
       }
 
       // Query win-loss records to calculate winrate
       const { data: matches } = await supabase
-        .from("shipandbattle_matches")
+        .from(`${DB_PREFIX}matches`)
         .select("*")
-        .or(`shipandbattle_product_a_id.eq.${slug},shipandbattle_product_b_id.eq.${slug}`);
+        .or(`${DB_PREFIX}product_a_id.eq.${slug},${DB_PREFIX}product_b_id.eq.${slug}`);
 
       if (matches) {
         totalMatches = matches.length;
-        winCount = matches.filter(m => m.shipandbattle_winner_id === slug).length;
+        winCount = matches.filter((m: any) => m[`${DB_PREFIX}winner_id`] === slug).length;
       }
     }
   }
@@ -204,91 +189,111 @@ export default async function ReviewPage({ params }: Props) {
   }
 
   const winRate = totalMatches > 0 ? Math.round((winCount / totalMatches) * 100) : 75;
+  const ratingValue = (winRate / 20).toFixed(1);
 
   return (
-    <div className="min-h-screen bg-[#070503] text-[#faf5ef] antialiased selection:bg-[#ffbe18] selection:text-black">
+    <div className="min-h-screen bg-[#0B0B0C] text-white antialiased selection:bg-white selection:text-black">
+      {/* Structured Data (JSON-LD) for Search Engines */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify({
+            "@context": "https://schema.org",
+            "@type": "Product",
+            "name": product.title,
+            "image": product.logo && (product.logo.startsWith("http") || product.logo.startsWith("/")) ? product.logo : undefined,
+            "description": product.tagline,
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD",
+              "availability": "https://schema.org/InStock"
+            },
+            "aggregateRating": totalMatches > 0 ? {
+              "@type": "AggregateRating",
+              "ratingValue": ratingValue,
+              "bestRating": "5",
+              "worstRating": "0",
+              "ratingCount": totalMatches
+            } : undefined
+          })
+        }}
+      />
+
       {/* 🌌 Background ambient gradient */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#130d08] via-[#070503] to-[#070503] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0c0c0e] via-[#0B0B0C] to-[#0B0B0C] pointer-events-none" />
 
       {/* ⚔️ Sticky Header */}
-      <header className="relative border-b border-white/5 py-4 backdrop-blur-md bg-black/20 sticky top-0 z-50">
+      <header className="relative border-b border-white/[0.06] py-4 backdrop-blur-md bg-black/20 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
           <a href="/" className="flex items-center gap-2 group">
-            <span className="text-2xl font-black tracking-tighter bg-gradient-to-r from-[#ffbe18] to-orange-500 bg-clip-text text-transparent group-hover:scale-105 transition">
+            <span className="text-2xl font-semibold tracking-tighter bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent group-hover:text-zinc-300 transition">
               INDIE CLASH
             </span>
-            <span className="text-[10px] font-mono border border-[#ffbe18]/30 px-1.5 py-0.5 rounded bg-[#ffbe18]/10 text-[#ffbe18] tracking-widest uppercase">
+            <span className="text-[10px] font-mono border border-white/[0.08] px-1.5 py-0.5 rounded bg-white/[0.02] text-zinc-400 tracking-wider font-mono uppercase">
               Arena
             </span>
           </a>
           <a 
             href="/"
-            className="text-xs border border-white/10 hover:border-[#ffbe18]/30 hover:bg-[#ffbe18]/5 transition px-3.5 py-1.5 rounded-lg text-[#faf5ef]/80 hover:text-white"
+            className="text-xs border border-white/[0.1] hover:bg-white/[0.04] text-zinc-300 hover:text-white transition px-3.5 py-1.5 rounded-md"
           >
             Enter Arena ➔
           </a>
         </div>
       </header>
 
-      <main className="relative max-w-4xl mx-auto px-4 py-12">
+      <main className="relative max-w-4xl mx-auto px-4 py-12 animate-fade-in-blur">
         {/* SEO Breadcrumbs */}
-        <nav className="text-xs text-[#faf5ef]/40 mb-8 flex items-center gap-2 font-mono">
-          <a href="/" className="hover:text-[#ffbe18] transition">INDIE CLASH</a>
+        <nav className="text-xs text-zinc-500 mb-8 flex items-center gap-2 font-mono">
+          <a href="/" className="hover:text-white transition">INDIE CLASH</a>
           <span>/</span>
           <span className="text-[#faf5ef]/60">PRODUCT REVIEWS</span>
           <span>/</span>
-          <span className="text-[#ffbe18] font-bold">{product.title} Reviews</span>
+          <span className="text-white font-semibold">{product.title} Reviews</span>
         </nav>
 
         {/* 🏆 Header Profile Card */}
-        <div className="bg-[#120d09]/60 border border-white/5 p-8 rounded-3xl mb-12 shadow-2xl relative overflow-hidden backdrop-blur-md">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#ffbe18]/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="bg-[#121215]/85 border border-white/[0.06] p-8 rounded-xl mb-12 relative overflow-hidden backdrop-blur-md">
+          
           
           <div className="flex flex-col sm:flex-row items-center gap-6 text-center sm:text-left mb-6">
-            <div className="w-20 h-20 rounded-2xl bg-[#ffbe18]/10 border border-[#ffbe18]/20 flex items-center justify-center shadow-inner select-none shrink-0 overflow-hidden">
+            <div className="w-20 h-20 rounded-2xl bg-[#141417] border border-white/[0.06] flex items-center justify-center select-none shrink-0 overflow-hidden rounded-lg">
               {renderLogo(product.logo, "w-14 h-14")}
             </div>
             <div>
-              <h1 className="text-3xl md:text-4xl font-black text-white tracking-tight leading-tight">
+              <h1 className="text-2xl md:text-3xl font-semibold text-white tracking-tight">
                 {product.title}
               </h1>
-              <p className="text-sm text-[#faf5ef]/70 mt-1.5 font-light leading-relaxed">
+              <p className="text-sm text-zinc-400 mt-1.5 font-light leading-relaxed">
                 "{product.tagline}"
               </p>
             </div>
           </div>
 
-          <hr className="border-white/5 my-6" />
+          <hr className="border-white/[0.06] my-6" />
 
           {/* Grid Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center sm:text-left">
-            <div className="bg-black/20 p-4 rounded-xl border border-white/5">
-              <span className="block text-xs font-mono text-[#faf5ef]/40 uppercase tracking-wider mb-1">Win Rate</span>
-              <span className="text-2xl font-black text-[#ffbe18]">{winRate}%</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 text-center sm:text-left">
+            <div className="bg-[#141417] p-4 rounded-lg border border-white/[0.06]">
+              <span className="block text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Total Duels</span>
+              <span className="text-2xl font-semibold text-white">{totalMatches} duels</span>
             </div>
-            <div className="bg-black/20 p-4 rounded-xl border border-white/5">
-              <span className="block text-xs font-mono text-[#faf5ef]/40 uppercase tracking-wider mb-1">Total Duels</span>
-              <span className="text-2xl font-black text-white">{totalMatches} duels</span>
-            </div>
-            <div className="bg-black/20 p-4 rounded-xl border border-white/5">
-              <span className="block text-xs font-mono text-[#faf5ef]/40 uppercase tracking-wider mb-1">Total Votes</span>
-              <span className="text-2xl font-black text-white">{product.votesCount} votes</span>
-            </div>
-            <div className="bg-black/20 p-4 rounded-xl border border-white/5">
-              <span className="block text-xs font-mono text-[#faf5ef]/40 uppercase tracking-wider mb-1">Sprint Time</span>
-              <span className="text-2xl font-black text-orange-400 font-mono">{product.shipTimeframe}</span>
+            <div className="bg-[#141417] p-4 rounded-lg border border-white/[0.06]">
+              <span className="block text-xs font-mono text-zinc-500 uppercase tracking-wider mb-1">Total Votes</span>
+              <span className="text-2xl font-semibold text-white">{product.votesCount} votes</span>
             </div>
           </div>
 
           {/* Social details bar */}
-          <div className="mt-8 pt-6 border-t border-white/5 flex flex-wrap gap-4 items-center justify-between text-sm font-mono">
+          <div className="mt-8 pt-6 border-t border-white/[0.06] flex flex-wrap gap-4 items-center justify-between text-sm font-mono">
             <div className="flex items-center gap-2">
-              <span className="text-[#faf5ef]/40">Maker:</span>
+              <span className="text-zinc-500">Maker:</span>
               <span className="text-white font-bold">{product.makerName}</span>
               <a 
                 href={`https://twitter.com/${product.makerTwitter?.replace(/^@/, "")}`}
                 target="_blank"
-                className="text-[#ffbe18] hover:underline"
+                className="text-white hover:underline"
               >
                 ({product.makerTwitter})
               </a>
@@ -297,14 +302,14 @@ export default async function ReviewPage({ params }: Props) {
               <a 
                 href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(`Check out the founder critiques and 1v1 duel stats for ${product.title} on @IndieClash! ⚔️\n\nhttps://www.indieclash.com/reviews/${product.id}`)}`}
                 target="_blank"
-                className="px-4 py-2 rounded-xl border border-[#ffbe18]/30 hover:border-[#ffbe18]/60 hover:bg-[#ffbe18]/5 text-[#ffbe18] font-bold text-sm transition font-mono flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl border border-[#ffbe18]/30 hover:border-[#ffbe18]/60 hover:bg-[#ffbe18]/5 text-white font-semibold text-sm transition font-mono flex items-center gap-1.5"
               >
                 📢 Share on X
               </a>
               <a 
                 href={product.url}
                 target="_blank"
-                className="px-4 py-2 rounded-xl bg-[#ffbe18] text-black font-extrabold hover:scale-105 hover:bg-[#e0a612] transition shadow-md"
+                className="px-4 py-2 rounded-xl bg-[#ffbe18] text-black font-semibold hover:scale-105 hover:bg-[#e0a612] transition shadow-md"
               >
                 Visit Startup Website ➔
               </a>
@@ -313,19 +318,19 @@ export default async function ReviewPage({ params }: Props) {
         </div>
 
         {/* 🏆 Embed Backlink Badge Widget */}
-        <section className="bg-[#120d09]/40 border border-[#ffbe18]/25 p-6 sm:p-8 rounded-3xl mb-12 shadow-2xl relative overflow-hidden backdrop-blur-md">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-[#ffbe18]/5 rounded-full blur-3xl pointer-events-none" />
-          <h2 className="text-xl font-extrabold text-white mb-2 flex items-center gap-2">
+        <section className="bg-[#121215]/85 border border-white/[0.08] p-6 sm:p-8 rounded-xl mb-12 relative overflow-hidden backdrop-blur-md">
+          
+          <h2 className="text-xl font-semibold text-white mb-2 flex items-center gap-2">
             🏆 Claim Your Badge & Boost Your SEO Rank
           </h2>
-          <p className="text-xs text-[#faf5ef]/70 mb-6 font-light leading-relaxed">
+          <p className="text-xs text-zinc-400 mb-6 font-light leading-relaxed">
             Showcase your startup's performance in the Indie Clash arena. Place this live badge on your website or GitHub README to increase search authority and drive traffic back to your critiques feed.
           </p>
           
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-black/40 p-5 rounded-2xl border border-white/5 items-center">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-[#141417] p-5 rounded-2xl border border-white/[0.06] items-center">
             {/* Badge preview */}
-            <div className="md:col-span-4 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-white/5 pb-6 md:pb-0 md:pr-6 shrink-0 text-center">
-              <span className="text-[10px] font-mono text-[#faf5ef]/40 mb-2 uppercase tracking-widest block">Badge Preview</span>
+            <div className="md:col-span-4 flex flex-col items-center justify-center border-b md:border-b-0 md:border-r border-white/[0.06] pb-6 md:pb-0 md:pr-6 shrink-0 text-center">
+              <span className="text-[10px] font-mono text-zinc-500 mb-2 uppercase tracking-widest block">Badge Preview</span>
               <a 
                 href={`https://www.indieclash.com/reviews/${product.id}`}
                 target="_blank"
@@ -342,22 +347,26 @@ export default async function ReviewPage({ params }: Props) {
             {/* Embed Code Copy */}
             <div className="md:col-span-8 space-y-4">
               <div>
-                <span className="text-[10px] font-mono text-[#faf5ef]/40 mb-1.5 uppercase tracking-widest block">HTML Embed Code (for website homepage/footer)</span>
+                <span className="text-[10px] font-mono text-zinc-500 mb-1.5 uppercase tracking-widest block">Direct SEO Review Link</span>
+                <CopyLink value={`https://www.indieclash.com/reviews/${product.id}`} />
+              </div>
+              <div>
+                <span className="text-[10px] font-mono text-zinc-500 mb-1.5 uppercase tracking-widest block">HTML Embed Code (for website homepage/footer)</span>
                 <textarea 
                   readOnly
                   value={`<a href="https://www.indieclash.com/reviews/${product.id}" target="_blank"><img src="https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Indie_Clash-Voted_on_Arena-ffbe18?style=flat-square" alt="Voted on Indie Clash" /></a>`}
-                  className="w-full h-14 bg-black/60 border border-white/10 rounded-xl p-2 text-[10px] font-mono text-[#faf5ef]/80 focus:outline-none focus:border-[#ffbe18]/40 select-all leading-normal"
+                  className="w-full h-14 bg-zinc-950 border border-white/[0.08] rounded-md p-2 text-[10px] font-mono text-zinc-400 focus:outline-none focus:border-zinc-400 select-all leading-normal"
                 />
               </div>
               <div>
-                <span className="text-[10px] font-mono text-[#faf5ef]/40 mb-1.5 uppercase tracking-widest block">Markdown Code (for GitHub README)</span>
+                <span className="text-[10px] font-mono text-zinc-500 mb-1.5 uppercase tracking-widest block">Markdown Code (for GitHub README)</span>
                 <textarea 
                   readOnly
                   value={`[![Voted on Indie Clash](https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Indie_Clash-Voted_on_Arena-ffbe18?style=flat-square)](https://www.indieclash.com/reviews/${product.id})`}
-                  className="w-full h-14 bg-black/60 border border-white/10 rounded-xl p-2 text-[10px] font-mono text-[#faf5ef]/80 focus:outline-none focus:border-[#ffbe18]/40 select-all leading-normal"
+                  className="w-full h-14 bg-zinc-950 border border-white/[0.08] rounded-md p-2 text-[10px] font-mono text-zinc-400 focus:outline-none focus:border-zinc-400 select-all leading-normal"
                 />
               </div>
-              <div className="text-[10px] text-[#ffbe18] font-mono text-right italic">
+              <div className="text-[10px] text-white font-mono text-right italic">
                 💡 Hint: Click inside any box to select code, then copy and paste!
               </div>
             </div>
@@ -366,38 +375,38 @@ export default async function ReviewPage({ params }: Props) {
 
         {/* 🛡️ The Critique Feed */}
         <section className="space-y-6 mb-12">
-          <div className="border-b border-white/5 pb-4 flex justify-between items-baseline">
-            <h2 className="text-2xl font-black text-white">
+          <div className="border-b border-white/[0.06] pb-4 flex justify-between items-baseline">
+            <h2 className="text-2xl font-semibold text-white">
               🛡️ Founder Critiques Feed
             </h2>
-            <span className="text-xs font-mono text-[#faf5ef]/40">{reviews.length} Verified Reviews</span>
+            <span className="text-xs font-mono text-zinc-500">{reviews.length} Verified Reviews</span>
           </div>
 
           <div className="space-y-6">
             {reviews.map((r, i) => (
               <div 
                 key={i} 
-                className="bg-[#120d09]/40 border border-white/5 p-6 rounded-2xl hover:border-white/10 transition relative group"
+                className="bg-[#120d09]/40 border border-white/[0.06] p-6 rounded-2xl hover:border-white/[0.08] transition relative group"
               >
                 <div className="flex justify-between items-center mb-4">
                   <div className="flex items-center gap-2 text-sm font-mono">
-                    <span className="text-[#ffbe18]">🛡️ verified voter</span>
-                    <span className="text-[#faf5ef]/30">|</span>
+                    <span className="text-white">🛡️ verified voter</span>
+                    <span className="text-zinc-650">|</span>
                     <span className="text-white/90">{r.voter}</span>
                   </div>
-                  <span className="text-[10px] font-mono text-[#faf5ef]/30">
+                  <span className="text-[10px] font-mono text-zinc-650">
                     {r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "Just now"}
                   </span>
                 </div>
 
-                <div className="space-y-3 font-light text-sm text-[#faf5ef]/80 leading-relaxed">
-                  <div className="pl-4 border-l-2 border-green-500/50 bg-green-500/5 py-1.5 pr-2 rounded-r">
-                    <strong className="block text-xs font-mono text-green-400 uppercase tracking-wider mb-1">✨ Positive Highlights:</strong>
+                <div className="space-y-3 font-light text-sm text-zinc-400 leading-relaxed">
+                  <div className="pl-4 border-l-2 border-white/[0.1] bg-white/[0.02] py-1.5 pr-2 rounded-r">
+                    <strong className="block text-xs font-mono text-white uppercase tracking-wider mb-1">✨ Positive Highlights:</strong>
                     "{r.winnerFeedback || "Incredibly clean layout, simplifies core functions perfectly."}"
                   </div>
 
-                  <div className="pl-4 border-l-2 border-red-500/50 bg-red-500/5 py-1.5 pr-2 rounded-r">
-                    <strong className="block text-xs font-mono text-red-400 uppercase tracking-wider mb-1">⚠️ Constructive Critique:</strong>
+                  <div className="pl-4 border-l-2 border-white/[0.06] bg-white/[0.02] py-1.5 pr-2 rounded-r">
+                    <strong className="block text-xs font-mono text-zinc-400 uppercase tracking-wider mb-1">⚠️ Constructive Critique:</strong>
                     "{r.loserFeedback || "Needs some tooltips on layout setup options for better accessibility."}"
                   </div>
                 </div>
@@ -407,20 +416,20 @@ export default async function ReviewPage({ params }: Props) {
         </section>
 
         {/* 🚀 Dynamic Final CTA Banner */}
-        <section className="relative rounded-3xl bg-gradient-to-r from-[#ffbe18]/15 via-[#ffbe18]/5 to-transparent border border-[#ffbe18]/25 p-8 md:p-12 overflow-hidden shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8">
+        <section className="relative rounded-3xl bg-gradient-to-r from-[#ffbe18]/15 via-[#ffbe18]/5 to-transparent border border-white/[0.08] p-8 md:p-12 overflow-hidden shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8">
           <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent)] pointer-events-none" />
           <div className="text-center md:text-left">
-            <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-3">
+            <h2 className="text-2xl md:text-3xl font-semibold text-white mb-3">
               Want critiques for your own startup?
             </h2>
-            <p className="text-sm md:text-base text-[#faf5ef]/70 font-light max-w-xl">
+            <p className="text-sm md:text-base text-zinc-400 font-light max-w-xl">
               Submit your project, challenge other makers, trade verified critiques, and scale your domain authority on search engines.
             </p>
           </div>
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto shrink-0">
             <a 
               href="/"
-              className="w-full sm:w-auto bg-[#ffbe18] hover:bg-[#e0a612] text-black font-extrabold text-sm px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition text-center"
+              className="w-full sm:w-auto bg-[#ffbe18] hover:bg-[#e0a612] text-black font-semibold text-sm px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition text-center"
             >
               Challenge {product.title} Now ➔
             </a>
@@ -429,7 +438,7 @@ export default async function ReviewPage({ params }: Props) {
       </main>
 
       {/* 🛡️ Footer */}
-      <footer className="border-t border-white/5 py-12 bg-black/40 font-mono text-xs text-[#faf5ef]/30 mt-16 relative">
+      <footer className="border-t border-white/[0.06] py-12 bg-[#141417] font-mono text-xs text-zinc-650 mt-16 relative">
         <div className="max-w-4xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             © 2026 INDIE CLASH. Voted and shipped by public creators.

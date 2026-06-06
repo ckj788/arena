@@ -5,7 +5,7 @@
  * strictly using the New York Timezone benchmark.
  */
 
-// 1. 获取当前纽约的本地时间 Date 对象
+// 1. Get current local time in New York as Date object
 export function getNewYorkTime(): Date {
   const date = new Date();
   const formatter = new Intl.DateTimeFormat("en-US", {
@@ -32,7 +32,7 @@ export function getNewYorkTime(): Date {
   );
 }
 
-// 1.5. 将指定 Date 对象转换为纽约本地时间的 Date 对象
+// 1.5. Convert a specific Date object to New York local time Date object
 export function getNewYorkTimeOfDate(date: Date): Date {
   const formatter = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -58,8 +58,8 @@ export function getNewYorkTimeOfDate(date: Date): Date {
   );
 }
 
-// 2. 计算距离下一次纽约时间零点（Midnight 00:00:00）的剩余毫秒数
-// 如果传入了 startedAt，则以 startedAt（组建时间）的下一天零点为目标
+// 2. Calculate remaining milliseconds to next New York midnight (00:00:00)
+// If startedAt is provided, target midnight of the day after startedAt (matching creation day)
 export function getMillisecondsToNextNYMidnight(startedAt?: string): number {
   const nyNow = getNewYorkTime();
   const baseDate = startedAt ? new Date(startedAt) : new Date();
@@ -69,36 +69,36 @@ export function getMillisecondsToNextNYMidnight(startedAt?: string): number {
   return nyTargetMidnight.getTime() - nyNow.getTime();
 }
 
-// 3. 根据 3-2-1-1 规则，获取每轮赛事的规定时长（单位：毫秒）
-// 已恢复为天数时间配置：3天、2天、1天、1天
+// 3. Get the duration of each round according to the 3-2-1-1 rule (in milliseconds)
+// Restored to daily duration configs: 3 days, 2 days, 1 day, 1 day
 export function getRoundDurationMs(roundNumber: number): number {
   const ONE_DAY_MS = 24 * 60 * 60 * 1000;
   switch (roundNumber) {
     case 1:
-      return 3 * ONE_DAY_MS; // 3天
+      return 3 * ONE_DAY_MS; // 3 days
     case 2:
-      return 2 * ONE_DAY_MS; // 2天
+      return 2 * ONE_DAY_MS; // 2 days
     case 3:
-      return 1 * ONE_DAY_MS; // 1天
+      return 1 * ONE_DAY_MS; // 1 day
     case 4:
-      return 1 * ONE_DAY_MS; // 1天
+      return 1 * ONE_DAY_MS; // 1 day
     default:
       return 1 * ONE_DAY_MS;
   }
 }
 
-// 4. 获取当前轮次的剩余截止时间（单位：毫秒）
-// 参数 startedAtStr: 数据库中记录的当前轮次启动 ISO 时间戳
+// 4. Get remaining time for the current round (in milliseconds)
+// Param startedAtStr: ISO timestamp of the current round start recorded in DB
 export function getRoundRemainingMs(roundNumber: number, startedAtStr: string): number {
   const startedAt = new Date(startedAtStr).getTime();
   const duration = getRoundDurationMs(roundNumber);
   const deadline = startedAt + duration;
   
-  // 🚀 [TESTING DEPLOYMENT BYPASS]: 采用纯 UTC 时间戳相减，100% 免疫任何时区差（如中美时差）导致的“瞬间归零”Bug！
+  // 🚀 [TESTING DEPLOYMENT BYPASS]: Subtract pure UTC timestamps to avoid timezone difference bugs
   const remaining = deadline - Date.now();
   return Math.max(0, remaining);
   
-  /* 原版纽约时间修正逻辑（在分钟级短测试下会因为时区差导致直接归零）：
+  /* Original NY time adjustment logic (which could drop to zero immediately due to timezone differences in short testing):
   const currentNYTime = getNewYorkTime().getTime();
   const rawCurrentLocalTime = new Date().getTime();
   const diffOffset = currentNYTime - rawCurrentLocalTime; 
@@ -108,7 +108,7 @@ export function getRoundRemainingMs(roundNumber: number, startedAtStr: string): 
   */
 }
 
-// 5. 格式化毫秒数为天、时、分、秒字符串 (用于 UI 渲染)
+// 5. Format milliseconds into day, hour, minute, second string (for UI rendering)
 export function formatDuration(ms: number): string {
   if (ms <= 0) return "00:00:00";
   
@@ -128,7 +128,7 @@ export function formatDuration(ms: number): string {
   return parts.join(" ");
 }
 
-// 6. 极速格式化为 HH:MM:SS 格式 (用于集结倒计时)
+// 6. Format as HH:MM:SS (for countdown UI)
 export function formatToHMS(ms: number): string {
   if (ms <= 0) return "00:00:00";
   const totalSeconds = Math.floor(ms / 1000);
@@ -139,3 +139,4 @@ export function formatToHMS(ms: number): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
+

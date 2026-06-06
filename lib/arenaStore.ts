@@ -1,5 +1,5 @@
 import { Product, Match, Bracket, SEED_PRODUCTS } from "./mockData";
-import { supabase } from "./supabaseClient";
+import { supabase, DB_PREFIX } from "./supabaseClient";
 
 const PRODUCTS_KEY = "arena_products_v1";
 const BRACKET_KEY = "arena_bracket_v1";
@@ -102,8 +102,8 @@ export function saveBracket(bracket: Bracket | null) {
 }
 
 // 自动生成 16 强配对
-export function buildInitialBracket(products: Product[]): Bracket {
-  const waitingProducts = products.filter(p => p.queueStatus === "waiting");
+export function buildInitialBracket(products: Product[]): { bracket: Bracket; updatedProducts: Product[] } {
+  const waitingProducts = products.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
   const activeProducts = waitingProducts.slice(0, 16);
   const round1: Match[] = [];
   for (let i = 0; i < 8; i++) {
@@ -138,7 +138,7 @@ export function buildInitialBracket(products: Product[]): Bracket {
   saveProducts(updatedProducts);
   saveBracket(bracket);
 
-  return bracket;
+  return { bracket, updatedProducts };
 }
 
 // 模拟自动为对局增加一些票数 (Sandbox 模式)
@@ -313,73 +313,68 @@ export function addDummyMaker(products: Product[]): Product[] {
   return updated;
 }
 
-
-// ========================================================
-// 2. SUPABASE 异步联机云数据引擎 (对齐 'shipandbattle_' 前缀)
-// ========================================================
-
 // 映射器 1：本地 Product -> DB 产品行
 function toDbProduct(p: Product) {
   return {
-    shipandbattle_id: p.id,
-    shipandbattle_title: p.title,
-    shipandbattle_tagline: p.tagline,
-    shipandbattle_url: p.url,
-    shipandbattle_ship_timeframe: p.shipTimeframe,
-    shipandbattle_maker_name: p.makerName,
-    shipandbattle_maker_twitter: p.makerTwitter,
-    shipandbattle_maker_avatar: p.makerAvatar,
-    shipandbattle_logo: p.logo,
-    shipandbattle_submitted_at: p.submittedAt,
-    shipandbattle_queue_status: p.queueStatus,
-    shipandbattle_votes_count: p.votesCount
+    [`${DB_PREFIX}id`]: p.id,
+    [`${DB_PREFIX}title`]: p.title,
+    [`${DB_PREFIX}tagline`]: p.tagline,
+    [`${DB_PREFIX}url`]: p.url,
+    [`${DB_PREFIX}ship_timeframe`]: p.shipTimeframe,
+    [`${DB_PREFIX}maker_name`]: p.makerName,
+    [`${DB_PREFIX}maker_twitter`]: p.makerTwitter,
+    [`${DB_PREFIX}maker_avatar`]: p.makerAvatar,
+    [`${DB_PREFIX}logo`]: p.logo,
+    [`${DB_PREFIX}submitted_at`]: p.submittedAt,
+    [`${DB_PREFIX}queue_status`]: p.queueStatus,
+    [`${DB_PREFIX}votes_count`]: p.votesCount
   };
 }
 
 // 映射器 2：DB 产品行 -> 本地 Product
-function fromDbProduct(row: any): Product {
+export function fromDbProduct(row: any): Product {
   return {
-    id: row.shipandbattle_id,
-    title: row.shipandbattle_title,
-    tagline: row.shipandbattle_tagline,
-    url: row.shipandbattle_url,
-    shipTimeframe: row.shipandbattle_ship_timeframe,
-    makerName: row.shipandbattle_maker_name,
-    makerTwitter: row.shipandbattle_maker_twitter,
-    makerAvatar: row.shipandbattle_maker_avatar,
-    logo: row.shipandbattle_logo,
-    submittedAt: row.shipandbattle_submitted_at,
-    queueStatus: row.shipandbattle_queue_status,
-    votesCount: row.shipandbattle_votes_count
+    id: row[`${DB_PREFIX}id`],
+    title: row[`${DB_PREFIX}title`],
+    tagline: row[`${DB_PREFIX}tagline`],
+    url: row[`${DB_PREFIX}url`],
+    shipTimeframe: row[`${DB_PREFIX}ship_timeframe`],
+    makerName: row[`${DB_PREFIX}maker_name`],
+    makerTwitter: row[`${DB_PREFIX}maker_twitter`],
+    makerAvatar: row[`${DB_PREFIX}maker_avatar`],
+    logo: row[`${DB_PREFIX}logo`],
+    submittedAt: row[`${DB_PREFIX}submitted_at`],
+    queueStatus: row[`${DB_PREFIX}queue_status`],
+    votesCount: row[`${DB_PREFIX}votes_count`]
   };
 }
 
 // 映射器 3：本地 Match -> DB 对局行
 function toDbMatch(m: Match, bracketId: string) {
   return {
-    shipandbattle_id: m.id,
-    shipandbattle_bracket_id: bracketId,
-    shipandbattle_round_number: m.roundNumber,
-    shipandbattle_product_a_id: m.productA.id,
-    shipandbattle_product_b_id: m.productB.id,
-    shipandbattle_votes_a: m.votesA,
-    shipandbattle_votes_b: m.votesB,
-    shipandbattle_winner_id: m.winnerId || null,
-    shipandbattle_voted_user_ids: m.votedUserIds
+    [`${DB_PREFIX}id`]: m.id,
+    [`${DB_PREFIX}bracket_id`]: bracketId,
+    [`${DB_PREFIX}round_number`]: m.roundNumber,
+    [`${DB_PREFIX}product_a_id`]: m.productA?.id || "",
+    [`${DB_PREFIX}product_b_id`]: m.productB?.id || "",
+    [`${DB_PREFIX}votes_a`]: m.votesA,
+    [`${DB_PREFIX}votes_b`]: m.votesB,
+    [`${DB_PREFIX}winner_id`]: m.winnerId || null,
+    [`${DB_PREFIX}voted_user_ids`]: m.votedUserIds
   };
 }
 
 // 映射器 4：DB 对局行 -> 本地 Match
 function fromDbMatch(row: any, productA: Product, productB: Product): Match {
   return {
-    id: row.shipandbattle_id,
-    roundNumber: row.shipandbattle_round_number,
+    id: row[`${DB_PREFIX}id`],
+    roundNumber: row[`${DB_PREFIX}round_number`],
     productA,
     productB,
-    votesA: row.shipandbattle_votes_a,
-    votesB: row.shipandbattle_votes_b,
-    winnerId: row.shipandbattle_winner_id || undefined,
-    votedUserIds: row.shipandbattle_voted_user_ids || []
+    votesA: row[`${DB_PREFIX}votes_a`],
+    votesB: row[`${DB_PREFIX}votes_b`],
+    winnerId: row[`${DB_PREFIX}winner_id`] || undefined,
+    votedUserIds: row[`${DB_PREFIX}voted_user_ids`] || []
   };
 }
 
@@ -387,9 +382,9 @@ function fromDbMatch(row: any, productA: Product, productB: Product): Match {
 export async function fetchCloudProducts(): Promise<Product[]> {
   if (!supabase) return loadProducts();
   const { data, error } = await supabase
-    .from("shipandbattle_products")
+    .from(`${DB_PREFIX}products`)
     .select("*")
-    .order("shipandbattle_submitted_at", { ascending: true });
+    .order(`${DB_PREFIX}submitted_at`, { ascending: true });
 
   if (error) {
     console.error("Error fetching cloud products:", error);
@@ -409,8 +404,8 @@ export async function upsertCloudProduct(p: Product): Promise<void> {
     return;
   }
   const { error } = await supabase
-    .from("shipandbattle_products")
-    .upsert(toDbProduct(p));
+    .from(`${DB_PREFIX}products`)
+    .upsert(toDbProduct(p) as any);
 
   if (error) {
     console.error("Error upserting product:", error);
@@ -426,13 +421,13 @@ export async function saveCloudBracket(b: Bracket): Promise<void> {
 
   // A. 插入或更新 Bracket 根节点
   const { error: bErr } = await supabase
-    .from("shipandbattle_brackets")
+    .from(`${DB_PREFIX}brackets`)
     .upsert({
-      shipandbattle_id: b.id,
-      shipandbattle_status: b.status,
-      shipandbattle_winner_id: b.winner?.id || null,
-      shipandbattle_round_started_at: b.roundStartedAt || new Date().toISOString()
-    });
+      [`${DB_PREFIX}id`]: b.id,
+      [`${DB_PREFIX}status`]: b.status,
+      [`${DB_PREFIX}winner_id`]: b.winner?.id || null,
+      [`${DB_PREFIX}round_started_at`]: b.roundStartedAt || new Date().toISOString()
+    } as any);
 
   if (bErr) {
     console.error("Error upserting bracket:", bErr);
@@ -451,8 +446,8 @@ export async function saveCloudBracket(b: Bracket): Promise<void> {
 
   const dbMatches = allMatches.map(m => toDbMatch(m, b.id));
   const { error: mErr } = await supabase
-    .from("shipandbattle_matches")
-    .upsert(dbMatches);
+    .from(`${DB_PREFIX}matches`)
+    .upsert(dbMatches as any);
 
   if (mErr) {
     console.error("Error upserting matches:", mErr);
@@ -470,8 +465,8 @@ export async function saveCloudBracket(b: Bracket): Promise<void> {
 
     const dbProds = Array.from(productMap.values()).map(toDbProduct);
     const { error: pErr } = await supabase
-      .from("shipandbattle_products")
-      .upsert(dbProds);
+      .from(`${DB_PREFIX}products`)
+      .upsert(dbProds as any);
 
     if (pErr) {
       console.error("Error updating participating product queue statuses in cloud:", pErr);
@@ -485,10 +480,10 @@ export async function fetchCloudBracket(): Promise<Bracket | null> {
 
   // A. 先抓取当前活跃（集结中/进行中）的最近一条对局树记录
   const { data: bData, error: bErr } = await supabase
-    .from("shipandbattle_brackets")
+    .from(`${DB_PREFIX}brackets`)
     .select("*")
-    .in("shipandbattle_status", ["preparing", "active"])
-    .order("shipandbattle_created_at", { ascending: false })
+    .in(`${DB_PREFIX}status`, ["preparing", "active"])
+    .order(`${DB_PREFIX}created_at`, { ascending: false })
     .limit(1)
     .maybeSingle();
 
@@ -501,9 +496,9 @@ export async function fetchCloudBracket(): Promise<Bracket | null> {
 
   // B. 抓取该对局树下的所有场次
   const { data: mData, error: mErr } = await supabase
-    .from("shipandbattle_matches")
+    .from(`${DB_PREFIX}matches`)
     .select("*")
-    .eq("shipandbattle_bracket_id", bData.shipandbattle_id);
+    .eq(`${DB_PREFIX}bracket_id`, bData[`${DB_PREFIX}id`]);
 
   if (mErr) {
     console.error("Error fetching bracket matches:", mErr);
@@ -521,15 +516,15 @@ export async function fetchCloudBracket(): Promise<Bracket | null> {
   const round4: Match[] = [];
 
   mData.forEach(m => {
-    const prodA = prodMap.get(m.shipandbattle_product_a_id);
-    const prodB = prodMap.get(m.shipandbattle_product_b_id);
+    const prodA = prodMap.get(m[`${DB_PREFIX}product_a_id`]);
+    const prodB = prodMap.get(m[`${DB_PREFIX}product_b_id`]);
     if (!prodA || !prodB) return;
 
     const matchObj = fromDbMatch(m, prodA, prodB);
-    if (m.shipandbattle_round_number === 1) round1.push(matchObj);
-    else if (m.shipandbattle_round_number === 2) round2.push(matchObj);
-    else if (m.shipandbattle_round_number === 3) round3.push(matchObj);
-    else if (m.shipandbattle_round_number === 4) round4.push(matchObj);
+    if (m[`${DB_PREFIX}round_number`] === 1) round1.push(matchObj);
+    else if (m[`${DB_PREFIX}round_number`] === 2) round2.push(matchObj);
+    else if (m[`${DB_PREFIX}round_number`] === 3) round3.push(matchObj);
+    else if (m[`${DB_PREFIX}round_number`] === 4) round4.push(matchObj);
   });
 
   // 排序以防乱序
@@ -539,13 +534,13 @@ export async function fetchCloudBracket(): Promise<Bracket | null> {
   round3.sort(sortByMatchId);
   round4.sort(sortByMatchId);
 
-  const finalWinner = bData.shipandbattle_winner_id ? prodMap.get(bData.shipandbattle_winner_id) : undefined;
+  const finalWinner = bData[`${DB_PREFIX}winner_id`] ? prodMap.get(bData[`${DB_PREFIX}winner_id`]) : undefined;
 
   return {
-    id: bData.shipandbattle_id,
-    status: bData.shipandbattle_status,
+    id: bData[`${DB_PREFIX}id`],
+    status: bData[`${DB_PREFIX}status`],
     winner: finalWinner,
-    roundStartedAt: bData.shipandbattle_round_started_at,
+    roundStartedAt: bData[`${DB_PREFIX}round_started_at`],
     round1,
     round2,
     round3,
@@ -553,40 +548,51 @@ export async function fetchCloudBracket(): Promise<Bracket | null> {
   };
 }
 
-// 5. 永久清除云端对局数据并重置（对 SEO 友好：保留产品和评价，仅重置活跃对局树）
+// 5. 永久清除云端对局数据并重置（彻底清空所有数据库表以支持沙箱重置）
 export async function clearCloudData(): Promise<void> {
   if (!supabase) return;
 
-  // A. 获取当前未完成（活跃/集结中）的 Bracket ID
-  const { data: activeBrackets } = await supabase
-    .from("shipandbattle_brackets")
-    .select("shipandbattle_id")
-    .in("shipandbattle_status", ["preparing", "active"]);
-
-  if (activeBrackets && activeBrackets.length > 0) {
-    const activeIds = activeBrackets.map(b => b.shipandbattle_id);
-
-    // B. 清除这些活跃对局关联的场次（已完成 completed 的对局和场次保留以维持 versus 页面 SEO）
-    await supabase
-      .from("shipandbattle_matches")
-      .delete()
-      .in("shipandbattle_bracket_id", activeIds);
-
-    // C. 清除这些活跃的 Bracket 树
-    await supabase
-      .from("shipandbattle_brackets")
-      .delete()
-      .in("shipandbattle_id", activeIds);
+  // A. 清除所有投票与反馈
+  const { error: vErr } = await supabase
+    .from(`${DB_PREFIX}votes`)
+    .delete()
+    .neq(`${DB_PREFIX}id`, "00000000-0000-0000-0000-000000000000");
+  if (vErr) {
+    console.error("Error deleting votes:", vErr);
+    throw new Error(`Failed to delete votes: ${vErr.message}`);
   }
 
-  // D. 将当前正在对决中（active）的产品状态还原为排队中（waiting），避免选手状态孤立
-  await supabase
-    .from("shipandbattle_products")
-    .update({ shipandbattle_queue_status: "waiting" })
-    .eq("shipandbattle_queue_status", "active");
+  // B. 清除所有对局场次
+  const { error: mErr } = await supabase
+    .from(`${DB_PREFIX}matches`)
+    .delete()
+    .neq(`${DB_PREFIX}id`, "_nonexistent_");
+  if (mErr) {
+    console.error("Error deleting matches:", mErr);
+    throw new Error(`Failed to delete matches: ${mErr.message}`);
+  }
 
-  // 对 SEO 友好：绝对不删除历史产品表 shipandbattle_products 和历史评价表 shipandbattle_votes
+  // C. 清除所有晋级赛树
+  const { error: bErr } = await supabase
+    .from(`${DB_PREFIX}brackets`)
+    .delete()
+    .neq(`${DB_PREFIX}id`, "_nonexistent_");
+  if (bErr) {
+    console.error("Error deleting brackets:", bErr);
+    throw new Error(`Failed to delete brackets: ${bErr.message}`);
+  }
+
+  // D. 清除所有产品记录
+  const { error: pErr } = await supabase
+    .from(`${DB_PREFIX}products`)
+    .delete()
+    .neq(`${DB_PREFIX}id`, "_nonexistent_");
+  if (pErr) {
+    console.error("Error deleting products:", pErr);
+    throw new Error(`Failed to delete products: ${pErr.message}`);
+  }
 }
+
 
 const PAST_CHAMPS_KEY = "arena_past_champions_v1";
 
@@ -627,18 +633,18 @@ export async function fetchCloudPastChampions(): Promise<Product[]> {
     return loadLocalPastChampions();
   }
   const { data: bData, error: bErr } = await supabase
-    .from("shipandbattle_brackets")
-    .select("shipandbattle_winner_id")
-    .eq("shipandbattle_status", "completed");
+    .from(`${DB_PREFIX}brackets`)
+    .select(`${DB_PREFIX}winner_id`)
+    .eq(`${DB_PREFIX}status`, "completed");
   
   if (bErr || !bData) return [];
-  const winnerIds = bData.map(x => x.shipandbattle_winner_id).filter(Boolean);
+  const winnerIds = bData.map((x: any) => x[`${DB_PREFIX}winner_id`]).filter(Boolean);
   if (winnerIds.length === 0) return [];
   
   const { data: pData, error: pErr } = await supabase
-    .from("shipandbattle_products")
+    .from(`${DB_PREFIX}products`)
     .select("*")
-    .in("shipandbattle_id", winnerIds);
+    .in(`${DB_PREFIX}id`, winnerIds);
     
   if (pErr || !pData) return [];
   return pData.map(fromDbProduct);

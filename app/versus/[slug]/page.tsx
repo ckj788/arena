@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
 import { SEED_PRODUCTS } from "@/lib/mockData";
 
 interface Props {
@@ -20,13 +20,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (supabase) {
     const { data: products } = await supabase
-      .from("shipandbattle_products")
-      .select("shipandbattle_title")
-      .in("shipandbattle_id", [slugA, slugB]);
+      .from(`${DB_PREFIX}products`)
+      .select(`${DB_PREFIX}title`)
+      .in(`${DB_PREFIX}id`, [slugA, slugB]);
 
     if (products && products.length >= 2) {
-      titleA = products[0].shipandbattle_title;
-      titleB = products[1].shipandbattle_title;
+      titleA = (products[0] as any)[`${DB_PREFIX}title`];
+      titleB = (products[1] as any)[`${DB_PREFIX}title`];
     }
   } else {
     const pA = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugA.toLowerCase());
@@ -70,28 +70,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 // 2. Pre-generate popular matchups at build time (SSG)
 export async function generateStaticParams() {
-  if (!supabase) {
-    return [
-      { slug: "zenjournal-vs-logocraft" },
-      { slug: "quickcron-vs-cardioai" },
-      { slug: "typeflow-vs-siteshot" },
-    ];
-  }
-
-  try {
-    const { data: matches } = await supabase
-      .from("shipandbattle_matches")
-      .select("shipandbattle_product_a_id, shipandbattle_product_b_id")
-      .limit(30);
-
-    if (!matches) return [];
-
-    return matches.map(m => ({
-      slug: `${m.shipandbattle_product_a_id}-vs-${m.shipandbattle_product_b_id}`,
-    }));
-  } catch (e) {
-    return [];
-  }
+  return [
+    { slug: "zenjournal-vs-logocraft" },
+    { slug: "quickcron-vs-cardioai" },
+    { slug: "typeflow-vs-siteshot" },
+  ];
 }
 
 export const revalidate = 1800; // Settle cache every 30 minutes in background
@@ -118,57 +101,59 @@ export default async function VersusPage({ params }: Props) {
 
   if (supabase) {
     const { data: pA } = await supabase
-      .from("shipandbattle_products")
+      .from(`${DB_PREFIX}products`)
       .select("*")
-      .eq("shipandbattle_id", slugA)
+      .eq(`${DB_PREFIX}id`, slugA)
       .single();
 
     const { data: pB } = await supabase
-      .from("shipandbattle_products")
+      .from(`${DB_PREFIX}products`)
       .select("*")
-      .eq("shipandbattle_id", slugB)
+      .eq(`${DB_PREFIX}id`, slugB)
       .single();
 
     if (pA && pB) {
+      const rawPA = pA as any;
+      const rawPB = pB as any;
       productA = {
-        id: pA.shipandbattle_id,
-        title: pA.shipandbattle_title,
-        tagline: pA.shipandbattle_tagline,
-        url: pA.shipandbattle_url,
-        shipTimeframe: pA.shipandbattle_ship_timeframe,
-        makerName: pA.shipandbattle_maker_name,
-        makerTwitter: pA.shipandbattle_maker_twitter,
-        makerAvatar: pA.shipandbattle_maker_avatar,
-        logo: pA.shipandbattle_logo,
-        votesCount: pA.shipandbattle_votes_count,
+        id: rawPA[`${DB_PREFIX}id`],
+        title: rawPA[`${DB_PREFIX}title`],
+        tagline: rawPA[`${DB_PREFIX}tagline`],
+        url: rawPA[`${DB_PREFIX}url`],
+        shipTimeframe: rawPA[`${DB_PREFIX}ship_timeframe`],
+        makerName: rawPA[`${DB_PREFIX}maker_name`],
+        makerTwitter: rawPA[`${DB_PREFIX}maker_twitter`],
+        makerAvatar: rawPA[`${DB_PREFIX}maker_avatar`],
+        logo: rawPA[`${DB_PREFIX}logo`],
+        votesCount: rawPA[`${DB_PREFIX}votes_count`],
       };
 
       productB = {
-        id: pB.shipandbattle_id,
-        title: pB.shipandbattle_title,
-        tagline: pB.shipandbattle_tagline,
-        url: pB.shipandbattle_url,
-        shipTimeframe: pB.shipandbattle_ship_timeframe,
-        makerName: pB.shipandbattle_maker_name,
-        makerTwitter: pB.shipandbattle_maker_twitter,
-        makerAvatar: pB.shipandbattle_maker_avatar,
-        logo: pB.shipandbattle_logo,
-        votesCount: pB.shipandbattle_votes_count,
+        id: rawPB[`${DB_PREFIX}id`],
+        title: rawPB[`${DB_PREFIX}title`],
+        tagline: rawPB[`${DB_PREFIX}tagline`],
+        url: rawPB[`${DB_PREFIX}url`],
+        shipTimeframe: rawPB[`${DB_PREFIX}ship_timeframe`],
+        makerName: rawPB[`${DB_PREFIX}maker_name`],
+        makerTwitter: rawPB[`${DB_PREFIX}maker_twitter`],
+        makerAvatar: rawPB[`${DB_PREFIX}maker_avatar`],
+        logo: rawPB[`${DB_PREFIX}logo`],
+        votesCount: rawPB[`${DB_PREFIX}votes_count`],
       };
 
       const { data: vData } = await supabase
-        .from("shipandbattle_votes")
+        .from(`${DB_PREFIX}votes`)
         .select("*")
-        .in("shipandbattle_voted_product_id", [slugA, slugB])
+        .in(`${DB_PREFIX}voted_product_id`, [slugA, slugB])
         .limit(10);
       
       if (vData) {
-        matchesVotes = vData.map(v => ({
-          id: v.shipandbattle_id,
-          voter: v.shipandbattle_voter_username,
-          votedId: v.shipandbattle_voted_product_id,
-          winnerFeedback: v.shipandbattle_feedback_winner,
-          loserFeedback: v.shipandbattle_feedback_loser,
+        matchesVotes = vData.map((v: any) => ({
+          id: v[`${DB_PREFIX}id`],
+          voter: v[`${DB_PREFIX}voter_username`],
+          votedId: v[`${DB_PREFIX}voted_product_id`],
+          winnerFeedback: v[`${DB_PREFIX}feedback_winner`],
+          loserFeedback: v[`${DB_PREFIX}feedback_loser`],
         }));
       }
     }
@@ -242,132 +227,125 @@ export default async function VersusPage({ params }: Props) {
   const percentB = 100 - percentA;
 
   return (
-    <div className="min-h-screen bg-[#070503] text-[#faf5ef] antialiased selection:bg-[#ffbe18] selection:text-black">
+    <div className="min-h-screen bg-[#0B0B0C] text-white antialiased selection:bg-white selection:text-black">
       {/* 🌌 Background grid and ambient glows */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#1c1209] via-[#070503] to-[#070503] pointer-events-none" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0c0c0e] via-[#0B0B0C] to-[#0B0B0C] pointer-events-none" />
       
       {/* ⚔️ Premium header container */}
-      <header className="relative border-b border-white/5 py-4 backdrop-blur-md bg-black/20 sticky top-0 z-50">
+      <header className="relative border-b border-white/[0.06] py-4 backdrop-blur-md bg-black/20 sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
           <a href="/" className="flex items-center gap-2 group">
-            <span className="text-2xl font-black tracking-tighter bg-gradient-to-r from-[#ffbe18] to-orange-500 bg-clip-text text-transparent group-hover:scale-105 transition">
+            <span className="text-2xl font-semibold tracking-tighter bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent group-hover:text-zinc-300 transition">
               INDIE CLASH
             </span>
-            <span className="text-[10px] font-mono border border-[#ffbe18]/30 px-1.5 py-0.5 rounded bg-[#ffbe18]/10 text-[#ffbe18] tracking-widest uppercase">
+            <span className="text-[10px] font-mono border border-white/[0.08] px-1.5 py-0.5 rounded bg-white/[0.02] text-zinc-400 tracking-wider font-mono uppercase">
               Arena
             </span>
           </a>
           <a 
             href="/"
-            className="text-xs border border-white/10 hover:border-[#ffbe18]/30 hover:bg-[#ffbe18]/5 transition px-3.5 py-1.5 rounded-lg text-[#faf5ef]/80 hover:text-white"
+            className="text-xs border border-white/[0.1] hover:bg-white/[0.04] text-zinc-300 hover:text-white transition px-3.5 py-1.5 rounded-md"
           >
             Enter Arena ➔
           </a>
         </div>
       </header>
 
-      <main className="relative max-w-6xl mx-auto px-4 py-12">
+      <main className="relative max-w-6xl mx-auto px-4 py-12 animate-fade-in-blur">
         {/* H1 SEO Breadcrumbs */}
-        <nav className="text-xs text-[#faf5ef]/40 mb-8 flex items-center gap-2 font-mono">
-          <a href="/" className="hover:text-[#ffbe18] transition">INDIE CLASH</a>
+        <nav className="text-xs text-zinc-500 mb-8 flex items-center gap-2 font-mono">
+          <a href="/" className="hover:text-white transition">INDIE CLASH</a>
           <span>/</span>
-          <span className="text-[#faf5ef]/60">VERSUS ARENA</span>
+          <span className="text-zinc-450">VERSUS ARENA</span>
           <span>/</span>
-          <span className="text-[#ffbe18] font-bold">{productA.title} vs {productB.title}</span>
+          <span className="text-white font-semibold">{productA.title} vs {productB.title}</span>
         </nav>
 
         {/* 🏆 Versus Duel Screen Banner */}
         <div className="relative text-center mb-16">
           <div className="inline-block relative mb-4">
-            <span className="absolute -inset-1 rounded-full bg-gradient-to-r from-red-600 to-indigo-600 opacity-30 blur-lg animate-pulse" />
-            <div className="relative bg-[#160f09] border border-white/10 px-4 py-1.5 rounded-full text-xs font-mono uppercase tracking-widest text-[#ffbe18] flex items-center gap-2">
+            
+            <div className="relative bg-[#121215] border border-white/[0.06] px-4 py-1.5 rounded-full text-xs font-mono uppercase tracking-widest text-zinc-400 flex items-center gap-2">
               <span>Season 1 Matchup</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-[#ffbe18] animate-ping" />
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
             </div>
           </div>
           
-          <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white mb-4">
-            {productA.title} <span className="text-[#ffbe18]/40 font-light italic text-3xl md:text-5xl mx-2">vs</span> {productB.title}
+          <h1 className="text-3xl md:text-5xl font-semibold tracking-tight text-white mb-4">
+            {productA.title} <span className="text-zinc-500 font-light italic text-3xl md:text-5xl mx-2">vs</span> {productB.title}
           </h1>
-          <p className="text-base md:text-lg text-[#faf5ef]/60 max-w-2xl mx-auto font-light leading-relaxed">
+          <p className="text-base md:text-lg text-zinc-450 max-w-2xl mx-auto font-light leading-relaxed">
             A battle of minimalist execution. Read authentic peer critiques, see the builder community votes, and analyze their scores.
           </p>
         </div>
 
         {/* ⚡ Dynamic Clash Split Meter */}
-        <div className="relative bg-[#140e0a]/80 border border-white/5 p-8 rounded-3xl mb-16 shadow-2xl overflow-hidden backdrop-blur-md">
+        <div className="relative bg-[#121215]/80 border border-white/[0.06] p-8 rounded-xl mb-16 overflow-hidden backdrop-blur-md">
           <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
           
           <div className="flex justify-between items-end mb-4 font-mono text-sm">
             <div className="text-left">
-              <span className="block text-2xl font-black text-white">{percentA}%</span>
-              <span className="text-xs text-[#faf5ef]/40">{productA.title} ({votesA} votes)</span>
+              <span className="block text-2xl font-semibold text-white">{percentA}%</span>
+              <span className="text-xs text-zinc-500">{productA.title} ({votesA} votes)</span>
             </div>
-            <div className="w-8 h-8 rounded-full border border-white/10 bg-black flex items-center justify-center font-black text-xs text-[#ffbe18] shadow">
+            <div className="w-8 h-8 rounded-full border border-white/[0.08] bg-black flex items-center justify-center font-semibold text-xs text-white shadow">
               VS
             </div>
             <div className="text-right">
-              <span className="block text-2xl font-black text-white">{percentB}%</span>
-              <span className="text-xs text-[#faf5ef]/40">{productB.title} ({votesB} votes)</span>
+              <span className="block text-2xl font-semibold text-white">{percentB}%</span>
+              <span className="text-xs text-zinc-500">{productB.title} ({votesB} votes)</span>
             </div>
           </div>
 
           {/* ⚔️ Dual Gradient Progress Bar */}
-          <div className="w-full h-5 bg-black/60 rounded-full p-1 overflow-hidden flex border border-white/5 relative">
-            <div 
-              style={{ width: `${percentA}%` }}
-              className="h-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-400 rounded-l-full transition-all duration-1000 ease-out"
-            />
-            <div 
-              style={{ width: `${percentB}%` }}
-              className="h-full bg-gradient-to-r from-indigo-500 via-purple-600 to-blue-500 rounded-r-full transition-all duration-1000 ease-out"
-            />
+          <div className="w-full h-1 bg-zinc-900 overflow-hidden flex relative select-none rounded-full">
+            <div style={{ width: `${percentA}%` }} className="h-full bg-white transition-all duration-1000 ease-out" />
+            <div style={{ width: `${percentB}%` }} className="h-full bg-zinc-800 transition-all duration-1000 ease-out flex-1" />
           </div>
         </div>
 
         {/* 💻 Side-by-Side Product Matrices */}
         <div className="grid md:grid-cols-2 gap-8 mb-16">
           {/* Product A Matrix Card */}
-          <div className="bg-[#120d09]/50 border border-white/5 p-8 rounded-2xl hover:border-orange-500/20 transition duration-300 relative group overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-orange-500/5 rounded-full blur-2xl group-hover:bg-orange-500/10 transition pointer-events-none" />
+          <div className="bg-[#121215] border border-white/[0.06] p-8 rounded-xl hover:border-white/[0.12] transition duration-300 relative group overflow-hidden">
+            
             
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center shadow-inner overflow-hidden">
+              <div className="w-16 h-16 rounded-lg bg-[#141417] border border-white/[0.06] flex items-center justify-center overflow-hidden">
                 {renderLogo(productA.logo, "w-10 h-10")}
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-white tracking-tight">{productA.title}</h3>
-                <p className="text-xs font-mono text-orange-400">Shipped in {productA.shipTimeframe}</p>
+                <h3 className="text-xl font-semibold text-white tracking-tight">{productA.title}</h3>
               </div>
             </div>
 
-            <p className="text-[#faf5ef]/80 text-sm font-light mb-8 leading-relaxed italic h-12">
+            <p className="text-zinc-400 text-sm font-light mb-8 leading-relaxed italic h-12">
               "{productA.tagline}"
             </p>
 
-            <hr className="border-white/5 mb-6" />
+            <hr className="border-white/[0.06] mb-6" />
 
             <div className="space-y-3.5 text-sm font-mono">
               <div className="flex justify-between">
-                <span className="text-[#faf5ef]/40">Makers Name:</span>
+                <span className="text-zinc-500">Makers Name:</span>
                 <span className="text-white/90">{productA.makerName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#faf5ef]/40">Maker Twitter:</span>
+                <span className="text-zinc-500">Maker Twitter:</span>
                 <a 
                   href={`https://twitter.com/${productA.makerTwitter?.replace(/^@/, "")}`}
                   target="_blank"
-                  className="text-orange-400 hover:underline hover:text-orange-300 transition"
+                  className="text-zinc-400 hover:underline text-zinc-300 transition"
                 >
                   {productA.makerTwitter}
                 </a>
               </div>
               <div className="flex justify-between items-center pt-2">
-                <span className="text-[#faf5ef]/40">Product Live URL:</span>
+                <span className="text-zinc-500">Product Live URL:</span>
                 <a 
                   href={productA.url} 
                   target="_blank"
-                  className="text-xs bg-orange-500/10 border border-orange-500/30 text-orange-400 hover:bg-orange-500/20 transition px-3 py-1 rounded-lg"
+                  className="text-xs bg-white/10 border border-orange-500/30 text-zinc-400 hover:bg-white/20 transition px-3 py-1 rounded-lg"
                 >
                   Visit Live Site ➔
                 </a>
@@ -376,46 +354,45 @@ export default async function VersusPage({ params }: Props) {
           </div>
 
           {/* Product B Matrix Card */}
-          <div className="bg-[#120d09]/50 border border-white/5 p-8 rounded-2xl hover:border-indigo-500/20 transition duration-300 relative group overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl group-hover:bg-indigo-500/10 transition pointer-events-none" />
+          <div className="bg-[#121215] border border-white/[0.06] p-8 rounded-xl hover:border-white/[0.12] transition duration-300 relative group overflow-hidden">
+            
 
             <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center shadow-inner overflow-hidden">
+              <div className="w-16 h-16 rounded-lg bg-[#141417] border border-white/[0.06] flex items-center justify-center overflow-hidden">
                 {renderLogo(productB.logo, "w-10 h-10")}
               </div>
               <div>
-                <h3 className="text-2xl font-bold text-white tracking-tight">{productB.title}</h3>
-                <p className="text-xs font-mono text-indigo-400">Shipped in {productB.shipTimeframe}</p>
+                <h3 className="text-xl font-semibold text-white tracking-tight">{productB.title}</h3>
               </div>
             </div>
 
-            <p className="text-[#faf5ef]/80 text-sm font-light mb-8 leading-relaxed italic h-12">
+            <p className="text-zinc-400 text-sm font-light mb-8 leading-relaxed italic h-12">
               "{productB.tagline}"
             </p>
 
-            <hr className="border-white/5 mb-6" />
+            <hr className="border-white/[0.06] mb-6" />
 
             <div className="space-y-3.5 text-sm font-mono">
               <div className="flex justify-between">
-                <span className="text-[#faf5ef]/40">Makers Name:</span>
+                <span className="text-zinc-500">Makers Name:</span>
                 <span className="text-white/90">{productB.makerName}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#faf5ef]/40">Maker Twitter:</span>
+                <span className="text-zinc-500">Maker Twitter:</span>
                 <a 
                   href={`https://twitter.com/${productB.makerTwitter?.replace(/^@/, "")}`}
                   target="_blank"
-                  className="text-indigo-400 hover:underline hover:text-indigo-300 transition"
+                  className="text-zinc-400 hover:underline text-zinc-300 transition"
                 >
                   {productB.makerTwitter}
                 </a>
               </div>
               <div className="flex justify-between items-center pt-2">
-                <span className="text-[#faf5ef]/40">Product Live URL:</span>
+                <span className="text-zinc-500">Product Live URL:</span>
                 <a 
                   href={productB.url} 
                   target="_blank"
-                  className="text-xs bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500/20 transition px-3 py-1 rounded-lg"
+                  className="text-xs bg-zinc-600/10 border border-indigo-500/30 text-zinc-400 hover:bg-zinc-600/20 transition px-3 py-1 rounded-lg"
                 >
                   Visit Live Site ➔
                 </a>
@@ -425,33 +402,33 @@ export default async function VersusPage({ params }: Props) {
         </div>
 
         {/* 🛡️ The Critique Vault — Direct Peer Critiques split columns */}
-        <section className="bg-[#120d09]/30 border border-white/5 p-8 rounded-3xl mb-16">
-          <h2 className="text-2xl font-black text-white mb-2 flex items-center gap-2">
+        <section className="bg-[#120d09]/30 border border-white/[0.06] p-8 rounded-3xl mb-16">
+          <h2 className="text-2xl font-semibold text-white mb-2 flex items-center gap-2">
             🛡️ The Critique Vault
           </h2>
-          <p className="text-sm text-[#faf5ef]/60 mb-8 font-light max-w-xl">
+          <p className="text-sm text-zinc-450 mb-8 font-light max-w-xl">
             Verified builders on Google & GitHub voted and left honest, zero-sugar critiques to help makers validate their idea.
           </p>
 
           <div className="grid md:grid-cols-2 gap-8">
             {/* Column A */}
             <div className="space-y-6">
-              <h3 className="text-xs font-mono tracking-widest text-[#faf5ef]/40 uppercase mb-4 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+              <h3 className="text-xs font-mono tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-white" />
                 Verified Critiques: {productA.title}
               </h3>
               
               <div className="space-y-4">
                 {matchesVotes.filter(v => v.votedId === productA.id || v.winnerFeedback).slice(0, 3).map((v, i) => (
-                  <div key={i} className="border border-white/5 bg-black/30 p-5 rounded-xl text-sm leading-relaxed relative hover:border-orange-500/15 transition">
-                    <span className="absolute -top-2 left-4 px-2 py-0.5 bg-[#160f09] border border-white/10 rounded text-[10px] font-mono text-[#faf5ef]/40">
+                  <div key={i} className="border border-white/[0.06] bg-[#141417] p-5 rounded-lg border border-white/[0.06] text-sm leading-relaxed relative hover:border-white/[0.15] transition">
+                    <span className="absolute -top-2 left-4 px-2 py-0.5 bg-zinc-950 border border-white/[0.08] rounded text-[10px] font-mono text-zinc-500">
                       {v.voter}
                     </span>
                     <div className="pt-2 space-y-2">
-                      <p className="text-[#ffbe18]/90 font-medium">✨ Good points:</p>
-                      <p className="text-[#faf5ef]/80 font-light italic">"{v.winnerFeedback || "Incredibly clean layout, simplifies core functions perfectly."}"</p>
-                      <p className="text-red-400/90 font-medium pt-1">⚠️ Constructive Critique:</p>
-                      <p className="text-[#faf5ef]/60 font-light text-xs italic">"{v.loserFeedback || "Needs some tooltips on layout setup options for better accessibility."}"</p>
+                      <p className="text-white/90 font-medium">✨ Good points:</p>
+                      <p className="text-zinc-400 font-light italic">"{v.winnerFeedback || "Incredibly clean layout, simplifies core functions perfectly."}"</p>
+                      <p className="text-zinc-400/90 font-medium pt-1">⚠️ Constructive Critique:</p>
+                      <p className="text-zinc-450 font-light text-xs italic">"{v.loserFeedback || "Needs some tooltips on layout setup options for better accessibility."}"</p>
                     </div>
                   </div>
                 ))}
@@ -460,22 +437,22 @@ export default async function VersusPage({ params }: Props) {
 
             {/* Column B */}
             <div className="space-y-6">
-              <h3 className="text-xs font-mono tracking-widest text-[#faf5ef]/40 uppercase mb-4 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+              <h3 className="text-xs font-mono tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
                 Verified Critiques: {productB.title}
               </h3>
 
               <div className="space-y-4">
                 {matchesVotes.filter(v => v.votedId === productB.id || v.loserFeedback).slice(0, 3).map((v, i) => (
-                  <div key={i} className="border border-white/5 bg-black/30 p-5 rounded-xl text-sm leading-relaxed relative hover:border-indigo-500/15 transition">
-                    <span className="absolute -top-2 left-4 px-2 py-0.5 bg-[#100e16] border border-white/10 rounded text-[10px] font-mono text-[#faf5ef]/40">
+                  <div key={i} className="border border-white/[0.06] bg-[#141417] p-5 rounded-lg border border-white/[0.06] text-sm leading-relaxed relative hover:border-white/[0.15] transition">
+                    <span className="absolute -top-2 left-4 px-2 py-0.5 bg-zinc-950 border border-white/[0.08] rounded text-[10px] font-mono text-zinc-500">
                       {v.voter}
                     </span>
                     <div className="pt-2 space-y-2">
-                      <p className="text-[#ffbe18]/90 font-medium">✨ Good points:</p>
-                      <p className="text-[#faf5ef]/80 font-light italic">"{v.winnerFeedback || "Dynamic visual statistics are absolutely state-of-the-art."}"</p>
-                      <p className="text-red-400/90 font-medium pt-1">⚠️ Constructive Critique:</p>
-                      <p className="text-[#faf5ef]/60 font-light text-xs italic">"{v.loserFeedback || "Layout has minor padding offsets on tablet screens when rotating."}"</p>
+                      <p className="text-white/90 font-medium">✨ Good points:</p>
+                      <p className="text-zinc-400 font-light italic">"{v.winnerFeedback || "Dynamic visual statistics are absolutely state-of-the-art."}"</p>
+                      <p className="text-zinc-400/90 font-medium pt-1">⚠️ Constructive Critique:</p>
+                      <p className="text-zinc-450 font-light text-xs italic">"{v.loserFeedback || "Layout has minor padding offsets on tablet screens when rotating."}"</p>
                     </div>
                   </div>
                 ))}
@@ -485,10 +462,10 @@ export default async function VersusPage({ params }: Props) {
         </section>
 
         {/* 🚀 Dynamic Final CTA Banner */}
-        <section className="relative rounded-3xl bg-gradient-to-r from-[#ffbe18]/15 via-[#ffbe18]/5 to-transparent border border-[#ffbe18]/25 p-8 md:p-12 overflow-hidden shadow-2xl flex flex-col md:flex-row justify-between items-center gap-8">
+        <section className="relative rounded-3xl bg-[#121215] border border-white/[0.08] p-8 md:p-12 overflow-hidden flex flex-col md:flex-row justify-between items-center gap-8 rounded-xl">
           <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent)] pointer-events-none" />
           <div className="text-center md:text-left">
-            <h2 className="text-2xl md:text-3xl font-extrabold text-white mb-3">
+            <h2 className="text-2xl md:text-3xl font-semibold text-white mb-3">
               Is your product ready to enter the Arena?
             </h2>
             <p className="text-sm md:text-base text-[#faf5ef]/70 font-light max-w-xl">
@@ -498,7 +475,7 @@ export default async function VersusPage({ params }: Props) {
           <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto shrink-0">
             <a 
               href="/"
-              className="w-full sm:w-auto bg-[#ffbe18] hover:bg-[#e0a612] text-black font-extrabold text-sm px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition text-center"
+              className="w-full sm:w-auto bg-[#ffbe18] hover:bg-[#e0a612] text-black font-semibold text-sm px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition text-center"
             >
               Challenge {productA.title} Now ➔
             </a>
@@ -507,7 +484,7 @@ export default async function VersusPage({ params }: Props) {
       </main>
 
       {/* 🛡️ Footer */}
-      <footer className="border-t border-white/5 py-12 bg-black/40 font-mono text-xs text-[#faf5ef]/30 mt-16 relative">
+      <footer className="border-t border-white/[0.06] py-12 bg-[#0B0B0C] font-mono text-xs text-zinc-650 mt-16 relative">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
           <div>
             © 2026 INDIE CLASH. Voted and shipped by public creators.

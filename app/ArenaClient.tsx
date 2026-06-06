@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { Product, Match, Bracket } from "@/lib/mockData";
 import {
   loadProducts,
@@ -19,15 +19,96 @@ import {
   clearCloudData,
   fetchCloudPastChampions,
   loadLocalPastChampions,
-  saveLocalPastChampions
+  saveLocalPastChampions,
+  fromDbProduct
 } from "@/lib/arenaStore";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
 import {
   getMillisecondsToNextNYMidnight,
   getRoundRemainingMs,
   formatDuration,
   formatToHMS
 } from "@/lib/timeHelpers";
+import InteractiveGrid from "@/app/components/InteractiveGrid";
+import ClashLogo from "@/app/components/ClashLogo";
+import MakerConsole from "@/app/components/MakerConsole";
+
+// --- GLOBAL AUDIO UTILITY FOR GEEK HAPTIC SOUNDS ---
+let audioCtx: AudioContext | null = null;
+const playHaptics = (freq = 220, type: OscillatorType = "sine", duration = 0.08, volume = 0.03) => {
+  try {
+    if (typeof window === "undefined") return;
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    }
+    if (audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + duration);
+
+    osc.connect(gainNode);
+    gainNode.connect(audioCtx.destination);
+
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+  } catch (e) {
+    // Suppressed gracefully if audio is locked by browser
+  }
+};
+
+
+
+// --- INLINE SVG ICONS INSTEAD OF LUCIDE-REACT ---
+const ExternalLinkIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" />
+    <line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+);
+
+const SearchIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="11" cy="11" r="8" />
+    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+  </svg>
+);
+
+const PlusIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="12" y1="5" x2="12" y2="19" />
+    <line x1="5" y1="12" x2="19" y2="12" />
+  </svg>
+);
+
+const XIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <line x1="18" y1="6" x2="6" y2="18" />
+    <line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
+const AlertCircleIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="10" />
+    <line x1="12" y1="8" x2="12" y2="12" />
+    <line x1="12" y1="16" x2="12.01" y2="16" />
+  </svg>
+);
+
+const GitCommitIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    <circle cx="12" cy="12" r="4" />
+    <line x1="1.05" y1="12" x2="7" y2="12" />
+    <line x1="17" y1="12" x2="22.95" y2="12" />
+  </svg>
+);
 
 // Memory cache for client-side Stale-While-Revalidate (SWR) performance
 let memoryCache: {
@@ -54,6 +135,30 @@ export default function ArenaClient({
   initialBracket
 }: ArenaClientProps) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [isMuted, setIsMuted] = useState(false);
+  const synthClick = (freq = 300, type: OscillatorType = "sine", duration = 0.06, vol = 0.02) => {
+    if (!isMuted) {
+      playHaptics(freq, type, duration, vol);
+    }
+  };
+  const [toasts, setToasts] = useState<{ id: string; message: string; type?: "success" | "info" }[]>([]);
+  const pushToast = (message: string, type: "success" | "info" = "success") => {
+    const id = Math.random().toString(36).substring(4);
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
+  const [activeMatchCritiques, setActiveMatchCritiques] = useState<Array<{
+    id: string;
+    voter: string;
+    provider: string;
+    role: string;
+    text: string;
+    date: string;
+  }>>([]);
+  const [searchValue, setSearchValue] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [bracket, setBracket] = useState<Bracket | null>(initialBracket);
   const [activeMatch, setActiveMatch] = useState<Match | null>(() => {
     if (!initialBracket) return null;
@@ -66,8 +171,7 @@ export default function ArenaClient({
   });
   const isInitialSyncDone = useRef(false);
 
-  // Window scroll position tracking state
-  const [scrollY, setScrollY] = useState(0);
+
 
   // Screen shake animation state
   const [isShaking, setIsShaking] = useState(false);
@@ -94,6 +198,7 @@ export default function ArenaClient({
 
   // Submit Drawer State
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
+  const [submitSource, setSubmitSource] = useState<'home' | 'console'>('home');
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -103,6 +208,7 @@ export default function ArenaClient({
   const [newMaker, setNewMaker] = useState("");
   const [newTwitter, setNewTwitter] = useState("");
   const [newLogo, setNewLogo] = useState("🚀");
+  const [activeCardProduct, setActiveCardProduct] = useState<Product | null>(null);
 
   // Vote Modal State with Dual-Input Feedback Loop
   const [votingMatch, setVotingMatch] = useState<Match | null>(null);
@@ -386,7 +492,7 @@ export default function ArenaClient({
   const [pastChampions, setPastChampions] = useState<Product[]>(initialPastChampions);
   const [isChampionModalOpen, setIsChampionModalOpen] = useState(false);
   const [championWinner, setChampionWinner] = useState<Product | null>(null);
-  const [isPastChampsOpen, setIsPastChampsOpen] = useState(false);
+  const [currentView, setCurrentView] = useState<'home' | 'console'>('home');
   
   // Auth Form Inputs
   const [authInputVal, setAuthInputVal] = useState("");
@@ -394,6 +500,8 @@ export default function ArenaClient({
 
   // Keep latestBracketRef synchronized with bracket state to avoid closure staleness
   const latestBracketRef = useRef<Bracket | null>(null);
+  const isResettingRef = useRef(false);
+  const isSyncLockedRef = useRef(false);
   useEffect(() => {
     latestBracketRef.current = bracket;
   }, [bracket]);
@@ -401,7 +509,7 @@ export default function ArenaClient({
   // Synchronize state changes to memoryCache and localStorage cache (SWR Sync)
   useEffect(() => {
     if (!isInitialSyncDone.current) return;
-    if (products && products.length > 0) {
+    if (products) {
       memoryCache.products = products;
       if (typeof window !== "undefined") {
         try {
@@ -423,7 +531,7 @@ export default function ArenaClient({
 
   useEffect(() => {
     if (!isInitialSyncDone.current) return;
-    if (pastChampions && pastChampions.length > 0) {
+    if (pastChampions) {
       memoryCache.champs = pastChampions;
       if (typeof window !== "undefined") {
         try {
@@ -439,16 +547,17 @@ export default function ArenaClient({
 
 
   // Act refs & trigger states for scroll effects
-  const narrativeRef = useRef<HTMLDivElement>(null);
   const stepsRef = useRef<HTMLDivElement>(null);
   const dashboardRef = useRef<HTMLDivElement>(null);
-  const [narrativeActive, setNarrativeActive] = useState(0);
-  const [maxActiveReached, setMaxActiveReached] = useState(0);
   const [stepsRevealed, setStepsRevealed] = useState(false);
   const [dashRevealed, setDashRevealed] = useState(false);
 
   // Sync products and bracket from cloud or local storage with Stale-While-Revalidate
   const syncCloudData = async () => {
+    if (isResettingRef.current || isSyncLockedRef.current) {
+      console.log("ℹ️ [INDIE CLASH] syncCloudData bypassed because operation lock is active.");
+      return;
+    }
     // 1. Load cache from localStorage if memory is empty
     if (!memoryCache.products && typeof window !== "undefined") {
       try {
@@ -481,9 +590,9 @@ export default function ArenaClient({
       setActiveMatch(active || null);
     }
 
-    // 3. Skip background fetch if we did one in the last 3 seconds
+    // 3. Skip background fetch if we did one in the last 1 second (reduced from 3s to prevent stale data)
     const now = Date.now();
-    if (memoryCache.products && (now - memoryCache.lastFetchTime < 3000)) {
+    if (memoryCache.products && (now - memoryCache.lastFetchTime < 1000)) {
       isInitialSyncDone.current = true;
       return;
     }
@@ -498,7 +607,7 @@ export default function ArenaClient({
 
       memoryCache.lastFetchTime = Date.now();
 
-      if (prods && prods.length > 0) {
+      if (prods) {
         setProducts(prods);
         memoryCache.products = prods;
       }
@@ -571,30 +680,7 @@ export default function ArenaClient({
     }));
     setParticles(generated);
 
-    // Scroll listener for smooth fold transitions and visual parallax
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      setScrollY(currentScrollY);
-      
-      if (narrativeRef.current) {
-        const offsetTop = narrativeRef.current.offsetTop;
-        const sectionHeight = narrativeRef.current.offsetHeight;
-        const totalScrollable = sectionHeight - window.innerHeight;
-        
-        if (totalScrollable > 0) {
-          const sectionScroll = currentScrollY - offsetTop;
-          const progress = sectionScroll / (totalScrollable * 0.85);
-          const clampedProgress = Math.max(0, Math.min(0.999, progress));
-          const activeIndex = Math.floor(clampedProgress * 8);
-          setNarrativeActive(activeIndex);
-          setMaxActiveReached(prev => Math.max(prev, activeIndex));
-        }
-      }
-    };
-    window.addEventListener("scroll", handleScroll, { passive: true, capture: true });
-    return () => {
-      window.removeEventListener("scroll", handleScroll, { capture: true } as any);
-    };
+
   }, []);
 
   // Supabase Realtime Synchronization Hook
@@ -606,8 +692,9 @@ export default function ArenaClient({
       .channel("matches-realtime-channel")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "shipandbattle_matches" },
+        { event: "*", schema: "public", table: `${DB_PREFIX}matches` },
         async (payload) => {
+          if (isResettingRef.current || isSyncLockedRef.current) return;
           console.log("Realtime Match sync trigger received:", payload);
           
           // Debounce parallel realtime triggers to prevent WAL replication race conditions and network query spams
@@ -641,20 +728,20 @@ export default function ArenaClient({
               // If the updated match is our currently viewed match, sync its states
               if (activeMatch && payload.new) {
                 const row = payload.new as any;
-                if (activeMatch.id === row.shipandbattle_id) {
+                if (activeMatch.id === row[`${DB_PREFIX}id`]) {
                   // Find products A and B in in-memory state
-                  const prodA = products.find(p => p.id === row.shipandbattle_product_a_id);
-                  const prodB = products.find(p => p.id === row.shipandbattle_product_b_id);
+                  const prodA = products.find(p => p.id === row[`${DB_PREFIX}product_a_id`]);
+                  const prodB = products.find(p => p.id === row[`${DB_PREFIX}product_b_id`]);
                   if (prodA && prodB) {
                     setActiveMatch({
-                      id: row.shipandbattle_id,
-                      roundNumber: row.shipandbattle_round_number,
+                      id: row[`${DB_PREFIX}id`],
+                      roundNumber: row[`${DB_PREFIX}round_number`],
                       productA: prodA,
                       productB: prodB,
-                      votesA: row.shipandbattle_votes_a,
-                      votesB: row.shipandbattle_votes_b,
-                      winnerId: row.shipandbattle_winner_id || undefined,
-                      votedUserIds: row.shipandbattle_voted_user_ids || []
+                      votesA: row[`${DB_PREFIX}votes_a`],
+                      votesB: row[`${DB_PREFIX}votes_b`],
+                      winnerId: row[`${DB_PREFIX}winner_id`] || undefined,
+                      votedUserIds: row[`${DB_PREFIX}voted_user_ids`] || []
                     });
                   }
                 }
@@ -680,13 +767,44 @@ export default function ArenaClient({
       .channel("votes-realtime-channel")
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "shipandbattle_votes" },
+        { event: "INSERT", schema: "public", table: `${DB_PREFIX}votes` },
         (payload) => {
+          if (isResettingRef.current || isSyncLockedRef.current) return;
           console.log("Realtime Critique sync trigger received:", payload);
           const row = payload.new as any;
           if (row) {
-            const comment = `Critique: ${row.shipandbattle_feedback_loser.slice(0, 32)}...`;
+            const comment = `Critique: ${row[`${DB_PREFIX}feedback_loser`].slice(0, 32)}...`;
             setDanmakus(prev => [comment, ...prev]);
+          }
+        }
+      )
+      .subscribe();
+
+    // Listen to changes in the products table (ensures new submissions and status changes are reflected in real-time)
+    const productsChannel = supabase
+      .channel("products-realtime-channel")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: `${DB_PREFIX}products` },
+        (payload) => {
+          if (isResettingRef.current || isSyncLockedRef.current) return;
+          console.log("Realtime Product sync trigger received:", payload);
+          
+          if (payload.eventType === "INSERT" && payload.new) {
+            const newProd = fromDbProduct(payload.new);
+            setProducts(prev => {
+              // Avoid duplicates
+              if (prev.some(p => p.id === newProd.id)) return prev;
+              return [...prev, newProd];
+            });
+          } else if (payload.eventType === "UPDATE" && payload.new) {
+            const updatedProd = fromDbProduct(payload.new);
+            setProducts(prev => prev.map(p => p.id === updatedProd.id ? updatedProd : p));
+          } else if (payload.eventType === "DELETE" && payload.old) {
+            const deletedId = (payload.old as any)[`${DB_PREFIX}id`];
+            if (deletedId) {
+              setProducts(prev => prev.filter(p => p.id !== deletedId));
+            }
           }
         }
       )
@@ -696,11 +814,66 @@ export default function ArenaClient({
       if (supabase) {
         supabase.removeChannel(matchesChannel);
         supabase.removeChannel(votesChannel);
+        supabase.removeChannel(productsChannel);
       }
       if (syncDebounceTimeoutRef.current) {
         clearTimeout(syncDebounceTimeoutRef.current);
       }
     };
+  }, []);
+
+  // Load critiques for the active match dynamically from Supabase or localStorage
+  useEffect(() => {
+    if (!activeMatch) {
+      setActiveMatchCritiques([]);
+      return;
+    }
+    
+    const loadCritiques = async () => {
+      if (supabase) {
+        const { data: votes, error } = await supabase
+          .from(`${DB_PREFIX}votes`)
+          .select("*")
+          .eq(`${DB_PREFIX}match_id`, activeMatch.id)
+          .order(`${DB_PREFIX}created_at`, { ascending: false });
+        
+        if (!error && votes) {
+          const mapped = votes.map(v => {
+            const isWinner = activeMatch?.productA && v[`${DB_PREFIX}voted_product_id`] === activeMatch.productA.id;
+            const rawProvider = v[`${DB_PREFIX}voter_auth_type`];
+            const provider = rawProvider === "twitter" ? "google" : rawProvider;
+            return {
+              id: v[`${DB_PREFIX}id`] || `vote-${Math.random()}`,
+              voter: v[`${DB_PREFIX}voter_username`],
+              provider: provider,
+              role: isWinner ? "Winner (Voted For)" : "Loser (Opponent Voted For)",
+              text: isWinner ? v[`${DB_PREFIX}feedback_winner`] : v[`${DB_PREFIX}feedback_loser`],
+              date: new Date(v[`${DB_PREFIX}created_at`] || Date.now()).toLocaleDateString()
+            };
+          });
+          setActiveMatchCritiques(mapped);
+        }
+      } else {
+        // Local mode
+        const localVotesStr = localStorage.getItem("arena_votes_v1") || "[]";
+        const localVotes = JSON.parse(localVotesStr);
+        const filtered = localVotes.filter((v: any) => v.match_id === activeMatch.id);
+        const mapped = filtered.map((v: any) => {
+          const isWinner = activeMatch?.productA && v.voted_product_id === activeMatch.productA.id;
+          return {
+            id: v.id || `vote-${Math.random()}`,
+            voter: v.voter_username,
+            provider: v.voter_auth_type,
+            role: isWinner ? "Winner (Voted For)" : "Loser (Opponent Voted For)",
+            text: isWinner ? v.feedback_winner : v.feedback_loser,
+            date: new Date(v.created_at || Date.now()).toLocaleDateString()
+          };
+        });
+        setActiveMatchCritiques(mapped);
+      }
+    };
+
+    loadCritiques();
   }, [activeMatch, products]);
 
   // IntersectionObserver for Act 3 Staggered Steps
@@ -807,11 +980,70 @@ export default function ArenaClient({
     return () => clearInterval(timer);
   }, [bracket, activeMatch]);
 
+  // Generate 20 Mock Showcase Products Helper
+  const generateMockShowcaseProducts = (count = 20): Product[] => {
+    const list: Product[] = [];
+    for (let i = 0; i < count; i++) {
+      const names = ["Oliver", "Emma", "Sophia", "James", "Mia", "Leo", "John", "David", "Grace", "Jack", "Alex", "Zoe", "Ryan", "Chloe", "Luke", "Harper", "Aria", "Ben", "Ava", "Mason"];
+      const projects = ["TaskPulse", "Designify", "MailSniper", "ScribeAI", "SchemaForge", "FormFlow", "IconSpark", "DocuGen", "SiteFlow", "SpeedPDF", "LaunchKit", "TypeBoost", "FastAPI", "DevFlow", "CodeSync", "BugSlayer", "GitMap", "FileShrink", "CssGen", "FlexGrid"];
+      const taglines = [
+        "Elegant micro-utility that designs beautiful typography layouts in 10 seconds.",
+        "Ultra-minimalist 24h cold outreach email sender and queue monitor.",
+        "Ultimate local-first client to compress and convert PDFs and videos with zero server delay.",
+        "Keyboard-centric floating speed-dial overlay built specifically for Figma power users.",
+        "Convert your hand-drawn notebook sketches into clean raw SVG vector code instantly.",
+        "7-day personal bookkeeping dashboard with rich charts and high-end visual stats."
+      ];
+      const emojis = ["🍎", "🚀", "⚡", "🍀", "🧠", "📦", "🧩", "🎯", "🥑", "🔮", "✨", "📡"];
+
+      const randomName = names[Math.floor(Math.random() * names.length)];
+      const randomProject = projects[Math.floor(Math.random() * projects.length)] + " " + emojis[Math.floor(Math.random() * emojis.length)] + " " + (i + 1);
+      const randomTagline = taglines[Math.floor(Math.random() * taglines.length)];
+      const randomId = `p_dummy_${Date.now()}_${i}_${Math.floor(Math.random() * 1000000)}`;
+
+      const newProduct: Product = {
+        id: randomId,
+        title: randomProject,
+        tagline: randomTagline,
+        url: `https://${randomProject.toLowerCase().replace(/\s/g, "").replace(/[^a-z0-9]/g, "")}.xyz`,
+        shipTimeframe: Math.random() > 0.5 ? "24h" : Math.random() > 0.5 ? "48h" : "7d",
+        makerName: randomName,
+        makerTwitter: `@${randomName.toLowerCase()}_ship`,
+        makerAvatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 500000)}?w=100&h=100&fit=crop&crop=faces#pushed=false`,
+        logo: emojis[Math.floor(Math.random() * emojis.length)],
+        submittedAt: new Date().toISOString(),
+        queueStatus: "waiting",
+        votesCount: 0
+      } as any;
+
+      list.push(newProduct);
+    }
+    return list;
+  };
+
   // Reset Sandbox
   const handleReset = () => {
+    isResettingRef.current = true;
     localStorage.clear();
-    const freshProds = loadProducts();
-    setProducts(freshProds);
+    const mockShowcase = generateMockShowcaseProducts(20);
+    memoryCache = {
+      products: mockShowcase,
+      bracket: null,
+      champs: [],
+      lastFetchTime: Date.now()
+    };
+    
+    // Synchronously write cache defaults back to localStorage immediately
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
+        localStorage.setItem("arena_products_v1", JSON.stringify(mockShowcase));
+      } catch (e) {}
+    }
+
+    setProducts(mockShowcase);
+    saveProducts(mockShowcase);
+    setPastChampions([]);
     setBracket(null);
     setActiveMatch(null);
     setIsSubmitOpen(false);
@@ -819,8 +1051,28 @@ export default function ArenaClient({
     setVotingTarget(null);
     setVoteWinnerFeedback("");
     setVoteLoserFeedback("");
+
     if (supabase) {
-      clearCloudData().then(() => syncCloudData());
+      pushToast("Resetting cloud database...", "info");
+      clearCloudData()
+        .then(() => Promise.all(mockShowcase.map(p => upsertCloudProduct(p))))
+        .then(() => {
+          pushToast("Database reset successfully!", "success");
+          // Hold the isResettingRef = true lock for an extra 1500ms so all delayed
+          // database deletion events from the WebSocket channel are safely ignored.
+          setTimeout(() => {
+            isResettingRef.current = false;
+            syncCloudData();
+          }, 1500);
+        })
+        .catch((e) => {
+          isResettingRef.current = false;
+          console.error("Error resetting sandbox cloud database:", e);
+          pushToast(`Reset failed: ${e.message || "Unknown error"}`, "info");
+        });
+    } else {
+      isResettingRef.current = false;
+      pushToast("Local sandbox reset successfully!", "success");
     }
   };
 
@@ -832,54 +1084,122 @@ export default function ArenaClient({
     }
   };
 
-  // Add Competitor
-  const handleAddDummy = () => {
-    const currentWaiting = products.filter(p => p.queueStatus === "waiting");
+  // Inject 16 Arena Competitors
+  const handleInject16 = () => {
+    const currentWaiting = products.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
     if (currentWaiting.length >= 16) {
-      alert("The Waiting Room queue is already full with 16 competitors!");
+      alert("The Arena is already full or has active competitors!");
       return;
     }
-    const updated = addDummyMaker(products);
-    setProducts(updated);
-    const addedProd = updated[updated.length - 1];
-
-    if (supabase && addedProd) {
-      upsertCloudProduct(addedProd);
-    }
     
-    // Auto-launch the tournament bracket once we hit 16 in the sandbox!
-    const newWaiting = updated.filter(p => p.queueStatus === "waiting");
-    if (newWaiting.length === 16 && !bracket) {
-      setTimeout(() => {
-        alert("Waitlist reached 16! Automatically generating the double-elimination tournament bracket!");
-        const newB = buildInitialBracket(updated);
-        setBracket(newB);
-        setActiveMatch(newB.round1[0]);
-        if (supabase) {
-          saveCloudBracket(newB).then(() => syncCloudData());
-        }
-      }, 300);
+    // Acquire Sync Lock to prevent race condition pullbacks
+    isSyncLockedRef.current = true;
+    
+    let currentProducts = [...products];
+    const newAdded: Product[] = [];
+    const countNeeded = 16 - currentWaiting.length;
+    
+    for (let i = 0; i < countNeeded; i++) {
+      const names = ["Oliver", "Emma", "Sophia", "James", "Mia", "Leo", "John", "David", "Grace", "Jack", "Alex", "Zoe", "Ryan", "Chloe", "Luke", "Harper", "Aria", "Ben", "Ava", "Mason"];
+      const projects = ["TaskPulse", "Designify", "MailSniper", "ScribeAI", "SchemaForge", "FormFlow", "IconSpark", "DocuGen", "SiteFlow", "SpeedPDF", "LaunchKit", "TypeBoost", "FastAPI", "DevFlow", "CodeSync", "BugSlayer", "GitMap", "FileShrink", "CssGen", "FlexGrid"];
+      const taglines = [
+        "Elegant micro-utility that designs beautiful typography layouts in 10 seconds.",
+        "Ultra-minimalist 24h cold outreach email sender and queue monitor.",
+        "Ultimate local-first client to compress and convert PDFs and videos with zero server delay.",
+        "Keyboard-centric floating speed-dial overlay built specifically for Figma power users.",
+        "Convert your hand-drawn notebook sketches into clean raw SVG vector code instantly.",
+        "7-day personal bookkeeping dashboard with rich charts and high-end visual stats."
+      ];
+      const emojis = ["🍎", "🚀", "⚡", "🍀", "🧠", "📦", "🧩", "🎯", "🥑", "🔮", "✨", "📡"];
+
+      const randomName = names[Math.floor(Math.random() * names.length)];
+      const randomProject = projects[Math.floor(Math.random() * projects.length)] + " " + emojis[Math.floor(Math.random() * emojis.length)] + " " + (i + 1);
+      const randomTagline = taglines[Math.floor(Math.random() * taglines.length)];
+      const randomId = `p_dummy_${Date.now()}_${i}_${Math.floor(Math.random() * 1000000)}`;
+
+      const newProduct: Product = {
+        id: randomId,
+        title: randomProject,
+        tagline: randomTagline,
+        url: `https://${randomProject.toLowerCase().replace(/\s/g, "").replace(/[^a-z0-9]/g, "")}.xyz`,
+        shipTimeframe: Math.random() > 0.5 ? "24h" : Math.random() > 0.5 ? "48h" : "7d",
+        makerName: randomName,
+        makerTwitter: `@${randomName.toLowerCase()}_ship`,
+        makerAvatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 500000)}?w=100&h=100&fit=crop&crop=faces`,
+        logo: emojis[Math.floor(Math.random() * emojis.length)],
+        submittedAt: new Date().toISOString(),
+        queueStatus: "waiting",
+        votesCount: 0
+      } as any;
+
+      currentProducts.push(newProduct);
+      newAdded.push(newProduct);
+    }
+
+    setProducts(currentProducts);
+    saveProducts(currentProducts);
+
+    const startTournament = () => {
+      const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(currentProducts);
+      setProducts(newProds);
+      setBracket(newB);
+      setActiveMatch(newB.round1[0]);
+      if (supabase) {
+        // Sync updated product statuses to cloud
+        Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
+          .then(() => saveCloudBracket(newB))
+          .then(() => {
+            setTimeout(() => {
+              isSyncLockedRef.current = false;
+              syncCloudData();
+            }, 800);
+          }).catch((err) => {
+            isSyncLockedRef.current = false;
+            console.error("Error saving initial cloud bracket:", err);
+          });
+      } else {
+        isSyncLockedRef.current = false;
+      }
+    };
+
+    if (supabase) {
+      Promise.all(newAdded.map(p => upsertCloudProduct(p))).then(() => {
+        pushToast("16 Arena Competitors successfully injected!");
+        setTimeout(startTournament, 300);
+      }).catch((err) => {
+        isSyncLockedRef.current = false;
+        console.error("Error uploading injected competitors:", err);
+      });
+    } else {
+      pushToast("16 Arena Competitors successfully injected!");
+      setTimeout(startTournament, 300);
     }
   };
 
-  // Fill & Start
-  const handleAutoFillAndStart = () => {
-    let currentProducts = [...products];
-    let currentWaiting = currentProducts.filter(p => p.queueStatus === "waiting");
-    while (currentWaiting.length < 16) {
-      currentProducts = addDummyMaker(currentProducts);
-      currentWaiting = currentProducts.filter(p => p.queueStatus === "waiting");
-      const added = currentProducts[currentProducts.length - 1];
-      if (supabase && added) {
-        upsertCloudProduct(added);
-      }
-    }
+  // Inject 20 Mock Competitors
+  const handleInject20 = () => {
+    // Acquire Sync Lock to prevent race condition pullbacks
+    isSyncLockedRef.current = true;
+
+    const newAdded = generateMockShowcaseProducts(20);
+    const currentProducts = [...products, ...newAdded];
     setProducts(currentProducts);
-    const newB = buildInitialBracket(currentProducts);
-    setBracket(newB);
-    setActiveMatch(newB.round1[0]);
+    saveProducts(currentProducts);
+
     if (supabase) {
-      saveCloudBracket(newB).then(() => syncCloudData());
+      Promise.all(newAdded.map(p => upsertCloudProduct(p))).then(() => {
+        pushToast("20 Mock Competitors successfully injected!");
+        setTimeout(() => {
+          isSyncLockedRef.current = false;
+          syncCloudData();
+        }, 800);
+      }).catch((err) => {
+        isSyncLockedRef.current = false;
+        console.error("Error uploading showcase products:", err);
+      });
+    } else {
+      isSyncLockedRef.current = false;
+      pushToast("20 Mock Competitors successfully injected (Local)!");
     }
   };
 
@@ -887,11 +1207,13 @@ export default function ArenaClient({
   const handleSubmitProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userLoggedIn) {
+      synthClick(150, "sawtooth", 0.12);
       alert("Verification Required!\n\nPlease link and verify your Google or GitHub identity before submitting your product to the waiting list.");
       setIsAuthOpen(true);
       return;
     }
     if (!newTitle || !newTagline || !newUrl) {
+      synthClick(150, "sawtooth", 0.12);
       alert("Please fill in all required product fields.");
       return;
     }
@@ -909,6 +1231,7 @@ export default function ArenaClient({
     });
 
     if (hasExisting && !isAdmin) {
+      synthClick(150, "sawtooth", 0.12);
       alert("Submission Limit Exceeded!\n\nTo ensure fair play, each maker is allowed only ONE product in the waiting list or active queue per tournament cycle.");
       return;
     }
@@ -953,7 +1276,7 @@ export default function ArenaClient({
       makerName: newMaker || "Anonymous Maker",
       makerTwitter: newTwitter ? (newTwitter.startsWith("@") ? newTwitter : `@${newTwitter}`) : "@anonymous",
       makerAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces" + 
-        (userLoggedIn ? `#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}` : ""),
+        (userLoggedIn ? `#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}&pushed=false` : ""),
       logo: newLogo,
       submittedAt: new Date().toISOString(),
       queueStatus: "waiting",
@@ -963,6 +1286,7 @@ export default function ArenaClient({
     } as any;
 
     const updated = [...products, newProd];
+    synthClick(600, "sine", 0.15, 0.06);
     setProducts(updated);
     saveProducts(updated);
 
@@ -975,9 +1299,8 @@ export default function ArenaClient({
       } catch (e) {}
     }
 
-    if (supabase) {
-      upsertCloudProduct(newProd);
-    }
+    // Acquire Sync Lock to prevent race condition pullbacks
+    isSyncLockedRef.current = true;
 
     setNewTitle("");
     setNewTagline("");
@@ -986,25 +1309,127 @@ export default function ArenaClient({
     setNewTwitter("");
     setIsSubmitOpen(false);
 
-    const waitingList = updated.filter(p => p.queueStatus === "waiting");
-    if (waitingList.length >= 16 && !bracket) {
-      setTimeout(() => {
-        setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
-        setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
-        setIsSuccessOpen(true);
-        const newB = buildInitialBracket(updated);
-        setBracket(newB);
-        setActiveMatch(newB.round1[0]);
-        if (supabase) {
-          saveCloudBracket(newB).then(() => syncCloudData());
+    const finishSubmit = () => {
+      const queuedList = updated.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
+      if (queuedList.length >= 16 && !bracket) {
+        setTimeout(() => {
+          setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
+          setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
+          setIsSuccessOpen(true);
+          const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(updated);
+          setProducts(newProds);
+          setBracket(newB);
+          setActiveMatch(newB.round1[0]);
+          if (supabase) {
+            Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
+              .then(() => saveCloudBracket(newB))
+              .then(() => {
+                setTimeout(() => {
+                  isSyncLockedRef.current = false;
+                  syncCloudData();
+                }, 800);
+              }).catch(() => {
+                isSyncLockedRef.current = false;
+              });
+          } else {
+            isSyncLockedRef.current = false;
+          }
+        }, 500);
+      } else {
+        if (submitSource === 'home') {
+          setSuccessModalTitle("PROJECT SUBMITTED 🛡️");
+          setSuccessModalText("Your product has been successfully submitted and is now live on the Releases list!\n\nTo enter the 1v1 Arena matchmaking queue, click 'ENTER THE CONSOLE' below and click 'Push to Arena'.");
+          setIsSuccessOpen(true);
+        } else {
+          pushToast("Product successfully submitted!", "success");
         }
-      }, 500);
+        setTimeout(() => {
+          isSyncLockedRef.current = false;
+          syncCloudData();
+        }, 800);
+      }
+    };
+
+    if (supabase) {
+      upsertCloudProduct(newProd).then(() => {
+        finishSubmit();
+      }).catch((err) => {
+        isSyncLockedRef.current = false;
+        console.error("Error submitting product:", err);
+      });
     } else {
-      setSuccessModalTitle("PROJECT QUEUED 🛡️");
-      setSuccessModalText("Your product has been queued in the waiting room list. Note: This platform does NOT provide any organic promotion or marketing for your project. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
-      setIsSuccessOpen(true);
+      finishSubmit();
     }
   };
+
+  // Push project to arena waitlist matchmaking queue
+  const handlePushToQueue = (productId: string) => {
+    synthClick(300, "sine", 0.05);
+    const updated = products.map(p => {
+      if (p.id === productId && p.makerAvatar) {
+        const cleanedAvatar = p.makerAvatar.replace("pushed=false", "pushed=true");
+        return { ...p, makerAvatar: cleanedAvatar };
+      }
+      return p;
+    });
+    setProducts(updated);
+    saveProducts(updated);
+
+    // Acquire Sync Lock to prevent race condition pullbacks
+    isSyncLockedRef.current = true;
+
+    const pushedProduct = updated.find(p => p.id === productId);
+    
+    const finishPush = () => {
+      pushToast(`Product successfully enqueued in matchmaking waitlist!`, "success");
+
+      // Check if we hit 16 queued products to trigger matchmaking
+      const queuedList = updated.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
+      if (queuedList.length >= 16 && !bracket) {
+        setTimeout(() => {
+          setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
+          setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
+          setIsSuccessOpen(true);
+          const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(updated);
+          setProducts(newProds);
+          setBracket(newB);
+          setActiveMatch(newB.round1[0]);
+          if (supabase) {
+            Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
+              .then(() => saveCloudBracket(newB))
+              .then(() => {
+                setTimeout(() => {
+                  isSyncLockedRef.current = false;
+                  syncCloudData();
+                }, 800);
+              }).catch(() => {
+                isSyncLockedRef.current = false;
+              });
+          } else {
+            isSyncLockedRef.current = false;
+          }
+        }, 500);
+      } else {
+        setTimeout(() => {
+          isSyncLockedRef.current = false;
+          syncCloudData();
+        }, 800);
+      }
+    };
+
+    if (pushedProduct && supabase) {
+      upsertCloudProduct(pushedProduct).then(() => {
+        finishPush();
+      }).catch((err) => {
+        isSyncLockedRef.current = false;
+        console.error("Error pushing product to queue:", err);
+      });
+    } else {
+      finishPush();
+    }
+  };
+
+
 
   // Advance Round
   const handleAdvanceRound = () => {
@@ -1022,6 +1447,16 @@ export default function ArenaClient({
       updated = advanceTournamentRound(bracket);
     }
     
+    // Acquire Sync Lock to prevent race condition pullbacks
+    isSyncLockedRef.current = true;
+
+    const finishAdvance = () => {
+      setTimeout(() => {
+        isSyncLockedRef.current = false;
+        syncCloudData();
+      }, 800);
+    };
+
     if (updated.status === "completed" && updated.winner) {
       const champ = updated.winner;
       setPastChampions(prev => {
@@ -1039,7 +1474,12 @@ export default function ArenaClient({
       setActiveMatch(null);
       saveBracket(null);
       if (supabase) {
-        saveCloudBracket(updated).then(() => syncCloudData());
+        saveCloudBracket(updated).then(finishAdvance).catch((err) => {
+          isSyncLockedRef.current = false;
+          console.error("Error saving cloud bracket:", err);
+        });
+      } else {
+        isSyncLockedRef.current = false;
       }
     } else {
       setBracket(updated);
@@ -1054,7 +1494,12 @@ export default function ArenaClient({
       setActiveMatch(nextActive || null);
 
       if (supabase) {
-        saveCloudBracket(updated).then(() => syncCloudData());
+        saveCloudBracket(updated).then(finishAdvance).catch((err) => {
+          isSyncLockedRef.current = false;
+          console.error("Error saving cloud bracket:", err);
+        });
+      } else {
+        isSyncLockedRef.current = false;
       }
     }
   };
@@ -1063,10 +1508,12 @@ export default function ArenaClient({
   const handleVoteSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!userLoggedIn) {
+      synthClick(150, "sawtooth", 0.12);
       setVoteError("Please link your Google or GitHub account first to authorize your vote.");
       return;
     }
     if (voteWinnerFeedback.length < 10 || voteLoserFeedback.length < 10) {
+      synthClick(150, "sawtooth", 0.12);
       setVoteError("Dual feedback inputs must both be at least 10 characters long.");
       return;
     }
@@ -1077,10 +1524,11 @@ export default function ArenaClient({
     // Limit to one vote per user per separate 1v1 matchup (within a round)
     const alreadyVotedOnThisMatch = votingMatch.votedUserIds && votingMatch.votedUserIds.includes(mockUserTwitter);
     if (alreadyVotedOnThisMatch) {
+      synthClick(180, "sawtooth", 0.1);
       setVoteError("Voting Limit Reached! To ensure fair play, you can only cast ONE vote per separate 1v1 matchup.");
       return;
     }
-    const voteForA = votingTarget.id === votingMatch.productA.id;
+    const voteForA = votingMatch?.productA && votingTarget.id === votingMatch.productA.id;
 
     const updateVotes = (matches: Match[]): Match[] => {
       return matches.map(m => {
@@ -1113,6 +1561,7 @@ export default function ArenaClient({
     if (freshMatch) setActiveMatch(freshMatch);
 
     // Trigger physical screen rumble shake & swords clash animations
+    synthClick(440, "sine", 0.12, 0.05);
     setIsShaking(true);
     setIsSwordsClashing(true);
     setTimeout(() => {
@@ -1126,33 +1575,33 @@ export default function ArenaClient({
       // Rigid database CHECK constraint restricts auth type column to 'twitter' or 'github'.
       // Bypassed database constraint by mapping 'google' login provider to 'twitter' during DB insertion.
       supabase
-        .from("shipandbattle_votes")
+        .from(`${DB_PREFIX}votes`)
         .insert({
-          shipandbattle_match_id: freshMatch.id,
-          shipandbattle_voter_username: mockUserTwitter,
-          shipandbattle_voter_auth_type: userAuthType === "google" ? "twitter" : userAuthType,
-          shipandbattle_voted_product_id: votingTarget.id,
-          shipandbattle_feedback_winner: voteWinnerFeedback,
-          shipandbattle_feedback_loser: voteLoserFeedback
-        })
+          [`${DB_PREFIX}match_id`]: freshMatch.id,
+          [`${DB_PREFIX}voter_username`]: mockUserTwitter,
+          [`${DB_PREFIX}voter_auth_type`]: userAuthType === "google" ? "twitter" : userAuthType,
+          [`${DB_PREFIX}voted_product_id`]: votingTarget.id,
+          [`${DB_PREFIX}feedback_winner`]: voteWinnerFeedback,
+          [`${DB_PREFIX}feedback_loser`]: voteLoserFeedback
+        } as any)
         .then(({ error }) => {
           if (error) console.error("Error inserting realtime vote:", error);
         });
 
       // 2. Update match votes in database
       supabase
-        .from("shipandbattle_matches")
+        .from(`${DB_PREFIX}matches`)
         .upsert({
-          shipandbattle_id: freshMatch.id,
-          shipandbattle_bracket_id: nextBracket.id,
-          shipandbattle_round_number: freshMatch.roundNumber,
-          shipandbattle_product_a_id: freshMatch.productA.id,
-          shipandbattle_product_b_id: freshMatch.productB.id,
-          shipandbattle_votes_a: freshMatch.votesA,
-          shipandbattle_votes_b: freshMatch.votesB,
-          shipandbattle_winner_id: freshMatch.winnerId || null,
-          shipandbattle_voted_user_ids: freshMatch.votedUserIds
-        })
+          [`${DB_PREFIX}id`]: freshMatch.id,
+          [`${DB_PREFIX}bracket_id`]: nextBracket.id,
+          [`${DB_PREFIX}round_number`]: freshMatch.roundNumber,
+          [`${DB_PREFIX}product_a_id`]: freshMatch.productA?.id || "",
+          [`${DB_PREFIX}product_b_id`]: freshMatch.productB?.id || "",
+          [`${DB_PREFIX}votes_a`]: freshMatch.votesA,
+          [`${DB_PREFIX}votes_b`]: freshMatch.votesB,
+          [`${DB_PREFIX}winner_id`]: freshMatch.winnerId || null,
+          [`${DB_PREFIX}voted_user_ids`]: freshMatch.votedUserIds
+        } as any)
         .then(({ error }) => {
           if (error) console.error("Error updating realtime match:", error);
         });
@@ -1170,8 +1619,8 @@ export default function ArenaClient({
           voted_product_id: votingTarget.id,
           feedback_winner: voteWinnerFeedback,
           feedback_loser: voteLoserFeedback,
-          product_a_id: votingMatch.productA.id,
-          product_b_id: votingMatch.productB.id,
+          product_a_id: votingMatch.productA?.id || "",
+          product_b_id: votingMatch.productB?.id || "",
           created_at: new Date().toISOString()
         });
         localStorage.setItem("arena_votes_v1", JSON.stringify(localVotes));
@@ -1271,35 +1720,35 @@ export default function ArenaClient({
         // 1. Cloud Mode: Fetch from Supabase
         // A. Fetch matches where the product participated
         const { data: matches, error: mErr } = await supabase
-          .from("shipandbattle_matches")
-          .select("shipandbattle_id")
-          .or(`shipandbattle_product_a_id.eq.${product.id},shipandbattle_product_b_id.eq.${product.id}`);
+          .from(`${DB_PREFIX}matches`)
+          .select(`${DB_PREFIX}id`)
+          .or(`${DB_PREFIX}product_a_id.eq.${product.id},${DB_PREFIX}product_b_id.eq.${product.id}`);
 
         if (mErr) throw mErr;
 
         if (matches && matches.length > 0) {
-          const matchIds = matches.map(m => m.shipandbattle_id);
+          const matchIds = matches.map((m: any) => m[`${DB_PREFIX}id`]);
           
           // B. Fetch all votes for these matches
           const { data: votes, error: vErr } = await supabase
-            .from("shipandbattle_votes")
+            .from(`${DB_PREFIX}votes`)
             .select("*")
-            .in("shipandbattle_match_id", matchIds);
+            .in(`${DB_PREFIX}match_id`, matchIds);
 
           if (vErr) throw vErr;
 
           if (votes) {
-            critiques = votes.map(v => {
-              const isWinner = v.shipandbattle_voted_product_id === product.id;
+            critiques = votes.map((v: any) => {
+              const isWinner = v[`${DB_PREFIX}voted_product_id`] === product.id;
               // Map database-compatible provider 'twitter' back to 'google' if voter has a google/email style signature
-              const rawProvider = v.shipandbattle_voter_auth_type;
+              const rawProvider = v[`${DB_PREFIX}voter_auth_type`];
               const provider = rawProvider === "twitter" ? "google" : rawProvider;
               return {
-                voter: v.shipandbattle_voter_username,
+                voter: v[`${DB_PREFIX}voter_username`],
                 provider: provider,
                 role: isWinner ? "Winner (Voted For)" : "Loser (Opponent Voted For)",
-                text: isWinner ? v.shipandbattle_feedback_winner : v.shipandbattle_feedback_loser,
-                date: new Date(v.shipandbattle_created_at || Date.now()).toLocaleDateString()
+                text: isWinner ? v[`${DB_PREFIX}feedback_winner`] : v[`${DB_PREFIX}feedback_loser`],
+                date: new Date(v[`${DB_PREFIX}created_at`] || Date.now()).toLocaleDateString()
               };
             });
           }
@@ -1554,70 +2003,110 @@ export default function ArenaClient({
   };
 
   const activeRoundNum = bracket ? getActiveRound(bracket) : 0;
-  const waitingProducts = products.filter(p => p.queueStatus === "waiting");
+  const queuedProducts = products.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
+  const lineupProducts = useMemo(() => {
+    if (bracket && bracket.round1 && bracket.round1.length > 0) {
+      const list: Product[] = [];
+      bracket.round1.forEach(m => {
+        if (m.productA) list.push(m.productA);
+        if (m.productB) list.push(m.productB);
+      });
+      return list;
+    }
+    return queuedProducts;
+  }, [bracket, queuedProducts]);
+  const showcaseProducts = useMemo(() => {
+    // Show ALL products in the showcase list, regardless of queue status
+    const sorted = [...products].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+    return sorted;
+  }, [products]);
   const currentSeasonNum = pastChampions.length + 1;
   const currentSeasonStr = String(currentSeasonNum).padStart(2, "0");
 
+  const currentRoundMatches = useMemo(() => {
+    if (!bracket) return [];
+    const round = getActiveRound(bracket);
+    if (round === 1) return bracket.round1;
+    if (round === 2) return bracket.round2;
+    if (round === 3) return bracket.round3;
+    if (round === 4) return bracket.round4;
+    return [];
+  }, [bracket]);
+
   return (
-    <div className={`flex-1 bg-[#121110] text-[#181715] font-sans selection:bg-[#fdf2e9] crt-screen min-h-screen relative ${isShaking ? "animate-arena-shake" : ""}`}>
+    <div className={`min-h-screen bg-[#030303] text-[#E4E4E7] font-sans selection:bg-[#E4E4E7] selection:text-black antialiased relative pb-24 overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
       
-      {/* Main page content wrapped with the CRT boot screen-on animation */}
-      <div className={`transition-all duration-300 ${isBooted ? "animate-crt-boot" : "opacity-0"}`}>
-      
-      {/* ========================================================
-          ACT 1: IMMERSIVE HERO ARENA (First Fold)
-         ======================================================== */}
-      <section 
-        className="w-full h-screen relative flex flex-col justify-between overflow-hidden"
-        style={{
-          backgroundImage: "linear-gradient(to bottom, rgba(24, 23, 21, 0.45) 0%, rgba(24, 23, 21, 0.15) 30%, rgba(24, 23, 21, 0.35) 75%, rgba(24, 23, 21, 0.85) 100%), url('/colosseum_arena_pixel.png')",
-          backgroundSize: "cover",
-          backgroundPosition: "center 75%",
-          backgroundAttachment: "fixed",
-        }}
-      >
-        {/* Absolute floating retro pixel particles */}
-        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
-          {particles.map(p => (
-            <div
-              key={p.id}
-              className="pixel-particle"
-              style={{
-                left: p.left,
-                width: p.size,
-                height: p.size,
-                animation: `particle-up ${p.duration} linear infinite`,
-                animationDelay: p.delay
+      {/* HIGH PERFORMANCE DYNAMIC CANVAS BACKGROUND */}
+      <InteractiveGrid />
+
+      {/* FIXED TOAST NOTIFICATION CONTAINER */}
+      <div className="fixed top-6 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
+        {toasts.map(t => (
+          <div
+            key={t.id}
+            className="bg-[#0b0b0c] border border-white/[0.08] text-xs font-mono text-zinc-100 p-4 rounded-md flex items-center justify-between pointer-events-auto animate-fade-in-blur"
+          >
+            <div className="flex items-center gap-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${t.type === 'success' ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
+              <span>{t.message}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Sticky Header Navbar */}
+      <header className="sticky top-0 z-50 w-full bg-[#030303]/95 border-b border-white/[0.06]" style={{ willChange: "transform" }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          
+          <div className="flex items-center gap-8">
+            <div 
+              className="flex items-center gap-3 cursor-pointer"
+              onClick={() => {
+                synthClick(300, "sine", 0.05);
+                setCurrentView('home');
+                pushToast("Welcome back to Indie-Clash!", "success");
               }}
-            />
-          ))}
-        </div>
+            >
+              <ClashLogo size="md" />
+              <span className="font-bold text-white tracking-tight text-xl font-sans">
+                Indie-Clash
+              </span>
+            </div>
 
-        {/* Global High-Visibility Announcement Bar at the absolute top */}
-        <div className="w-full bg-[#d97706] text-[#181715] font-pixel text-4xs uppercase tracking-widest py-3 px-6 text-center relative z-30 flex justify-center items-center gap-2 select-none shadow-sm font-bold border-b border-[#faf5ef]/10">
-          <span className="w-1.5 h-1.5 bg-[#181715] rounded-full animate-pulse shrink-0"></span>
-          <span className="leading-tight">⚡️ {products.length} VERIFIED PRODUCTS DEPLOYED TO THE ARENA. SUBMIT YOUR PRODUCT TO DUEL NOW ➔</span>
-        </div>
-
-        {/* 8-Bit Pixel-Art Elegant Header inside First Fold */}
-        <header className="border-b border-stone-850 py-5 px-6 sm:px-12 flex justify-between items-center bg-[#181715]/75 backdrop-blur-xs relative z-20 text-[#faf5ef] shadow-sm">
-          <div className="flex items-center space-x-4">
-            <span className="text-xl sm:text-2xl font-pixel tracking-wider text-[#faf5ef] animate-pixel-bounce">INDIE_CLASH ⚔️</span>
-            <span className="bg-[#181715] border border-stone-700 text-xs font-pixel px-2 py-0.5 text-[#d97706] uppercase">
-              {supabase ? "LIVE_CLOUD" : "STAGE_1"}
-            </span>
+            <nav className="hidden md:flex items-center gap-5 text-sm font-medium text-zinc-200 font-sans">
+              <a href="#launches-section" className="hover:text-white transition duration-200">Releases</a>
+              <span className="text-zinc-700">/</span>
+              <a href="#arena-section" className="hover:text-white transition duration-200">Arena</a>
+              <span className="text-zinc-700">/</span>
+              <a href="#champions-section" className="hover:text-white transition duration-200">Champion</a>
+              <span className="text-zinc-700">/</span>
+              <a href="#how-it-works-section" className="hover:text-white transition duration-200">How it Work</a>
+            </nav>
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center gap-4">
+
+            {userLoggedIn && (
+              <button
+                onClick={() => {
+                  synthClick(300, "sine", 0.05);
+                  setCurrentView(currentView === 'console' ? 'home' : 'console');
+                }}
+                className="py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-[10px] font-mono uppercase tracking-wider rounded-md cursor-pointer transition mr-2"
+              >
+                {currentView === 'console' ? "Return to Arena ➔" : "My Console"}
+              </button>
+            )}
+
             {userLoggedIn ? (
-              <div className="flex items-center space-x-3 text-2xs bg-[#181715] px-3.5 py-1.5 border border-stone-850 font-pixel text-[#faf5ef] shadow-pixel-sm relative z-20">
-                <span className="w-2.5 h-2.5 bg-emerald-500 animate-pulse rounded-full inline-block"></span>
-                <span className="tracking-wide text-4xs text-[#faf5ef]/80 uppercase">
-                  Connected: <span className="text-[#faf5ef] font-sans font-bold text-3xs hover:text-[#d97706]">{mockUserTwitter}</span>
+              <div className="flex items-center gap-3 text-xs bg-[#121215] px-3.5 py-1.5 border border-white/[0.06] text-white">
+                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
+                <span className="text-zinc-400 text-[10px] font-mono">
+                  CONNECTED: <span className="text-white font-sans font-bold">{mockUserTwitter}</span>
                 </span>
                 <button 
                   onClick={handleLogout}
-                  className="px-2 py-0.5 text-4xs uppercase bg-red-950/40 text-red-400 hover:bg-red-900/60 hover:text-white border border-red-900/50 transition-all font-pixel cursor-pointer rounded-none font-bold"
+                  className="px-2 py-0.5 text-[10px] font-mono uppercase bg-red-950/40 text-red-400 hover:bg-red-900/60 hover:text-white border border-red-900/50 transition-all cursor-pointer font-bold"
                 >
                   Exit
                 </button>
@@ -1625,1651 +2114,1041 @@ export default function ArenaClient({
             ) : (
               <button 
                 onClick={() => setIsAuthOpen(true)}
-                className="btn-pixel !bg-[#181715] !text-[#faf5ef] border-stone-700 hover:!bg-[#d97706] hover:!text-white"
+                className="bg-[#121215] text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold px-3 py-2 rounded-md transition-all cursor-pointer"
               >
                 Link Identity
               </button>
             )}
-          </div>
-        </header>
 
-        {/* Dynamic Backdrop Blur & Darken DissOverlay */}
-        <div 
-          className="absolute inset-0 pointer-events-none z-1"
-          style={{
-            backgroundColor: `rgba(18, 17, 16, ${Math.min(0.85, scrollY / 400)})`,
-            backdropFilter: `blur(${Math.min(12, scrollY / 30)}px)`,
-            WebkitBackdropFilter: `blur(${Math.min(12, scrollY / 30)}px)`,
-          }}
-        />
-
-        {/* First Fold Main Info Overlay - 2 Column Grid Layout on Large Screens */}
-        <div 
-          className="flex-1 flex flex-col lg:flex-row lg:items-center justify-between max-w-7xl mx-auto px-6 sm:px-12 w-full z-10 select-none pb-24 relative gap-12 transition-all duration-100 ease-out"
-          style={{
-            transform: `translateY(${scrollY * -0.45}px)`,
-            opacity: Math.max(0, 1 - scrollY / 300),
-          }}
-        >
-          {/* Left Column: Slogan and details in a high-quality glassmorphism panel */}
-          <div className="max-w-xl relative z-20 bg-[#141210]/85 backdrop-blur-md border border-stone-850/80 p-6 sm:p-8 rounded-none shadow-pixel-lg animate-hero-title">
-            <div className="flex flex-col text-left">
-              <h1 className="font-sans font-black tracking-tighter leading-[0.85] text-[#faf5ef] text-5xl sm:text-6xl md:text-7xl flex flex-col">
-                <span className="drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">INDIE</span>
-                <span className="text-[#dc2626] drop-shadow-[0_4px_0_rgba(0,0,0,0.95)]">CLASH</span>
-              </h1>
-              <p className="text-[#d97706] font-pixel text-4xs sm:text-3xs font-bold tracking-widest mt-4 uppercase">
-                LAUNCH OR DIE. THE ULTIMATE INDIE PRODUCT BATTLEGROUND.
-              </p>
-              <p className="text-stone-300 font-sans text-2xs font-normal tracking-wide mt-2.5 leading-relaxed">
-                No coordinate rings. No fake upvotes. Deploy your product into the 1v1 arena, duel for survival, and let unfiltered peer feedback decide your fate.
-              </p>
-            </div>
-
-            {/* Live Ticker banner if match is active */}
-            {bracket && bracket.status === "active" && activeMatch && (
-              <div className="mt-5 bg-[#d97706]/10 border border-[#d97706]/30 px-3.5 py-2 flex items-center justify-between text-5xs font-pixel text-[#d97706] animate-pulse">
-                <span className="flex items-center gap-1.5 font-bold uppercase">
-                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block animate-ping"></span>
-                  🔴 决斗进行中
-                </span>
-                <span className="truncate max-w-[200px] text-stone-200">
-                  {activeMatch.productA.title.toUpperCase()} VS {activeMatch.productB.title.toUpperCase()}
-                </span>
-                <span className="underline select-none cursor-pointer" onClick={scrollToDuel}>前往投票 ➔</span>
-              </div>
+            {/* Top Right Main Conversion button */}
+            {currentView !== 'console' && (
+              <button
+                onClick={() => {
+                  synthClick(420, "sine", 0.08, 0.04);
+                  setSubmitSource('home');
+                  setIsSubmitOpen(true);
+                }}
+                className="bg-white hover:bg-zinc-200 text-black py-2 px-4 rounded-md text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
+              >
+                Submit Product
+              </button>
             )}
 
-            {/* Dual Core CTAs */}
-            <div className="mt-6 flex flex-col sm:flex-row gap-3 w-full animate-hero-cta">
-              <button
-                onClick={scrollToDuel}
-                className="btn-pixel flex-1 py-3 px-5 text-4xs font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-stone-900 font-black shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all uppercase cursor-pointer"
-              >
-                ⚔️ {bracket && bracket.status === "active" ? "ENTER THE ARENA / 进入战场" : "WITNESS THE DUEL / 围观决斗"}
-              </button>
-              
-              <button
-                onClick={() => setIsSubmitOpen(true)}
-                className="btn-pixel flex-1 py-3 px-5 text-4xs font-pixel bg-[#1e1c1a] hover:bg-stone-900 text-stone-200 border-2 border-stone-850 hover:border-stone-750 font-black shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all uppercase cursor-pointer"
-              >
-                🛡️ DEPLOY PRODUCT / 派遣出征
-              </button>
-            </div>
+          </div>
 
-            {/* Premium Trust Badges */}
-            <div className="mt-8 flex flex-wrap gap-3 items-center animate-hero-badge">
-              <span className="flex items-center space-x-1.5 bg-[#1e1b19] border border-stone-850 px-2.5 py-1 text-5xs font-pixel text-stone-300">
-                <span>⚔️</span> <span>0% Coordinate Rings / 绝无互刷</span>
-              </span>
-              <span className="flex items-center space-x-1.5 bg-[#1e1b19] border border-stone-850 px-2.5 py-1 text-5xs font-pixel text-[#d97706]">
-                <span>🛡️</span> <span>Unfiltered Critique / 真实吐槽</span>
-              </span>
-              <span className="flex items-center space-x-1.5 bg-[#1e1b19] border border-stone-850 px-2.5 py-1 text-5xs font-pixel text-emerald-500">
-                <span>🔥</span> <span>16 Slots. 1 Winner. / 16强生死战</span>
-              </span>
+        </div>
+      </header>
+
+      {currentView === 'console' ? (
+        <MakerConsole 
+          isOpen={true}
+          onClose={() => setCurrentView('home')}
+          products={products}
+          userTwitter={mockUserTwitter}
+          userSubId={userSupabaseId}
+          onPushToQueue={handlePushToQueue}
+          renderLogo={renderLogo}
+          onExportCsv={handleExportCritiquesCsv}
+          onSubmitProductClick={() => {
+            setSubmitSource('console');
+            setIsSubmitOpen(true);
+          }}
+        />
+      ) : (
+        <>
+          {/* Hero Banner */}
+          <section className="py-24 border-b border-white/[0.05] relative overflow-hidden bg-gradient-to-b from-white/[0.01] to-transparent">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          
+          {/* Micro monospace badge on top */}
+          <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.15] px-3 py-1 rounded-md mb-8">
+            FREE INDIE LAUNCH PLATFORM
+          </div>
+
+          {/* Extreme large title font bold tracking tight */}
+          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-white uppercase mb-6 leading-none">
+            Every Indie Product<br />
+            <span className="text-zinc-500 font-mono font-medium">DESERVES TO BE SEEN</span>
+          </h1>
+
+          {/* Centered brief description, restricted width */}
+          <p className="max-w-[780px] mx-auto text-sm sm:text-base md:text-md text-zinc-400 leading-relaxed font-sans tracking-wide">
+            Submit for free. Get real exposure and a permanent SEO backlink. Then prove it in the 1v1 Arena, where builders compete through honest peer critiques, not vanity upvotes.
+          </p>
+
+          <div className="mt-8 flex flex-wrap justify-center gap-4 text-[10px] font-mono text-zinc-500">
+            <span className="bg-[#0b0b0c] border border-white/[0.05] px-2.5 py-1 rounded-md uppercase tracking-wider">
+              Products Submitted: <span className="text-white font-semibold">{products.length}</span>
+            </span>
+          </div>
+
+        </div>
+      </section>
+
+      {/* CORE APP WRAPPER LAYOUT */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+
+
+
+        {/* LIVE ARENA CLASHES (1v1 Live Showdowns) */}
+        {/* TODAY'S RELEASES (System Audit Logs Terminal Style Grid Layout) */}
+        <section id="launches-section" className="py-20 md:py-28">
+          
+          <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="text-left space-y-2">
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
+                  TODAY'S RELEASES
+                </h2>
+                <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full animate-pulse flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
+                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                  Live Feed: 24h Rolling
+                </span>
+              </div>
+              <p className="text-sm text-zinc-400 mt-2">
+                Upcoming products queued for matchmaking. Seamless 24h rolling waitlist stream.
+              </p>
             </div>
           </div>
 
-          {/* Right Column: Reigning Champion Card or Live Matchup Box */}
-          <div className="w-full lg:max-w-sm relative z-20 animate-hero-sub">
-            {bracket && bracket.status === "active" && activeMatch ? (
-              <div className="bg-[#1e1a17]/95 backdrop-blur-md border-4 border-[#d97706] shadow-pixel-lg p-5 text-[#faf5ef] relative overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 via-[#d97706] to-amber-500 animate-pulse" />
-                
-                <div className="flex justify-between items-center mb-4 border-b border-stone-800 pb-2">
-                  <span className="text-3xs font-pixel text-[#d97706] uppercase tracking-wider flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 bg-red-500 rounded-full inline-block animate-ping"></span>
-                    ⚡️ LIVE DUEL ACTIVE
-                  </span>
-                  <span className="text-5xs font-mono text-stone-400">ROUND {activeRoundNum}</span>
-                </div>
-
-                {/* The Matchup grid */}
-                <div className="grid grid-cols-7 gap-1 items-center mb-4 relative py-2">
-                  {/* Product A */}
-                  <div className="col-span-3 flex flex-col items-center text-center">
-                    <div className="w-12 h-12 bg-stone-900 border border-stone-800 rounded-md flex items-center justify-center text-2xl mb-1.5 select-none shadow-inner">
-                      {renderLogo(activeMatch.productA.logo, "w-8 h-8")}
-                    </div>
-                    <span className="font-pixel text-4xs uppercase tracking-wide truncate max-w-full text-stone-100 font-bold">
-                      {activeMatch.productA.title}
-                    </span>
-                  </div>
-
-                  {/* VS in the middle */}
-                  <div className="col-span-1 flex flex-col items-center justify-center">
-                    <span className="font-sans font-black text-lg italic text-[#dc2626] drop-shadow-[0_1.5px_0_rgba(0,0,0,0.9)] animate-pixel-bounce">VS</span>
-                  </div>
-
-                  {/* Product B */}
-                  <div className="col-span-3 flex flex-col items-center text-center">
-                    <div className="w-12 h-12 bg-stone-900 border border-stone-800 rounded-md flex items-center justify-center text-2xl mb-1.5 select-none shadow-inner">
-                      {renderLogo(activeMatch.productB.logo, "w-8 h-8")}
-                    </div>
-                    <span className="font-pixel text-4xs uppercase tracking-wide truncate max-w-full text-stone-100 font-bold">
-                      {activeMatch.productB.title}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Realtime Vote Percentage Bar */}
-                {(() => {
-                  const { pctA, pctB } = getPercentages(activeMatch);
-                  return (
-                    <div className="mb-4">
-                      <div className="flex justify-between text-5xs font-mono text-stone-400 mb-1 px-1">
-                        <span>{activeMatch.votesA} Votes ({pctA}%)</span>
-                        <span>{pctB}% ({activeMatch.votesB} Votes)</span>
-                      </div>
-                      <div className="w-full h-3 bg-stone-900 border border-stone-800 rounded-none overflow-hidden flex">
-                        <div className="h-full bg-gradient-to-r from-amber-600 to-[#d97706] transition-all duration-500 ease-out" style={{ width: `${pctA}%` }} />
-                        <div className="h-full bg-stone-850" style={{ width: `${pctB}%` }} />
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* CTA Voting buttons */}
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setVotingMatch(activeMatch);
-                      setVotingTarget(activeMatch.productA);
-                      setVoteWinnerFeedback("");
-                      setVoteLoserFeedback("");
-                      setVoteError("");
-                      scrollToDuel();
-                    }}
-                    className="flex-1 py-2.5 px-3 text-5xs tracking-wider font-pixel bg-[#1c1815] border border-stone-700 hover:bg-[#d97706] text-white hover:text-black transition-all cursor-pointer rounded-none font-black"
-                  >
-                    投 {activeMatch.productA.title.toUpperCase()}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setVotingMatch(activeMatch);
-                      setVotingTarget(activeMatch.productB);
-                      setVoteWinnerFeedback("");
-                      setVoteLoserFeedback("");
-                      setVoteError("");
-                      scrollToDuel();
-                    }}
-                    className="flex-1 py-2.5 px-3 text-5xs tracking-wider font-pixel bg-[#1c1815] border border-stone-700 hover:bg-[#d97706] text-white hover:text-black transition-all cursor-pointer rounded-none font-black"
-                  >
-                    投 {activeMatch.productB.title.toUpperCase()}
-                  </button>
-                </div>
+          {/* Audit logs stream table format only, strictly no cards */}
+          <div 
+            className="border border-white/[0.05] bg-[#070709]/40 rounded-md overflow-hidden h-[520px] relative"
+            style={{
+              maskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
+              WebkitMaskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
+            }}
+          >
+            {showcaseProducts.length === 0 ? (
+              <div className="absolute inset-0 flex items-center justify-center text-zinc-650 font-mono text-xs">
+                [ No waitlist submissions enqueued in waiting room. ]
               </div>
             ) : (
-              // High-Quality dark stone reigning champion card
-              <div className="bg-[#1e1a17]/95 backdrop-blur-md border-4 border-stone-850 shadow-pixel-lg p-5 text-[#faf5ef] relative overflow-hidden">
-                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-stone-800 via-stone-700 to-stone-800" />
-                
-                <div className="flex justify-between items-center mb-4 border-b border-stone-850 pb-2">
-                  <span className="text-3xs font-pixel text-[#d97706] uppercase tracking-wider">
-                    🏆 Reigning Champion
-                  </span>
-                  <span className="text-5xs font-mono text-stone-400">LAST SEASON</span>
-                </div>
-                
-                {pastChampions.length > 0 ? (
-                  (() => {
-                    const reigning = pastChampions[pastChampions.length - 1];
-                    return (
-                      <>
-                        <div className="flex items-start space-x-3 mb-4">
-                          <span className="text-3xl shrink-0 mt-1 flex items-center justify-center bg-stone-900 border border-stone-800 p-1.5 rounded-md">
-                            {renderLogo(reigning.logo, "w-8 h-8")}
+              <div 
+                className="flex flex-col marquee-vertical-container"
+                style={{
+                  animationName: 'marquee-vertical',
+                  animationDuration: `${Math.max(15, showcaseProducts.length * 2.2)}s`,
+                  animationTimingFunction: 'linear',
+                  animationIterationCount: 'infinite',
+                  willChange: 'transform'
+                }}
+              >
+                {/* Double the list to make seamless looping possible */}
+                {[...showcaseProducts, ...showcaseProducts].map((item, index) => {
+                  const originalIndex = index % showcaseProducts.length;
+                  return (
+                    <div 
+                      key={`${item.id}-dup-${index}`} 
+                      className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#0c0c0e]/80 transition duration-150 border-b border-white/[0.03] h-auto sm:h-[64px] box-border"
+                    >
+                      {/* Left segment */}
+                      <div className="flex items-center gap-3 shrink-0">
+                        {item.makerAvatar && item.makerAvatar.includes("pushed=false") ? (
+                          <span className="text-[10px] font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded border border-white/[0.06] uppercase tracking-wider">
+                            showcase
                           </span>
-                          <div>
+                        ) : (
+                          <span className="text-[10px] font-mono text-[#A78BFA] bg-[#A78BFA]/[0.05] px-2 py-0.5 rounded border border-[#A78BFA]/[0.15] uppercase tracking-wider">
+                            queued
+                          </span>
+                        )}
+                        <span className="w-6 h-6 flex items-center justify-center shrink-0 text-base">
+                          {renderLogo(item.logo, "w-6 h-6")}
+                        </span>
+                      </div>
+
+                      {/* Main Product Tagline truncate flex list */}
+                      <div className="flex-1 min-w-0 text-left">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <a 
+                            href={`/reviews/${item.id}`}
+                            className="font-bold text-white text-sm hover:underline hover:text-[#ffbe18] transition"
+                          >
+                            {item.title}
+                          </a>
+                          <span className="text-[10px] font-mono text-zinc-550">
+                            by{" "}
                             <a 
-                              href={reigning.url} 
-                              target="_blank" 
-                              rel="noreferrer" 
-                              className="font-pixel text-xs text-[#faf5ef] hover:text-[#d97706] hover:underline uppercase block leading-tight font-bold"
-                            >
-                              {reigning.title}
-                            </a>
-                            <p className="text-4xs text-stone-400 mt-1.5 line-clamp-2 leading-relaxed font-sans font-medium">
-                              {reigning.tagline}
-                            </p>
-                          </div>
-                        </div>
-                        
-                        <a 
-                          href={reigning.url} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="mb-4 bg-[#1a1715] border border-stone-800 p-2.5 text-3xs font-mono text-stone-300 hover:bg-[#d97706]/10 hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                        >
-                          <span>🌐 LIVE DEMO URL</span>
-                          <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                        </a>
-                        
-                        <div className="flex items-center justify-between border-t border-dashed border-stone-800 pt-3 text-4xs font-mono text-stone-400 mb-2">
-                          <div className="flex items-center space-x-1.5">
-                            <img src={reigning.makerAvatar} alt="Maker" className="w-5 h-5 border border-stone-800 shrink-0" />
-                            <a 
-                              href={`https://x.com/${reigning.makerTwitter.replace(/^@/, "")}`}
+                              href={`https://x.com/${item.makerTwitter ? item.makerTwitter.replace(/^@/, "") : ""}`}
                               target="_blank"
                               rel="noreferrer"
-                              className="hover:text-[#d97706] hover:underline font-bold"
+                              className="hover:underline hover:text-white transition duration-150"
+                              onClick={(e) => e.stopPropagation()}
                             >
-                              {reigning.makerTwitter}
+                              {item.makerTwitter}
                             </a>
-                          </div>
-                          <span className="text-5xs uppercase font-pixel bg-[#d97706]/10 border border-[#d97706]/30 text-[#d97706] px-1 py-0.2">CHAMP</span>
+                          </span>
                         </div>
-                      </>
+                        <p className="text-xs text-zinc-400 truncate mt-0.5 max-w-xl">
+                          {item.tagline}
+                        </p>
+                      </div>
+
+                      {/* Sandbox code base external sandbox link */}
+                      <div className="shrink-0 flex items-center gap-6">
+                        <a 
+                          href={item.url}
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="text-[10px] font-mono text-zinc-500 hover:text-white inline-flex items-center gap-1"
+                        >
+                          Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-650" />
+                        </a>
+
+
+                      </div>
+
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="mt-6 text-center">
+            <a 
+              href="#champions-section"
+              className="inline-flex items-center gap-2 text-xs font-mono text-zinc-500 hover:text-white transition"
+              onClick={() => synthClick(280, "sine", 0.05)}
+            >
+              View past champions and hall of valor →
+            </a>
+          </div>
+        </section>
+
+        <section id="arena-section" className="py-20 md:py-28 relative border-t border-white/[0.05]">
+          
+          <div className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
+                LIVE ARENA MATCHUPS
+              </h2>
+              <p className="text-xs text-zinc-500 mt-2">
+                Skins in the game. Inspect core trade-offs, voice your technical feedback, and vote to declare champions.
+              </p>
+            </div>
+            {bracket && bracket.status === "active" && (
+              <div className="flex shrink-0">
+                <span className="bg-[#0b0b0c] border border-white/[0.08] px-3.5 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#ffbe18] animate-pulse inline-block" />
+                  Round Closes In: <span className="text-white font-semibold">{formatToHMS(activeRoundRemainingMs)}</span>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {bracket && bracket.status === "active" ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+              
+              {/* Left Column: Matchup Slate (Grid of matches) */}
+              <div className="lg:col-span-5 space-y-4">
+                <div className="bg-[#0b0b0d] border border-white/[0.05] p-4 rounded-md">
+                  <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500">
+                    MATCH SLATE // ROUND STATUS
+                  </span>
+                  <div className="flex justify-between items-center mt-1.5">
+                    <span className="text-xs font-mono font-bold text-white uppercase">
+                      {activeRoundNum === 1 ? "Round of 16" : activeRoundNum === 2 ? "Quarterfinals" : activeRoundNum === 3 ? "Semifinals" : "Grand Finals"}
+                    </span>
+                    <span className="text-[10px] font-mono text-zinc-400">
+                      {currentRoundMatches.filter(m => !m.winnerId).length} Active Duels
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-3 max-h-[70vh] lg:max-h-[85vh] overflow-y-auto pr-2 custom-scrollbar">
+                  {currentRoundMatches.map((duel) => {
+                    const isDuelActive = !duel.winnerId;
+                    const isSelected = activeMatch?.id === duel.id;
+                    const sumVotes = duel.votesA + duel.votesB;
+                    const ratioA = sumVotes > 0 ? Math.round((duel.votesA / sumVotes) * 100) : 50;
+                    const ratioB = sumVotes > 0 ? 100 - ratioA : 50;
+
+                    return (
+                      <div
+                        key={duel.id}
+                        onClick={() => {
+                          synthClick(250, "sine", 0.05);
+                          setActiveMatch(duel);
+                          pushToast(`Inspecting matchup: ${duel.productA.title} vs ${duel.productB.title}`, "info");
+                        }}
+                        className={`p-4 bg-[#0a0a0c]/80 border rounded-md cursor-pointer transition-all duration-200 text-left hover:border-white/[0.15] hover:bg-[#0e0e11]/80 hover:-translate-y-0.5 ${
+                          isSelected ? "border-white/[0.2] bg-[#121215]/90 shadow-[0_0_15px_rgba(255,255,255,0.02)]" : "border-white/[0.05]"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-3 text-[9px] font-mono text-zinc-500">
+                          <span>MATCH ID: {duel.id.slice(0, 8)}</span>
+                          {isDuelActive ? (
+                            <span className="text-emerald-400 bg-emerald-400/[0.05] border border-emerald-400/[0.15] px-1.5 py-0.2 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
+                              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                              Active
+                            </span>
+                          ) : (
+                            <span className="text-zinc-500 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.2 rounded uppercase tracking-wider">
+                              Concluded
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Versus Symmetrical Lineup */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            <span className="text-base shrink-0">{renderLogo(duel.productA?.logo, "w-5 h-5")}</span>
+                            <span className={`text-xs font-bold truncate ${isSelected ? "text-white" : "text-zinc-350"}`}>
+                              {duel.productA?.title || "Pending"}
+                            </span>
+                          </div>
+                          
+                          <span className="text-[10px] font-mono font-medium text-zinc-650 shrink-0 px-2">VS</span>
+
+                          <div className="flex-1 min-w-0 flex items-center justify-end gap-2 text-right">
+                            <span className={`text-xs font-bold truncate ${isSelected ? "text-white" : "text-zinc-350"}`}>
+                              {duel.productB?.title || "Pending"}
+                            </span>
+                            <span className="text-base shrink-0">{renderLogo(duel.productB?.logo, "w-5 h-5")}</span>
+                          </div>
+                        </div>
+
+                        {/* Settle status preview / Score slider */}
+                        <div className="mt-3.5 space-y-1">
+                          <div className="flex justify-between text-[9px] font-mono text-zinc-500">
+                            <span>{ratioA}% ({duel.votesA}v)</span>
+                            <span>{duel.votesB}v ({ratioB}%)</span>
+                          </div>
+                          <div className="h-1 bg-zinc-900 w-full rounded-full overflow-hidden flex">
+                            <div className="bg-white h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
+                            <div className="bg-zinc-800 h-full flex-1" />
+                          </div>
+                        </div>
+
+                        {/* Winner stamp if concluded */}
+                        {!isDuelActive && duel.winnerId && (
+                          <div className="mt-2 text-[9px] font-mono text-center text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.12] py-0.5 rounded uppercase tracking-wider font-semibold">
+                            Winner: {duel.winnerId === duel.productA?.id ? (duel.productA?.title || "Pending") : (duel.productB?.title || "Pending")}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Right Column: Combat Inspector Panel (Sticky) */}
+              <div className="lg:col-span-7 lg:sticky lg:top-20 space-y-4">
+                {activeMatch ? (
+                  (() => {
+                    const duel = activeMatch;
+                    const isDuelActive = !duel.winnerId;
+                    const sumVotes = duel.votesA + duel.votesB;
+                    const ratioA = sumVotes > 0 ? Math.round((duel.votesA / sumVotes) * 100) : 50;
+                    const ratioB = sumVotes > 0 ? 100 - ratioA : 50;
+                    
+
+
+                    return (
+                      <div className="bg-[#0a0a0c]/80 border border-white/[0.08] rounded-md overflow-hidden premium-glass p-6 md:p-8 space-y-6 transition-all duration-300 animate-fade-in-blur">
+                        
+                        {/* Title Bar */}
+                        <div className="flex items-center justify-between border-b border-white/[0.04] pb-4">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[9px] uppercase tracking-wider font-semibold bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded text-zinc-300">
+                              ROUND {activeRoundNum} // BATTLE INSPECTOR
+                            </span>
+                          </div>
+                          <div>
+                            {isDuelActive ? (
+                              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-400/[0.05] border border-emerald-400/[0.15] px-2 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
+                                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                                DECISION OPEN
+                              </span>
+                            ) : (
+                              <span className="text-[9px] font-mono text-zinc-500 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded uppercase tracking-wider">
+                                CONCLUDED
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Interactive Duel Clash Head to Head */}
+                        <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
+                          
+                          {/* Product A block */}
+                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px]">
+                            <div>
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-base">{renderLogo(duel.productA?.logo, "w-6 h-6")}</span>
+                                <span className="text-[9px] font-mono text-zinc-500">{duel.productA?.makerTwitter}</span>
+                              </div>
+                              <h3 className="text-base font-bold text-white truncate">{duel.productA?.title || "Pending"}</h3>
+                              <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productA?.tagline}</p>
+                            </div>
+                            <div className="mt-4">
+                              <button
+                                onClick={() => {
+                                  setVotingMatch(duel);
+                                  setVotingTarget(duel.productA);
+                                  setVoteWinnerFeedback("");
+                                  setVoteLoserFeedback("");
+                                  setVoteError("");
+                                }}
+                                disabled={!isDuelActive || !duel.productA}
+                                className={`w-full py-2 px-3 text-[10px] font-bold rounded transition-all cursor-pointer uppercase tracking-wider ${
+                                  !isDuelActive
+                                  ? duel.winnerId === duel.productA?.id 
+                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-not-allowed" 
+                                    : "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
+                                  : !duel.productA
+                                    ? "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
+                                    : "bg-white text-black hover:bg-zinc-200"
+                                }`}
+                              >
+                                {duel.winnerId === duel.productA?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR A" : "DEFEATED"}
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* VS center block */}
+                          <div className="md:col-span-1 flex flex-col items-center justify-center py-2">
+                            <span className="text-zinc-700 font-mono tracking-widest text-[9px] uppercase">VS</span>
+                            <div className="flex flex-col items-center mt-2 leading-tight">
+                              <span className="font-mono font-bold text-lg text-white">{ratioA}%</span>
+                              <span className="font-mono font-semibold text-zinc-500 text-[10px]">{ratioB}%</span>
+                            </div>
+                            <span className="text-[8px] font-mono text-zinc-500 mt-2 uppercase tracking-widest">{sumVotes} Voted</span>
+                          </div>
+
+                          {/* Product B block */}
+                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px]">
+                            <div>
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="text-base">{renderLogo(duel.productB?.logo, "w-6 h-6")}</span>
+                                <span className="text-[9px] font-mono text-zinc-500">{duel.productB?.makerTwitter}</span>
+                              </div>
+                              <h3 className="text-base font-bold text-white truncate">{duel.productB?.title || "Pending"}</h3>
+                              <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productB?.tagline}</p>
+                            </div>
+                            <div className="mt-4">
+                              <button
+                                onClick={() => {
+                                  setVotingMatch(duel);
+                                  setVotingTarget(duel.productB);
+                                  setVoteWinnerFeedback("");
+                                  setVoteLoserFeedback("");
+                                  setVoteError("");
+                                }}
+                                disabled={!isDuelActive || !duel.productB}
+                                className={`w-full py-2 px-3 text-[10px] font-bold rounded transition-all cursor-pointer uppercase tracking-wider ${
+                                  !isDuelActive
+                                  ? duel.winnerId === duel.productB?.id 
+                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-not-allowed" 
+                                    : "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
+                                  : !duel.productB
+                                    ? "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
+                                    : "bg-white text-black hover:bg-zinc-200"
+                                }`}
+                              >
+                                {duel.winnerId === duel.productB?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR B" : "DEFEATED"}
+                              </button>
+                            </div>
+                          </div>
+
+                        </div>
+
+                        {/* Symmetrical Tug of War Slider bar */}
+                        <div className="space-y-1.5">
+                          <div className="h-1.5 bg-zinc-900 w-full rounded-full overflow-hidden flex">
+                            <div className="bg-white h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
+                            <div className="bg-zinc-800 h-full flex-1" />
+                          </div>
+                        </div>
+
+
+
+                        {/* Peer Critiques chronicles */}
+                        <div className="pt-4 border-t border-white/[0.04] space-y-4">
+                          <div className="flex items-center justify-between border-b border-white/[0.03] pb-2">
+                            <h4 className="text-[9px] font-mono uppercase tracking-widest text-zinc-400">
+                              PEER CRITIQUE CHRONICLES ({activeMatchCritiques.length})
+                            </h4>
+                            <span className="text-[8px] font-mono text-zinc-500 uppercase">
+                              verified feedback stream
+                            </span>
+                          </div>
+
+
+
+                          {/* Comments list inside inspector */}
+                          <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
+                            {activeMatchCritiques.map((c) => {
+                              const isProductA = c.role.includes(duel.productA.title) || c.text.toLowerCase().includes(duel.productA.title.toLowerCase());
+                              const badgeColor = isProductA
+                                ? "bg-white/[0.04] text-white border border-white/[0.08]"
+                                : "bg-zinc-950 text-zinc-400 border border-white/[0.04]";
+                              const auditedName = isProductA ? duel.productA.title : duel.productB.title;
+                              return (
+                                <div
+                                  key={c.id}
+                                  className="p-3 bg-zinc-950/20 border border-white/[0.03] hover:border-white/[0.08] transition duration-150 rounded text-left space-y-1"
+                                >
+                                  <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-[11px] font-mono font-bold text-white">{c.voter}</span>
+                                      <span className={`text-[8px] font-mono uppercase px-1.5 py-0.2 rounded ${badgeColor}`}>
+                                        audited {auditedName}
+                                      </span>
+                                    </div>
+                                    <span className="text-[9px] text-zinc-600 font-mono">{c.date}</span>
+                                  </div>
+                                  <p className="text-[11px] text-zinc-450 leading-relaxed pl-1">
+                                    {c.text}
+                                  </p>
+                                </div>
+                              );
+                            })}
+
+                            {activeMatchCritiques.length === 0 && (
+                              <div className="p-6 text-center text-zinc-650 font-mono text-[10px] border border-dashed border-white/[0.04] rounded">
+                                [ No verified peer critiques enqueued for this matchup. ]
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                      </div>
                     );
                   })()
                 ) : (
-                  <div className="py-4 text-center">
-                    <span className="text-3xl block mb-2">🛡️</span>
-                    <span className="font-pixel text-4xs text-stone-500 uppercase block mb-1">Season {currentSeasonStr} Active</span>
-                    <p className="text-5xs font-mono text-stone-400 leading-relaxed px-2">
-                      No champion has conquered the arena yet. Be the first to secure eternal glory!
-                    </p>
+                  <div className="bg-[#0a0a0c]/80 border border-white/[0.05] rounded-md p-12 text-center text-zinc-500 font-mono text-xs">
+                    [ SELECT A MATCHUP FROM THE LEFT SLATE TO INSPECT ]
                   </div>
                 )}
               </div>
-            )}
 
-            {/* View All Past Champions Button below the card */}
-            {pastChampions.length > 0 && (
-              <button
-                onClick={() => setIsPastChampsOpen(true)}
-                className="btn-pixel w-full py-2.5 mt-3 text-3xs tracking-wider font-pixel transition-all shadow-pixel-sm border-2 cursor-pointer"
-                style={{
-                  color: '#faf5ef',
-                  backgroundColor: '#1a1715',
-                  borderColor: '#2d2824',
-                }}
-              >
-                🏆 VIEW ALL PAST CHAMPIONS
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Pulsing Scroll Indicator */}
-        <div 
-          className="flex flex-col items-center pb-6 animate-scroll-cue z-20 pointer-events-none select-none transition-opacity duration-200"
-          style={{
-            opacity: Math.max(0, 1 - scrollY / 120),
-          }}
-        >
-          <span className="text-3xs font-pixel uppercase tracking-widest text-[#e7e3db] drop-shadow-[0_2px_4px_rgba(0,0,0,0.95)]">
-            👇 scroll to duel / enter the arena
-          </span>
-        </div>
-
-      </section>
-
-      {/* ========================================================
-          ACT 2: NARRATIVE STICKY SCROLL STORYTELLING
-         ======================================================== */}
-      <section 
-        ref={narrativeRef} 
-        className="relative bg-[#0d0c0b] border-b-4 border-pixel noise-overlay" 
-        style={{ minHeight: "120vh" }}
-      >
-        <div className="sticky top-0 h-screen w-full flex flex-col justify-center items-center px-6 max-w-4xl mx-auto overflow-hidden">
-          
-          <div className="text-center space-y-8 md:space-y-12 max-w-3xl">
-            <div className={`transition-all duration-500 mb-6 ${narrativeActive >= 0 ? "opacity-100" : "opacity-0"}`}>
-              <span className="font-pixel text-[#d97706] text-3xs sm:text-2xs uppercase tracking-widest bg-[#181715] border border-stone-800 px-3 py-1">
-                ARENA MANIFESTO // THE BATTLE FOR REAL VALUE
-              </span>
             </div>
-
-             {/* Narrative Lines */}
-             <div className="space-y-6 md:space-y-8 text-xl sm:text-2xl md:text-3xl font-sans font-black tracking-tight leading-relaxed">
-              <p className={`narrative-line ${maxActiveReached >= 0 ? "active" : ""}`}>
-                Traditional public launches? <span className="text-[#d97706] font-pixel text-sm sm:text-base ml-2">🤖 BOT INFLATION</span>
-              </p>
+          ) : (
+            /* ========================================================
+                WAITLIST QUEUE PREPARING SCREEN
+               ======================================================== */
+            <div className="bg-[#121215] border border-white/[0.06] p-8 sm:p-12 text-white text-center max-w-2xl mx-auto rounded-lg">
               
-              <p className={`narrative-line ${maxActiveReached >= 1 ? "active" : ""}`}>
-                Rigged upvotes and coordination rings dictate the game.
+              {/* Sleek countdown timer pill */}
+              {lineupProducts.length >= 16 && (
+                <div className="flex justify-center mb-6">
+                  <span className="bg-[#0b0b0c] border border-white/[0.08] px-3.5 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+                    Cycle Closes: <span className="text-white font-semibold">{formatToHMS(countdownToMidnightMs)}</span>
+                  </span>
+                </div>
+              )}
+
+              <div className="inline-block relative w-36 h-36 mb-6">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle 
+                    cx="72" 
+                    cy="72" 
+                    r="62" 
+                    stroke="rgba(255,255,255,0.04)" 
+                    strokeWidth="6" 
+                    fill="transparent" 
+                  />
+                  <circle 
+                    cx="72" 
+                    cy="72" 
+                    r="62" 
+                    stroke="#ffffff" 
+                    strokeWidth="6" 
+                    fill="transparent" 
+                    strokeDasharray={390}
+                    strokeDashoffset={390 - (390 * Math.min(lineupProducts.length, 16)) / 16}
+                    className="transition-all duration-1000 ease-out"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col justify-center items-center">
+                  {lineupProducts.length >= 16 ? (
+                    <>
+                      <span className="text-xl font-bold text-white font-mono tracking-tight">{formatToHMS(countdownToMidnightMs)}</span>
+                      <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Starts In</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-2xl font-semibold text-white">{lineupProducts.length} / 16</span>
+                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Ready</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-white">Season Preparing</h2>
+              <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+                Once 16 products are enqueued, the head-to-head tournament matchups generate automatically. Submit your startup product and queue it from your console to claim your spot in the roster!
               </p>
 
-              <p className={`narrative-line ${maxActiveReached >= 2 ? "active" : ""}`}>
-                You spent <span className="text-[#faf5ef]">6 months</span> pouring your soul into code...
-              </p>
+              {/* Roster Slots Grid (Street Fighter style character select) */}
+              <div className="mt-8 pt-6 border-t border-white/[0.05] max-w-md mx-auto">
+                <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-4">
+                  Roster Lineup ({lineupProducts.length} / 16)
+                </span>
+                <div className="grid grid-cols-8 gap-2.5 justify-center">
+                  {Array.from({ length: 16 }).map((_, idx) => {
+                    const prod = lineupProducts[idx];
+                    if (prod) {
+                      return (
+                        <button 
+                          key={idx} 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            synthClick(300, "sine", 0.05);
+                            setActiveCardProduct(prod);
+                          }}
+                          className="w-11 h-11 rounded-lg flex items-center justify-center text-lg select-none border transition-all duration-300 bg-[#141417] border-white/[0.12] text-white shadow-md shadow-black/40 hover:scale-105 cursor-pointer hover:border-amber-400/50 hover:shadow-[0_0_8px_rgba(245,158,11,0.15)]"
+                          title={prod.title}
+                        >
+                          {renderLogo(prod.logo, "w-7 h-7 object-contain")}
+                        </button>
+                      );
+                    }
+                    return (
+                      <div 
+                        key={idx} 
+                        className="w-11 h-11 rounded-lg flex items-center justify-center text-lg select-none border transition-all duration-300 bg-black/40 border-dashed border-white/[0.06] text-zinc-700"
+                        title="Empty Slot"
+                      >
+                        <span className="text-[10px] font-mono font-light opacity-30">?</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
 
-              <p className={`narrative-line ${maxActiveReached >= 3 ? "active" : ""}`}>
-                ...only to be buried by a low-effort clone backed by purchased hype.
-              </p>
-
-              <p className={`narrative-line ${maxActiveReached >= 4 ? "active" : ""}`}>
-                Genuine, actionable feedback from real creators? Drowned out.
-              </p>
-
-              <p className={`narrative-line ${maxActiveReached >= 5 ? "active" : ""}`}>
-                We aren't claiming to eradicate 100% of manipulation.
-              </p>
-
-              <p className={`narrative-line ${maxActiveReached >= 6 ? "active" : ""}`}>
-                But we can drastically minimize it through transparent, critique-locked duels.
-              </p>
-
-              <p className={`narrative-line ${maxActiveReached >= 7 ? "active" : ""}`}>
-                <span className="text-[#d97706] font-pixel">Write your peer review</span>, and let the authentic community decide.
+        {/* THE HALL OF VALOR — HISTORIC CHAMPIONS */}
+        <section id="champions-section" className="py-20 md:py-28 border-t border-white/[0.05]">
+          <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="text-left">
+              <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
+                THE HALL OF VALOR
+              </h2>
+              <p className="text-xs text-zinc-500 mt-2">
+                Conquerors of the 1v1 arena who have secured eternal glory and completed their seasons.
               </p>
             </div>
           </div>
 
-          {/* Smooth seamless transition boundary */}
-        </div>
-      </section>
+          {pastChampions && pastChampions.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {pastChampions.map((c, idx) => (
+                <div 
+                  key={c.id} 
+                  className="p-5 border border-white/[0.06] bg-[#09090b]/80 rounded-md hover:border-white/[0.15] hover:-translate-y-1 hover:bg-[#0c0c0f]/95 hover:shadow-[0_4px_20px_rgba(255,255,255,0.02)] transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex justify-between items-center mb-3">
+                      <span className="text-2xl flex items-center justify-center">
+                        {renderLogo(c.logo, "w-8 h-8")}
+                      </span>
+                      <span className="border border-white/[0.08] text-[9px] font-mono px-2 py-0.5 uppercase bg-white/[0.04] text-zinc-300 rounded tracking-wider">
+                        SEASON {String(idx + 1).padStart(2, "0")}
+                      </span>
+                    </div>
+                    <a 
+                      href={`/reviews/${c.id}`}
+                      className="font-sans text-xs hover:underline uppercase block mb-1 text-white font-semibold tracking-wide hover:text-[#ffbe18] transition"
+                    >
+                      {c.title}
+                    </a>
+                    <p className="text-[10px] leading-relaxed line-clamp-2 mb-4 text-zinc-400 font-sans">{c.tagline}</p>
+                  </div>
+                  
+                  <div className="flex items-center justify-between border-t border-white/[0.06] pt-3.5 text-[10px] font-mono text-zinc-400">
+                    <div className="flex items-center space-x-2">
+                      <img src={c.makerAvatar} alt="Maker" className="w-5 h-5 border border-white/[0.08] rounded-md shrink-0" />
+                      <a 
+                        href={`https://x.com/${c.makerTwitter.replace(/^@/, "")}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="hover:underline font-semibold text-zinc-400 hover:text-white"
+                      >
+                        {c.makerTwitter}
+                      </a>
+                    </div>
+                    <a 
+                      href={c.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[10px] uppercase font-mono underline text-white hover:text-zinc-300 transition-colors"
+                    >
+                      DEMO
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="border border-dashed border-white/[0.06] bg-[#070709]/30 rounded-md p-16 text-center text-zinc-500 font-mono text-xs max-w-xl mx-auto flex flex-col items-center justify-center space-y-3">
+              <svg className="w-8 h-8 text-zinc-650 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+              </svg>
+              <span>[ NO CHAMPION HAS CONQUERED THE ARENA YET ]</span>
+              <span className="text-[10px] text-zinc-600">Be the first to claim eternal glory and enter the Hall of Valor!</span>
+            </div>
+          )}
+        </section>
 
-      {/* ========================================================
-          ACT 3: HOW IT WORKS — STAGGERED REVEAL MECHANISM
-         ======================================================== */}
-      <section 
-        ref={stepsRef} 
-        className="relative bg-[#0f0e0d] py-32 border-b-4 border-pixel noise-overlay" 
-        style={{
-          backgroundImage: "radial-gradient(circle at center, rgba(217, 119, 6, 0.04) 0%, transparent 70%)"
-        }}
-      >
-        <div className="max-w-7xl mx-auto px-6 sm:px-12 relative z-10">
-          
-          {/* Header */}
-          <div className="text-center max-w-xl mx-auto mb-20">
-            <span className="font-pixel text-[#d97706] text-3xs uppercase tracking-widest bg-[#181715] border border-stone-800 px-3 py-1 inline-block mb-4">
-              RULES OF ENGAGEMENT // MECHANICS OF THE DUEL
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-pixel uppercase tracking-tight text-[#faf5ef]">
-              How it Works
+        {/* HOW IT WORKS SECTION */}
+        <section id="how-it-works-section" className="py-16 border-t border-white/[0.05]">
+          <div className="mb-12">
+            <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
+              HOW IT WORKS
             </h2>
-            <p className="text-xs sm:text-sm text-stone-400 mt-4 leading-relaxed font-sans">
+            <p className="text-xs text-zinc-500 mt-2 font-sans">
               Here, victory isn't bought with upvotes. It is earned through authentic, peer-reviewed execution.
             </p>
           </div>
 
-          {/* Cards Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
-            <div className={`step-card p-8 border-2 border-pixel bg-[#181715]/60 backdrop-blur-xs flex flex-col justify-between shadow-pixel ${
-              stepsRevealed ? "revealed" : ""
-            }`}>
+            {/* Step 1 */}
+            <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-all duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl sm:text-5xl font-pixel text-[#d97706] step-number">01</span>
-                  <span className="text-stone-500 font-mono text-3xs">STEP_01</span>
+                  <span className="text-4xl font-extrabold font-mono text-zinc-700">01</span>
+                  <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_01</span>
                 </div>
-                <h3 className="font-pixel text-xs text-[#faf5ef] uppercase mb-4 tracking-wide">
-                  Submit & Queue
+                <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
+                  SUBMIT & QUEUE
                 </h3>
-                <p className="text-xs text-stone-400 leading-relaxed font-sans">
-                  Submit your indie product for free. Provide a live demo URL and maker credentials to stand by in the staging area for matching.
+                <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
+                  Submit your project for free. Once registered, head over to "My Console" to queue it for the 1v1 Arena matchmaking.
                 </p>
               </div>
-              <div className="mt-8 border-t border-stone-800 pt-4 text-3xs font-mono text-stone-500">
+              <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
                 [ STAGE_1 : $0 FEE ]
               </div>
             </div>
 
-            <div className={`step-card p-8 border-2 border-pixel bg-[#181715]/60 backdrop-blur-xs flex flex-col justify-between shadow-pixel ${
-              stepsRevealed ? "revealed" : ""
-            }`}>
+            {/* Step 2 */}
+            <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-all duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl sm:text-5xl font-pixel text-[#d97706] step-number">02</span>
-                  <span className="text-stone-500 font-mono text-3xs">STEP_02</span>
+                  <span className="text-4xl font-extrabold font-mono text-zinc-700">02</span>
+                  <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_02</span>
                 </div>
-                <h3 className="font-pixel text-xs text-[#faf5ef] uppercase mb-4 tracking-wide">
-                  Critique-Locked Voting
+                <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
+                  CRITIQUE-LOCKED VOTING
                 </h3>
-                <p className="text-xs text-stone-400 leading-relaxed font-sans">
+                <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
                   No casual clicks. Every voter must connect via Google or GitHub and leave a constructive dual critique of 10+ characters. This friction drastically minimizes automated bot rigging and coordinate spamming.
                 </p>
               </div>
-              <div className="mt-8 border-t border-stone-800 pt-4 text-3xs font-mono text-[#d97706]">
+              <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-emerald-400 uppercase tracking-widest">
                 [ MINIMIZED MANIPULATION DESIGN ]
               </div>
             </div>
 
-            <div className={`step-card p-8 border-2 border-pixel bg-[#181715]/60 backdrop-blur-xs flex flex-col justify-between shadow-pixel ${
-              stepsRevealed ? "revealed" : ""
-            }`}>
+            {/* Step 3 */}
+            <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-all duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl sm:text-5xl font-pixel text-[#d97706] step-number">03</span>
-                  <span className="text-stone-500 font-mono text-3xs">STEP_03</span>
+                  <span className="text-4xl font-extrabold font-mono text-zinc-700">03</span>
+                  <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_03</span>
                 </div>
-                <h3 className="font-pixel text-xs text-[#faf5ef] uppercase mb-4 tracking-wide">
-                  Dual-Feedback Value
+                <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
+                  DUAL-FEEDBACK VALUE
                 </h3>
-                <p className="text-xs text-stone-400 leading-relaxed font-sans">
+                <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
                   Winners advance to the next bracket, but runners-up win where it matters: walking away with structured, highly valuable peer critiques. This feedback is 100x more valuable than empty clicks.
                 </p>
               </div>
-              <div className="mt-8 border-t border-stone-800 pt-4 text-3xs font-mono text-emerald-500">
+              <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-cyan-400 uppercase tracking-widest">
                 [ DUAL CRITIQUE FEEDBACK ]
               </div>
             </div>
 
           </div>
+        </section>
 
-        </div>
-      </section>
+      </main>
 
-      {/* ========================================================
-          ACT 4: TOURNAMENT & CAMPAIGN ARENA (Dashboard Fold)
-         ======================================================== */}
-      <section 
-        id="tournament-dashboard"
-        ref={dashboardRef}
-        className="w-full min-h-screen bg-[#11100f] text-[#faf5ef] relative z-10 border-b-4 border-pixel py-20 noise-overlay"
-        style={{
-          backgroundImage: "radial-gradient(circle at top, rgba(217, 119, 6, 0.06) 0%, transparent 60%), linear-gradient(to bottom, #11100f 0%, #0d0c0c 100%)",
-        }}
-      >
-        <div className={`max-w-7xl mx-auto px-6 sm:px-12 relative z-10 dashboard-card ${
-          dashRevealed ? "revealed" : ""
-        }`}>
-          
-          {/* Header */}
-          <div className="text-center max-w-xl mx-auto mb-16">
-            <span className="font-pixel text-[#d97706] text-3xs uppercase tracking-widest bg-[#181715] border border-stone-800 px-3 py-1 inline-block mb-4">
-              COMBAT ARENA // HEAD-TO-HEAD BRACKETS
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-pixel uppercase tracking-tight text-[#faf5ef]">
-              The Arena Standings
-            </h2>
-            <p className="text-xs sm:text-sm text-stone-400 mt-4 leading-relaxed font-sans">
-              Track tournament standings and live duels in real-time. Solo builders compete face-to-face, voted by real authenticated developers.
-            </p>
-          </div>
-
-          {/* 8-Bit Retro Tab Selector */}
-          <div className="flex justify-center space-x-4 mb-10">
-            <button
-              onClick={() => setActiveTab("duel")}
-              className={`btn-pixel py-2 px-6 text-xs font-pixel ${
-                activeTab === "duel" 
-                  ? "!bg-[#d97706] !text-white shadow-pixel-sm" 
-                  : "!bg-[#181715] !text-[#faf5ef] border-stone-700 hover:!bg-[#181715]/80"
-              }`}
-            >
-              ⚔️ LIVE COMBAT STAGE
-            </button>
-            <button
-              onClick={() => setActiveTab("leaderboard")}
-              className={`btn-pixel py-2 px-6 text-xs font-pixel ${
-                activeTab === "leaderboard" 
-                  ? "!bg-[#d97706] !text-white shadow-pixel-sm" 
-                  : "!bg-[#181715] !text-[#faf5ef] border-stone-700 hover:!bg-[#181715]/80"
-              }`}
-            >
-              🏆 COLOSEUM LEADERBOARD
-            </button>
-          </div>
-
-          {activeTab === "leaderboard" ? (
-            /* ========================================================
-                VIEW 3: Global Colosseum Leaderboard
-               ======================================================== */
-            <div className="bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel-lg p-6 sm:p-10 text-[#181715] animate-scale-in">
-              <div className="flex justify-between items-center mb-6 border-b-2 border-pixel pb-3">
-                <h3 className="font-pixel text-xs uppercase text-[#181715]">GLOBAL AP RANKINGS (SEASON {currentSeasonStr})</h3>
-                <span className="text-3xs font-pixel text-[#d97706]">ARENA POINTS = VOTES + (WINS * 150)</span>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b-2 border-pixel font-pixel text-4xs text-stone-500 uppercase tracking-widest bg-stone-100">
-                      <th className="py-3 px-4 w-16 text-center">Rank</th>
-                      <th className="py-3 px-4">Product</th>
-                      <th className="py-3 px-4 hidden md:table-cell">Maker</th>
-                      <th className="py-3 px-4 text-center hidden sm:table-cell">Wins</th>
-                      <th className="py-3 px-4 text-center">Votes</th>
-                      <th className="py-3 px-4 text-center">AP Score</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-250 font-mono text-2xs">
-                    {getLeaderboardData().map((p, idx) => {
-                      const isTop3 = idx < 3;
-                      const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}`;
-                      return (
-                        <tr key={p.id} className={`hover:bg-stone-50 transition-all ${isTop3 ? "bg-[#fdf2e9]/20 font-semibold" : ""}`}>
-                          <td className="py-3.5 px-4 text-center font-pixel text-xs text-[#d97706]">
-                            {medal}
-                          </td>
-                          <td className="py-3.5 px-4">
-                            <div className="flex items-center space-x-3">
-                              {renderLogo(p.logo, "w-6 h-6")}
-                              <div className="min-w-0">
-                                <a 
-                                  href={`/reviews/${p.id}`} 
-                                  className="font-pixel text-stone-900 hover:text-[#d97706] hover:underline block uppercase truncate"
-                                >
-                                  {p.title}
-                                </a>
-                                <span className="text-stone-400 font-sans text-3xs block truncate max-w-xs">{p.tagline}</span>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 hidden md:table-cell">
-                            <div className="flex items-center space-x-2">
-                              <img src={p.makerAvatar} alt="Maker" className="w-5 h-5 border border-pixel shrink-0" />
-                              <a 
-                                href={`https://x.com/${p.makerTwitter.replace(/^@/, "")}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-stone-600 hover:text-[#d97706] hover:underline truncate"
-                              >
-                                {p.makerTwitter}
-                              </a>
-                            </div>
-                          </td>
-                          <td className="py-3.5 px-4 text-center text-stone-600 hidden sm:table-cell font-pixel text-3xs">
-                            {p.wins || 0}W
-                          </td>
-                          <td className="py-3.5 px-4 text-center text-stone-600 font-pixel text-3xs">
-                            {p.bracketVotes || 0}P
-                          </td>
-                          <td className="py-3.5 px-4 text-center font-pixel text-3xs text-[#d97706]">
-                            {p.points} AP
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <>
-              {/* GLADIATOR DASHBOARD FOR COMPETITORS */}
-              {userLoggedIn && mockUserTwitter && (() => {
-                const myShips = getLeaderboardData().filter(p => isProductOwner(p, mockUserTwitter, userSupabaseId));
-                const archivedShips = products
-                  .filter(p => isProductOwner(p, mockUserTwitter, userSupabaseId))
-                  .map(p => {
-                    const activeMatch = getLeaderboardData().find(x => x.id === p.id);
-                    if (activeMatch) return activeMatch;
-                    return { ...p, wins: 0, bracketVotes: p.votesCount, points: p.votesCount } as any;
-                  });
-                
-                return (
-                  <div className="bg-[#181715]/90 border-2 border-[#d97706]/40 p-6 mb-8 text-[#faf5ef] shadow-pixel-md text-left">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-stone-850 pb-4 mb-4 gap-2">
-                      <div>
-                        <h3 className="font-pixel text-xs text-[#d97706] uppercase tracking-wider flex items-center gap-1.5">
-                          <span className="animate-pulse w-2 h-2 rounded-full bg-[#d97706]"></span>
-                          🛡️ COMPETITOR STANDING & CRITIQUES
-                        </h3>
-                        <p className="text-5xs font-pixel text-stone-500 uppercase mt-0.5 font-mono">
-                          Verified Handler: {mockUserTwitter}
-                        </p>
-                      </div>
-                      <span className="text-5xs font-mono text-stone-400 bg-stone-900 border border-stone-850 px-2 py-0.5 uppercase">
-                        GLADIATOR PORTAL ACTIVE
-                      </span>
-                    </div>
-
-                    {myShips.length === 0 ? (
-                      <div className="text-center py-4">
-                        <p className="text-4xs font-pixel text-stone-400 uppercase">
-                          No projects registered under your verified handle yet.
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setIsSubmitOpen(true)}
-                          className="mt-2 text-5xs font-pixel text-[#d97706] hover:underline uppercase cursor-pointer bg-transparent border-none p-0"
-                        >
-                          ⚔️ Submit your project to enter the waiting list now!
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {myShips.map(ship => {
-                          // Determine standing status
-                          let statusLabel = "⏳ QUEUED";
-                          let statusColor = "text-[#d97706] bg-[#d97706]/10 border-[#d97706]/35";
-                          let statusDesc = "Waiting in queue for the next tournament to start.";
-                          
-                          if (bracket) {
-                            const standing = getProductBracketStatus(ship.id);
-                            if (standing.status === "FIGHTING") {
-                              statusLabel = `⚔️ FIGHTING (R${standing.round})`;
-                              statusColor = "text-amber-500 bg-amber-500/10 border-amber-500/35";
-                              statusDesc = `Actively competing in Round ${standing.round} of the tournament.`;
-                            } else if (standing.status === "ADVANCED") {
-                              statusLabel = `🛡️ ADVANCED (R${standing.round})`;
-                              statusColor = "text-emerald-500 bg-emerald-500/10 border-emerald-500/35";
-                              statusDesc = `Successfully advanced through Round ${standing.round}!`;
-                            } else if (standing.status === "ELIMINATED") {
-                              statusLabel = `💀 ELIMINATED (R${standing.round})`;
-                              statusColor = "text-red-500 bg-red-500/10 border-red-500/35 animate-pulse";
-                              statusDesc = `Eliminated in Round ${standing.round}. Time to analyze peer advice!`;
-                            } else if (standing.status === "CHAMPION") {
-                              statusLabel = "🏆 ARENA CHAMPION";
-                              statusColor = "text-yellow-400 bg-yellow-400/10 border-yellow-400/35 animate-bounce";
-                              statusDesc = "The ultimate victor of the tournament! Hail the champion!";
-                            }
-                          }
-
-                          return (
-                            <div key={ship.id} className="p-4 bg-[#11100f] border border-stone-850 flex flex-col justify-between shadow-pixel-xs">
-                              <div>
-                                <div className="flex justify-between items-start mb-2">
-                                  <div className="flex items-center space-x-2">
-                                    {renderLogo(ship.logo, "w-6 h-6")}
-                                    <div>
-                                      <h4 className="font-pixel text-2xs uppercase text-[#faf5ef]">{ship.title}</h4>
-                                      <span className={`inline-block text-5xs font-pixel px-1.5 py-0.5 border uppercase ${statusColor} mt-1`}>
-                                        {statusLabel}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <p className="text-4xs text-stone-400 leading-relaxed font-sans mb-3 line-clamp-1">
-                                  {ship.tagline}
-                                </p>
-                                <p className="text-5xs font-mono text-stone-500 leading-relaxed italic mb-4">
-                                  💡 {statusDesc}
-                                </p>
-                              </div>
-
-                              <div className="border-t border-stone-900 pt-3 flex flex-wrap gap-2 justify-between items-center">
-                                <div className="text-5xs font-pixel text-stone-500 uppercase">
-                                  Votes: <span className="text-[#faf5ef] font-mono">{ship.bracketVotes || 0}</span> | Wins: <span className="text-[#faf5ef] font-mono font-bold">{ship.wins || 0}</span>
-                                </div>
-                                <div className="flex gap-2">
-                                  <a 
-                                    href={`/reviews/${ship.id}`} 
-                                    className="inline-flex items-center space-x-1.5 bg-[#faf5ef] border border-pixel text-stone-900 px-3 py-1 text-4xs font-pixel rounded-none hover:bg-[#fff9f2] transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
-                                  >
-                                    <span>🛡️ VIEW MY SEO REVIEW PAGE</span>
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleExportCritiquesCsv(ship)}
-                                    className="inline-flex items-center space-x-1.5 bg-[#d97706] border border-[#d97706] text-white px-3 py-1 text-4xs font-pixel rounded-none hover:bg-[#c25e00] hover:border-[#c25e00] transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
-                                    title="Export critiques as CSV"
-                                  >
-                                    <span>📥 EXPORT MY ARENA CRITIQUES (CSV)</span>
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Permanent Historical Archive Section */}
-                    <div className="border-t border-dashed border-stone-850 mt-6 pt-6 text-left">
-                      <h4 className="font-pixel text-4xs text-[#d97706] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                        📜 HISTORICAL ARCHIVES & CRITIQUE VAULT
-                      </h4>
-                      <p className="text-5xs font-sans text-stone-400 mb-4 leading-relaxed">
-                        Even after tournament slates are reset or 7-day rounds expire, your historical peer critiques are securely archived. Access and export your dual critiques at any time in the future.
-                      </p>
-                      {archivedShips.length === 0 ? (
-                        <p className="text-5xs font-mono text-stone-500 italic uppercase">
-                          No archived projects found in the colosseum records.
-                        </p>
-                      ) : (
-                        <div className="space-y-2.5">
-                          {archivedShips.map(ship => (
-                            <div key={`archived_${ship.id}`} className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-[#11100f] border border-[#d97706]/10 p-3 shadow-pixel-xs gap-3">
-                              <div className="flex items-center space-x-3">
-                                {renderLogo(ship.logo, "w-5 h-5")}
-                                <div>
-                                  <span className="font-pixel text-3xs uppercase block text-[#faf5ef]">{ship.title}</span>
-                                  <span className="text-5xs font-mono text-stone-500 uppercase">
-                                    Submitted: {new Date(ship.submittedAt).toLocaleDateString()} | Total AP Score: {ship.points || 0}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex gap-2 self-end sm:self-auto">
-                                <a 
-                                  href={`/reviews/${ship.id}`} 
-                                  className="inline-flex items-center space-x-1.5 bg-stone-900 border border-stone-800 text-stone-300 px-3 py-1 text-5xs font-pixel rounded-none hover:bg-stone-800 hover:text-white transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
-                                >
-                                  <span>🛡️ VIEW SEO PAGE</span>
-                                </a>
-                                <button
-                                  type="button"
-                                  onClick={() => handleExportCritiquesCsv(ship)}
-                                  className="inline-flex items-center space-x-1.5 bg-stone-900 border border-stone-800 text-stone-300 px-3 py-1 text-5xs font-pixel rounded-none hover:bg-stone-800 hover:text-white transition-all cursor-pointer font-bold uppercase shadow-pixel-xs"
-                                  title="Export archived critiques as CSV"
-                                >
-                                  <span>📥 DOWNLOAD CSV ARCHIVE</span>
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-
-                  </div>
-                );
-              })()}
-
-              {!bracket ? (
-                /* ========================================================
-                    WAITLIST QUEUE PREPARING SCREEN
-                   ======================================================== */
-                <>
-                  <div className="bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel-lg p-8 sm:p-12 mb-12 text-[#181715]">
-                  <div className="text-center max-w-xl mx-auto mb-12">
-                    <div className="inline-block relative w-36 h-36 mb-6">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle 
-                          cx="72" 
-                          cy="72" 
-                          r="62" 
-                          stroke="#d97706" 
-                          strokeWidth="10" 
-                          fill="transparent" 
-                          strokeDasharray={390}
-                          strokeDashoffset={390 - (390 * Math.min(waitingProducts.length, 16)) / 16}
-                          className="transition-all duration-1000 ease-out"
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col justify-center items-center">
-                        <span className="text-2xl font-pixel text-[#181715]">{waitingProducts.length} / 16</span>
-                        <span className="text-3xs font-pixel text-stone-400 uppercase tracking-widest mt-1">Ready</span>
-                      </div>
-                    </div>
-
-                    <h2 className="text-lg sm:text-xl font-pixel uppercase mb-3 text-[#181715]">Bracket No. 01 Preparing</h2>
-                    <p className="text-xs sm:text-sm text-stone-500 mb-8 max-w-md mx-auto leading-relaxed">
-                      Once 16 products are queued up, the double-elimination tournament generates automatically. Real developers link their Google or GitHub identities to cast double-critique votes and determine the champion!
-                    </p>
-
-                    <button 
-                      onClick={() => setIsSubmitOpen(true)}
-                      className="btn-pixel btn-pixel-primary px-8 py-3.5 text-xs tracking-wider"
-                    >
-                      Submit Project For Free (⚔️)
-                    </button>
-                  </div>
-
-                  {/* Product Gallery Waitlist */}
-                  <div>
-                    <div className="flex justify-between items-center mb-6 border-b-2 border-pixel pb-3">
-                      <h3 className="font-pixel text-xs uppercase text-stone-500">Waiting Room List ({waitingProducts.length})</h3>
-                      <span className="text-3xs font-pixel text-stone-450">Queue Index</span>
-                    </div>
-
-                    {waitingProducts.length === 0 ? (
-                      <div className="text-center py-10 font-mono text-stone-500 text-xs">
-                        [ No submissions in queue yet. Be the first to submit your product and claim your spot! ]
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {waitingProducts.map((p) => (
-                          <div key={p.id} className="p-5 border-2 border-pixel bg-[#faf5ef]/90 hover:bg-[#faf5ef] backdrop-blur-xs transition-all duration-200 flex flex-col justify-between shadow-pixel-sm">
-                            <div>
-                              <div className="flex justify-between items-start mb-3">
-                                {renderLogo(p.logo, "w-8 h-8")}
-                              </div>
-                              <a 
-                                href={`/reviews/${p.id}`} 
-                                className="font-pixel text-xs text-[#181715] hover:text-[#d97706] hover:underline mb-2 uppercase block"
-                              >
-                                {p.title}
-                              </a>
-                              <p className="text-xs text-stone-500 leading-relaxed mb-4 line-clamp-2">{p.tagline}</p>
-                            </div>
-
-                            <a 
-                              href={p.url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                            >
-                              <span>🌐 LIVE DEMO URL</span>
-                              <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                            </a>
-
-                            <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
-                              <div className="flex items-center space-x-2">
-                                <img src={p.makerAvatar} alt={p.makerName} className="w-5 h-5 border border-pixel" />
-                                <a 
-                                  href={`https://x.com/${p.makerTwitter.replace(/^@/, "")}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-3xs text-stone-500 font-mono font-semibold hover:text-[#d97706] hover:underline"
-                                >
-                                  {p.makerTwitter}
-                                </a>
-                              </div>
-                              <span className="text-3xs text-stone-400 font-mono">
-                                {new Date(p.submittedAt).toLocaleDateString()}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </>
-              ) : (
-                /* ========================================================
-                    VIEW 2: Tournament Live & Completed Stage (RECONSTRUCTED)
-                   ======================================================== */
-                <div className="space-y-10">
-                  
-                  {bracket.status === "preparing" ? (
-                    /* ========================================================
-                        A. NEW YORK TIME MIDNIGHT opening countdown
-                       ======================================================== */
-                    <>
-                      <div className="bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-8 sm:p-12 mb-12 text-[#181715] text-center max-w-2xl mx-auto">
-                        <div className="w-16 h-16 bg-amber-100 border-2 border-pixel rounded-none mx-auto flex items-center justify-center text-3xl mb-4 animate-pixel-bounce" style={{ borderColor: '#d97706' }}>
-                          ⏳
-                        </div>
-                        <h2 className="text-md sm:text-lg font-pixel uppercase mb-3 text-[#181715]">COMPETITORS ASSEMBLED</h2>
-                        <p className="text-xs text-stone-500 mb-6 leading-relaxed">
-                          The 16-competitor roster is fully assembled and locked! The double-elimination tournament is preparing to start automatically at the upcoming New York Time Midnight (0:00 EST/EDT).
-                        </p>
-                        <div className="p-4 bg-stone-900 border-2 border-[#d97706] text-[#faf5ef] font-mono text-xl sm:text-2xl font-black rounded-none shadow-pixel-sm tracking-wider inline-block">
-                          ⏱️ STARTING IN: {formatToHMS(countdownToMidnightMs)}
-                        </div>
-                        <div className="text-5xs font-pixel text-stone-400 mt-4 uppercase">
-                          New York Midnight Timezone Calibration Active (EST/EDT)
-                        </div>
-                      </div>
-
-                      {/* Waiting Room Gallery (LOCKED) */}
-                      <div>
-                        <div className="flex justify-between items-center mb-6 border-b-2 border-pixel pb-3">
-                          <h3 className="font-pixel text-xs uppercase text-stone-500">Waitlist Roster (LOCKED)</h3>
-                          <span className="text-4xs text-[#d97706] font-pixel">READY FOR ACTION</span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                          {products.slice(0, 16).map((p) => (
-                            <div key={p.id} className="p-5 border-2 border-pixel bg-[#faf5ef]/90 backdrop-blur-xs flex flex-col justify-between shadow-pixel-sm opacity-90">
-                              <div>
-                                <div className="flex justify-between items-start mb-3">
-                                  {renderLogo(p.logo, "w-8 h-8")}
-                                </div>
-                                <a 
-                                  href={`/reviews/${p.id}`} 
-                                  className="font-pixel text-xs text-[#181715] hover:text-[#d97706] hover:underline mb-2 uppercase block"
-                                >
-                                  {p.title}
-                                </a>
-                                <p className="text-xs text-stone-500 leading-relaxed mb-4 line-clamp-2">{p.tagline}</p>
-                              </div>
-
-                              <a 
-                                href={p.url} 
-                                target="_blank" 
-                                rel="noreferrer"
-                                className="mb-4 bg-[#faf5ef] border border-pixel p-2 text-3xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between shadow-pixel-xs uppercase font-semibold"
-                              >
-                                <span>🌐 LIVE DEMO URL</span>
-                                <span className="text-4xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                              </a>
-
-                              <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
-                                <div className="flex items-center space-x-2">
-                                  <img src={p.makerAvatar} alt={p.makerName} className="w-5 h-5 border border-pixel" />
-                                  <a 
-                                    href={`https://x.com/${p.makerTwitter.replace(/^@/, "")}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="text-3xs text-stone-500 font-mono font-semibold hover:text-[#d97706] hover:underline"
-                                  >
-                                    {p.makerTwitter}
-                                  </a>
-                                </div>
-                                <span className="text-3xs text-stone-400 font-mono">
-                                  {new Date(p.submittedAt).toLocaleDateString()}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    /* ========================================================
-                        B. COMBAT ACTIVE STAGE
-                       ======================================================== */
-                    <>
-                      {/* High-fidelity 3-2-1-1 active schedule timeline pipeline */}
-                      <div className="flex flex-col md:flex-row justify-between items-center bg-[#181715] border border-pixel p-3 mb-6 font-pixel text-4xs text-[#faf5ef] shadow-pixel-sm">
-                        <div className="flex flex-wrap gap-2 items-center">
-                          <span className={`px-2 py-0.5 border ${activeRoundNum === 1 ? "bg-[#d97706] text-white border-pixel" : "border-stone-850 text-stone-500"}`}>
-                            R1: 16-TEAMS (3 DAYS)
-                          </span>
-                          <span className="text-stone-700">➔</span>
-                          <span className={`px-2 py-0.5 border ${activeRoundNum === 2 ? "bg-[#d97706] text-white border-pixel" : "border-stone-850 text-stone-500"}`}>
-                            R2: QUARTERS (2 DAYS)
-                          </span>
-                          <span className="text-stone-700">➔</span>
-                          <span className={`px-2 py-0.5 border ${activeRoundNum === 3 ? "bg-[#d97706] text-white border-pixel" : "border-stone-850 text-stone-500"}`}>
-                            R3: SEMIS (1 DAY)
-                          </span>
-                          <span className="text-stone-700">➔</span>
-                          <span className={`px-2 py-0.5 border ${activeRoundNum === 4 ? "bg-[#d97706] text-white border-pixel" : "border-stone-850 text-stone-500"}`}>
-                            R4: FINALS (1 DAY)
-                          </span>
-                        </div>
-                        <div className="mt-3 md:mt-0 bg-[#dc2626]/10 border border-[#dc2626]/40 text-[#dc2626] font-mono px-3 py-1 font-bold animate-pulse">
-                          ⏱️ ROUND {activeRoundNum} REMAINING: {formatDuration(activeRoundRemainingMs)}
-                        </div>
-                      </div>
-
-                      {/* Top Status Alert Bar */}
-                      <div className="bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel-lg p-4 flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0 text-[#181715]">
-                        <div className="flex items-center space-x-3">
-                          <span className="w-3 h-3 bg-red-600 inline-block border border-pixel animate-pulse"></span>
-                          <span className="font-pixel uppercase text-xs text-[#181715]">
-                            {bracket.status === "completed" 
-                              ? "✨ Tournament Finished — Champion Declared!" 
-                              : `Active Duel Matchups — Round ${activeRoundNum} [${
-                                  activeRoundNum === 1 ? "Round of 16" : 
-                                  activeRoundNum === 2 ? "Quarterfinals" : 
-                                  activeRoundNum === 3 ? "Semifinals" : "Grand Finals"
-                                }]`}
-                          </span>
-                        </div>
-
-                      </div>
-
-                  {/* ACTIVE 1V1 DUEL MATCHUP STAGE CARD */}
-                  {activeMatch ? (
-                    <div className="bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-6 sm:p-10 text-[#181715]">
-                      <div className="flex justify-between items-center mb-8 border-b-2 border-pixel pb-3">
-                        <span className="font-pixel text-xs text-[#181715]">⚔️ LIVE ARENA STAGE FEATURING MATCH {activeMatch.id}</span>
-                        <span className="font-pixel text-3xs text-[#d97706]">ROUND {activeMatch.roundNumber}</span>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-5 gap-8 items-center">
-                        
-                        {/* PRODUCT A (Left Fighter) */}
-                        <div className="md:col-span-2 p-5 border-2 border-pixel bg-stone-50 flex flex-col justify-between min-h-[220px]">
-                          <div>
-                            <div className="flex justify-between items-start mb-3">
-                              {renderLogo(activeMatch.productA.logo, "w-10 h-10")}
-                            </div>
-                            <a 
-                              href={`/reviews/${activeMatch.productA.id}`} 
-                              className="font-pixel text-sm text-stone-900 hover:text-[#d97706] hover:underline block uppercase mb-1"
-                            >
-                              {activeMatch.productA.title}
-                            </a>
-                            <p className="text-3xs text-stone-500 font-sans leading-relaxed mb-4">{activeMatch.productA.tagline}</p>
-                          </div>
-
-                          <div className="flex flex-col space-y-3">
-                            <a 
-                              href={activeMatch.productA.url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
-                            >
-                              <span>🌐 LIVE DEMO URL</span>
-                              <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                            </a>
-
-                            <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
-                              <div className="flex items-center space-x-2">
-                                <img src={activeMatch.productA.makerAvatar} alt="Maker" className="w-5 h-5 border border-pixel shrink-0" />
-                                <a 
-                                  href={`https://x.com/${activeMatch.productA.makerTwitter.replace(/^@/, "")}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-4xs text-stone-500 font-mono font-semibold hover:text-[#d97706] hover:underline"
-                                >
-                                  {activeMatch.productA.makerTwitter}
-                                </a>
-                              </div>
-                              <span className="text-4xs font-pixel text-stone-400">MAKER</span>
-                            </div>
-                          </div>
-
-                          {/* Vote Trigger Button */}
-                          {bracket.status === "active" && !activeMatch.winnerId && (
-                            <button
-                              onClick={() => {
-                                setVotingMatch(activeMatch);
-                                setVotingTarget(activeMatch.productA);
-                              }}
-                              className="btn-pixel btn-pixel-primary py-2 w-full text-3xs font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border border-pixel mt-4"
-                            >
-                              VOTE FOR {activeMatch.productA.title} (🗡️)
-                            </button>
-                          )}
-                        </div>
-
-                        {/* VS MIDDLE BAR (Tug of war & Sword clash emoji) */}
-                        <div className="md:col-span-1 flex flex-col items-center justify-center space-y-4">
-                          <span className={`text-3xl filter drop-shadow-md select-none ${isSwordsClashing ? "animate-pixel-bounce scale-125" : ""}`}>
-                            ⚔️
-                          </span>
-                          
-                          {/* Tug of war health bar */}
-                          <div className="w-full bg-stone-250 border border-pixel h-4 rounded-none overflow-hidden flex relative shadow-pixel-xs">
-                            <div 
-                              className="bg-red-650 h-full transition-all duration-300"
-                              style={{ width: `${getPercentages(activeMatch).pctA}%` }}
-                            />
-                            <div 
-                              className="bg-blue-650 h-full transition-all duration-300 flex-1"
-                            />
-                          </div>
-
-                          {/* Score labels */}
-                          <div className="flex justify-between w-full font-pixel text-4xs text-stone-500 mb-1">
-                            <span>{getPercentages(activeMatch).pctA}% ({activeMatch.votesA}P)</span>
-                            <span>{getPercentages(activeMatch).pctB}% ({activeMatch.votesB}P)</span>
-                          </div>
-                          
-                          <a 
-                            href={`/versus/${activeMatch.productA.id}-vs-${activeMatch.productB.id}`}
-                            className="text-[9px] font-pixel text-[#d97706] hover:underline uppercase block text-center mt-1 animate-pulse"
-                          >
-                            ⚔️ View Dynamic Duel Page
-                          </a>
-
-                          {activeMatch.winnerId && (
-                            <div className="bg-emerald-50 border border-emerald-300 text-emerald-700 px-3 py-1 text-4xs font-pixel uppercase shadow-pixel-xs mt-2">
-                              🛡️ WINNER: {
-                                activeMatch.winnerId === activeMatch.productA.id 
-                                  ? activeMatch.productA.title 
-                                  : activeMatch.productB.title
-                              }
-                            </div>
-                          )}
-                        </div>
-
-                        {/* PRODUCT B (Right Fighter) */}
-                        <div className="md:col-span-2 p-5 border-2 border-pixel bg-stone-50 flex flex-col justify-between min-h-[220px]">
-                          <div>
-                            <div className="flex justify-between items-start mb-3">
-                              {renderLogo(activeMatch.productB.logo, "w-10 h-10")}
-                            </div>
-                            <a 
-                              href={`/reviews/${activeMatch.productB.id}`} 
-                              className="font-pixel text-sm text-stone-900 hover:text-[#d97706] hover:underline block uppercase mb-1"
-                            >
-                              {activeMatch.productB.title}
-                            </a>
-                            <p className="text-3xs text-stone-500 font-sans leading-relaxed mb-4">{activeMatch.productB.tagline}</p>
-                          </div>
-
-                          <div className="flex flex-col space-y-3">
-                            <a 
-                              href={activeMatch.productB.url} 
-                              target="_blank" 
-                              rel="noreferrer"
-                              className="bg-[#faf5ef] border border-pixel p-1.5 text-4xs font-mono text-stone-700 hover:bg-[#fdf2e9] hover:border-[#d97706] transition-all flex items-center justify-between uppercase font-semibold"
-                            >
-                              <span>🌐 LIVE DEMO URL</span>
-                              <span className="text-5xs text-[#d97706] underline font-pixel">view demo ➔</span>
-                            </a>
-
-                            <div className="flex justify-between items-center border-t border-dashed border-stone-300 pt-3">
-                              <div className="flex items-center space-x-2">
-                                <img src={activeMatch.productB.makerAvatar} alt="Maker" className="w-5 h-5 border border-pixel shrink-0" />
-                                <a 
-                                  href={`https://x.com/${activeMatch.productB.makerTwitter.replace(/^@/, "")}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-4xs text-stone-500 font-mono font-semibold hover:text-[#d97706] hover:underline"
-                                >
-                                  {activeMatch.productB.makerTwitter}
-                                </a>
-                              </div>
-                              <span className="text-4xs font-pixel text-stone-400">MAKER</span>
-                            </div>
-                          </div>
-
-                          {/* Vote Trigger Button */}
-                          {bracket.status === "active" && !activeMatch.winnerId && (
-                            <button
-                              onClick={() => {
-                                setVotingMatch(activeMatch);
-                                setVotingTarget(activeMatch.productB);
-                              }}
-                              className="btn-pixel btn-pixel-primary py-2 w-full text-3xs font-pixel bg-stone-900 hover:bg-stone-850 text-white border border-pixel mt-4"
-                            >
-                              VOTE FOR {activeMatch.productB.title} (🗡️)
-                            </button>
-                          )}
-                        </div>
-
-                      </div>
-                    </div>
-                  ) : bracket.status === "completed" && bracket.winner ? (
-                    /* GORGEOUS CHAMPION CARD */
-                    <div className="bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-8 sm:p-12 text-[#181715] text-center max-w-3xl mx-auto relative overflow-hidden" style={{ borderColor: '#d97706' }}>
-                      
-                      {/* Golden decorative elements */}
-                      <div className="absolute top-0 inset-x-0 h-2 bg-gradient-to-r from-amber-300 via-[#d97706] to-amber-300" />
-                      <div className="absolute -top-10 -right-10 w-24 h-24 bg-amber-50 rotate-45 border border-dashed border-amber-300 pointer-events-none" />
-                      <div className="absolute -top-10 -left-10 w-24 h-24 bg-amber-50 -rotate-45 border border-dashed border-amber-300 pointer-events-none" />
-
-                      {/* Header Badge */}
-                      <div className="inline-flex items-center space-x-2 bg-amber-50 border border-amber-300 text-[#d97706] font-pixel text-3xs px-4 py-1.5 uppercase mb-6 shadow-pixel-xs animate-pixel-bounce">
-                        <span>🏆</span> <span>SEASON {currentSeasonStr} COLOSEUM CHAMPION</span> <span>🏆</span>
-                      </div>
-
-                      {/* Winner Info */}
-                      <h2 className="text-4xl sm:text-5xl font-sans font-black tracking-tighter leading-none text-[#181715] uppercase mb-4 flex items-center justify-center flex-wrap gap-2">
-                        {renderLogo(bracket.winner.logo, "w-12 h-12")}
-                        <span>{bracket.winner.title}</span>
-                        {renderLogo(bracket.winner.logo, "w-12 h-12")}
-                      </h2>
-                      <p className="text-stone-500 font-sans text-xs max-w-lg mx-auto mb-8 font-semibold">
-                        {bracket.winner.tagline}
-                      </p>
-
-                      {/* Maker Spotlight Card */}
-                      <div className="max-w-md mx-auto p-5 border-2 border-pixel bg-stone-50 shadow-pixel-sm mb-8">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-3 text-left">
-                            <img src={bracket.winner.makerAvatar} alt="Maker" className="w-12 h-12 border border-pixel" />
-                            <div>
-                              <span className="text-4xs font-pixel text-stone-400 block">ARENA CONQUEROR</span>
-                              <span className="text-sm font-sans font-extrabold text-stone-850 block">{bracket.winner.makerName}</span>
-                            </div>
-                          </div>
-                          
-                          <a 
-                            href={`https://x.com/${bracket.winner.makerTwitter.replace(/^@/, "")}`}
-                            target="_blank" 
-                            rel="noreferrer"
-                            className="btn-pixel !py-1.5 !px-3 text-4xs bg-stone-900 text-white font-pixel hover:!bg-[#d97706]"
-                          >
-                            FOLLOW {bracket.winner.makerTwitter} ➔
-                          </a>
-                        </div>
-                      </div>
-
-                      {/* Runner-up Recognition */}
-                      {(() => {
-                        const r4Match = bracket.round4[0];
-                        const runnerUp = r4Match 
-                          ? (r4Match.winnerId === r4Match.productA.id ? r4Match.productB : r4Match.productA) 
-                          : null;
-                        if (!runnerUp) return null;
-                        return (
-                          <div className="text-3xs font-mono text-stone-500 uppercase mb-8">
-                            🥈 HONORABLE RUNNER-UP: <span className="font-pixel text-[#181715] inline-flex items-center">{renderLogo(runnerUp.logo, "w-4 h-4 mr-1")} {runnerUp.title}</span> BY <span className="text-stone-700 font-semibold">{runnerUp.makerTwitter}</span>
-                          </div>
-                        );
-                      })()}
-
-                      {/* CTAs */}
-                      <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
-                        <a 
-                          href={bracket.winner.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn-pixel btn-pixel-primary py-3.5 px-8 text-xs tracking-wider shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel bg-[#d97706] hover:bg-[#c25e00] text-white border-2 border-[#181715]"
-                        >
-                          🌐 EXPLORE CHAMPION DEMO URL ➔
-                        </a>
-                        
-                        <button 
-                          onClick={handleReset}
-                          className="btn-pixel py-3.5 px-8 text-xs tracking-wider font-pixel bg-stone-900 hover:bg-stone-800 text-white border-2 border-pixel shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all"
-                        >
-                          🔄 START NEW TOURNAMENT (RESET SLATE)
-                        </button>
-                      </div>
-
-                    </div>
-                  ) : null}
-
-                  {/* VISUAL BRACKET TREE DISPLAY */}
-                  <div className="bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel-lg p-6 sm:p-10 text-[#181715]">
-                    <div className="flex justify-between items-center mb-6 border-b-2 border-pixel pb-3">
-                      <h3 className="font-pixel text-xs uppercase text-stone-500">🏆 COMPLETE TOURNAMENT BRACKET</h3>
-                      <span className="text-4xs font-pixel text-stone-400">CLICK ANY UNRESOLVED DUEL MATCHUP TO VOTE</span>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6">
-                      
-                      {/* ROUND 1: ROUND OF 16 */}
-                      <div className="space-y-4">
-                        <div className="bg-stone-100 border border-pixel p-1.5 text-center text-4xs font-pixel text-stone-600 uppercase">
-                          Round of 16 (R1)
-                        </div>
-                        {bracket.round1.map(m => (
-                          <div 
-                            key={m.id} 
-                            onClick={() => setActiveMatch(m)}
-                            className={`p-3 border-2 border-pixel text-4xs font-mono cursor-pointer transition-all hover:bg-stone-100 ${
-                              activeMatch?.id === m.id ? "bg-[#fdf2e9] border-[#d97706]" : "bg-white"
-                            }`}
-                          >
-                            <div className="flex justify-between font-semibold">
-                              <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
-                              </span>
-                              <span>{m.votesA}</span>
-                            </div>
-                            <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
-                            <div className="flex justify-between font-semibold">
-                              <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
-                              </span>
-                              <span>{m.votesB}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* ROUND 2: QUARTERFINALS */}
-                      <div className="space-y-4">
-                        <div className="bg-stone-100 border border-pixel p-1.5 text-center text-4xs font-pixel text-stone-600 uppercase">
-                          Quarterfinals (R2)
-                        </div>
-                        {bracket.round2.length === 0 ? (
-                          <div className="text-center py-20 text-stone-400 font-pixel text-5xs">[ WAITING FOR R1 ]</div>
-                        ) : (
-                          bracket.round2.map(m => (
-                            <div 
-                              key={m.id} 
-                              onClick={() => setActiveMatch(m)}
-                              className={`p-3 border-2 border-pixel text-4xs font-mono cursor-pointer transition-all hover:bg-stone-100 ${
-                                activeMatch?.id === m.id ? "bg-[#fdf2e9] border-[#d97706]" : "bg-white"
-                              }`}
-                            >
-                              <div className="flex justify-between font-semibold">
-                                <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                  {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
-                                </span>
-                                <span>{m.votesA}</span>
-                              </div>
-                              <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
-                              <div className="flex justify-between font-semibold">
-                                <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                  {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
-                                </span>
-                                <span>{m.votesB}</span>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                      {/* ROUND 3: SEMIFINALS */}
-                      <div className="space-y-4">
-                        <div className="bg-stone-100 border border-pixel p-1.5 text-center text-4xs font-pixel text-stone-600 uppercase">
-                          Semifinals (R3)
-                        </div>
-                        {bracket.round3.length === 0 ? (
-                          <div className="text-center py-20 text-stone-400 font-pixel text-5xs">[ WAITING FOR R2 ]</div>
-                        ) : (
-                          bracket.round3.map(m => (
-                            <div 
-                              key={m.id} 
-                              onClick={() => setActiveMatch(m)}
-                              className={`p-3 border-2 border-pixel text-4xs font-mono cursor-pointer transition-all hover:bg-stone-100 ${
-                                activeMatch?.id === m.id ? "bg-[#fdf2e9] border-[#d97706]" : "bg-white"
-                              }`}
-                            >
-                              <div className="flex justify-between font-semibold">
-                                <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                  {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
-                                </span>
-                                <span>{m.votesA}</span>
-                              </div>
-                              <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
-                              <div className="flex justify-between font-semibold">
-                                <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                  {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
-                                </span>
-                                <span>{m.votesB}</span>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                      {/* ROUND 4: GRAND FINALS */}
-                      <div className="space-y-4">
-                        <div className="bg-stone-100 border border-pixel p-1.5 text-center text-4xs font-pixel text-stone-600 uppercase">
-                          Grand Finals (R4)
-                        </div>
-                        {bracket.round4.length === 0 ? (
-                          <div className="text-center py-20 text-stone-400 font-pixel text-5xs">[ WAITING FOR R3 ]</div>
-                        ) : (
-                          bracket.round4.map(m => (
-                            <div 
-                              key={m.id} 
-                              onClick={() => setActiveMatch(m)}
-                              className={`p-3 border-2 border-pixel text-4xs font-mono cursor-pointer transition-all hover:bg-stone-100 ${
-                                activeMatch?.id === m.id ? "bg-[#fdf2e9] border-[#d97706]" : "bg-white"
-                              }`}
-                            >
-                              <div className="flex justify-between font-semibold">
-                                <span className={`inline-flex items-center ${m.winnerId === m.productA.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                  {renderLogo(m.productA.logo, "w-4 h-4 mr-1")} {m.productA.title}
-                                </span>
-                                <span>{m.votesA}</span>
-                              </div>
-                              <div className="text-center font-pixel text-5xs text-stone-400 my-1">vs</div>
-                              <div className="flex justify-between font-semibold">
-                                <span className={`inline-flex items-center ${m.winnerId === m.productB.id ? "text-emerald-700 font-bold" : m.winnerId ? "text-stone-400 line-through" : ""}`}>
-                                  {renderLogo(m.productB.logo, "w-4 h-4 mr-1")} {m.productB.title}
-                                </span>
-                                <span>{m.votesB}</span>
-                              </div>
-                            </div>
-                          ))
-                        )}
-                      </div>
-
-                    </div>
-                  </div>
-                </>)}
-                </div>
-              )}
-            </>
-          )}
-
-        </div>
-      </section>
-
-
-
-      {/* Premium Footer with Creator Credit and Policy Links */}
-      <footer className="w-full bg-[#0c0c0b] border-t border-stone-900 py-10 px-6 max-w-7xl mx-auto z-10 relative select-none text-center">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="text-3xs font-mono text-stone-500 uppercase tracking-widest">
-            © {new Date().getFullYear()} THE ARENA. All Rights Reserved.
-          </div>
-          <div className="flex items-center space-x-2 text-3xs font-pixel uppercase">
-            <span className="text-stone-400">Created by</span>
+      <footer className="border-t border-white/[0.05] bg-[#070709]/40 py-12 mt-20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-zinc-500 text-xs">
+          <div className="flex items-center space-x-1.5 font-mono">
+            <span>© {new Date().getFullYear()} Indie Clash.</span>
+            <span>Created by</span>
             <a 
               href="https://x.com/MaberFate" 
               target="_blank" 
-              rel="noreferrer"
-              className="text-[#d97706] hover:underline font-bold"
+              rel="noreferrer" 
+              className="text-white hover:underline hover:text-amber-400 transition"
             >
-              @MaberFate
+              Vesper
             </a>
           </div>
-          <div className="flex space-x-6 text-3xs font-mono uppercase">
+          <div className="flex items-center gap-6 font-medium">
             <button 
-              onClick={() => setIsPrivacyOpen(true)}
-              className="text-stone-500 hover:text-stone-300 transition-all cursor-pointer hover:underline bg-transparent border-none p-0"
+              onClick={() => setIsPrivacyOpen(true)} 
+              className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
             >
               Privacy Policy
             </button>
             <button 
-              onClick={() => setIsTermsOpen(true)}
-              className="text-stone-500 hover:text-stone-300 transition-all cursor-pointer hover:underline bg-transparent border-none p-0"
+              onClick={() => setIsTermsOpen(true)} 
+              className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
             >
               Terms of Use
             </button>
+            <a 
+              href="mailto:support@maber.xyz" 
+              className="hover:text-white transition"
+            >
+              Contact Support
+            </a>
           </div>
         </div>
       </footer>
-
-      </div>
+        </>
+      )}
 
       {/* ========================================================
           Tactile Slide-over Drawer for new submissions
          ======================================================== */}
       {isSubmitOpen && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs animate-fade-in">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="fixed inset-0" 
+            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
             onClick={() => setIsSubmitOpen(false)}
           />
-          <div className="relative w-full max-w-md h-full bg-[#131312]/95 backdrop-blur-md border-l border-stone-850 shadow-2xl p-6 sm:p-10 flex flex-col justify-between overflow-y-auto animate-slide-in text-[#faf5ef]">
-            <div>
-              <div className="flex justify-between items-center mb-8 border-b border-stone-850 pb-4">
-                <h2 className="text-base sm:text-lg font-pixel uppercase text-[#faf5ef]">SUBMIT_PROJECT</h2>
-                <button 
-                  onClick={() => setIsSubmitOpen(false)}
-                  className="text-stone-400 hover:text-stone-200 text-xl font-bold font-mono transition-all cursor-pointer"
-                >
-                  ✕
-                </button>
-              </div>
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
+            <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
+              <h3 className="text-sm font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
+                <PlusIcon className="w-4 h-4 text-[#A78BFA]" /> SUBMIT PROJECT
+              </h3>
+              <button 
+                onClick={() => setIsSubmitOpen(false)}
+                className="text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-              {/* Functional Dual Google & GitHub Auth Card inside Submit Drawer */}
-              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex flex-col gap-3 shadow-pixel-sm mb-6 rounded-lg text-left">
-                <div className="flex items-center space-x-3">
-                  <span className="w-8 h-8 bg-stone-900 border border-stone-800 flex items-center justify-center text-sm font-pixel rounded-md">
-                    {userAuthType === "github" ? "🐙" : "🔑"}
-                  </span>
-                  <div>
-                    <span className="text-3xs font-pixel block text-stone-400">IDENTITY VERIFICATION</span>
-                    {userLoggedIn ? (
-                      <span className="text-3xs font-pixel text-[#d97706]">
-                        {mockUserTwitter} <span className="text-stone-400 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
-                      </span>
-                    ) : (
-                      <span className="text-3xs text-red-500 font-pixel uppercase font-bold">Unverified</span>
-                    )}
-                  </div>
+            <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+              Enlist your product launch. Once verified and 16 entries are queued, matches generate automatically.
+            </p>
+
+            {/* Auth Status Segment */}
+            <div className="p-4 bg-[#141417] border border-white/[0.06] rounded-md flex flex-col gap-3 text-left">
+              <div className="flex items-center space-x-3">
+                <span className="w-8 h-8 bg-[#0b0b0d] border border-white/[0.06] flex items-center justify-center text-sm rounded-md">
+                  {userAuthType === "github" ? "🐙" : "🔑"}
+                </span>
+                <div>
+                  <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block">IDENTITY VERIFICATION</span>
+                  {userLoggedIn ? (
+                    <span className="text-xs font-semibold text-white">
+                      {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
+                    </span>
+                  ) : (
+                    <span className="text-xs text-red-500 font-bold uppercase">Unverified</span>
+                  )}
                 </div>
-                {!userLoggedIn ? (
-                  <div className="flex gap-2 w-full">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempAuthType("google");
-                        setIsAuthOpen(true);
-                      }}
-                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
-                    >
-                      Link Google
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setTempAuthType("github");
-                        setIsAuthOpen(true);
-                      }}
-                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
-                    >
-                      Link GitHub
-                    </button>
-                  </div>
-                ) : (
+              </div>
+              {!userLoggedIn ? (
+                <div className="flex gap-2 w-full">
                   <button
                     type="button"
-                    onClick={handleLogout}
-                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer self-start"
+                    onClick={() => {
+                      setTempAuthType("google");
+                      setIsAuthOpen(true);
+                    }}
+                    className="flex-1 py-1.5 px-3 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
                   >
-                    Disconnect
+                    Link Google
                   </button>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTempAuthType("github");
+                      setIsAuthOpen(true);
+                    }}
+                    className="flex-1 py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
+                  >
+                    Link GitHub
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="text-zinc-400 hover:text-stone-200 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
+                >
+                  Disconnect
+                </button>
+              )}
+            </div>
+
+            <form onSubmit={handleSubmitProduct} noValidate className="space-y-4 text-left">
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. SiteShot 📸"
+                  value={newTitle}
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                />
               </div>
 
-              <form onSubmit={handleSubmitProduct} className="space-y-6">
-                <div>
-                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
-                    Product Title *
-                  </label>
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">One-Sentence Tagline *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. High-def screenshot API with full-page scrolling..."
+                  value={newTagline}
+                  onChange={(e) => setNewTagline(e.target.value)}
+                  className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Demo URL *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="https://siteshot.net"
+                  value={newUrl}
+                  onChange={(e) => setNewUrl(e.target.value)}
+                  className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Maker Name</label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. SiteShot 📸"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
+                    placeholder="Sarah"
+                    value={newMaker}
+                    onChange={(e) => setNewMaker(e.target.value)}
+                    className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
                   />
                 </div>
-
-                <div>
-                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
-                    One-Sentence Tagline *
-                  </label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Twitter (X)</label>
                   <input
                     type="text"
-                    required
-                    placeholder="e.g. High-def screenshot API with full-page scrolling..."
-                    value={newTagline}
-                    onChange={(e) => setNewTagline(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
+                    placeholder="@sarah_dev"
+                    value={newTwitter}
+                    onChange={(e) => setNewTwitter(e.target.value)}
+                    className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
                   />
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
-                    Demo URL *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="https://siteshot.net"
-                    value={newUrl}
-                    onChange={(e) => setNewUrl(e.target.value)}
-                    className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
-                  />
-                </div>
-
-
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
-                      Maker Name
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Sarah"
-                      value={newMaker}
-                      onChange={(e) => setNewMaker(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
-                      Twitter (X)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="@sarah_dev"
-                      value={newTwitter}
-                      onChange={(e) => setNewTwitter(e.target.value)}
-                      className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
-                    Product Logo * (Max 2MB)
-                  </label>
-                  <div className="flex items-center space-x-4">
-                    <label 
-                      htmlFor="logo-upload" 
-                      className="cursor-pointer flex flex-col items-center justify-center border-2 border-dashed border-stone-850 hover:border-[#d97706]/85 bg-stone-900 w-24 h-24 rounded-lg transition-all shadow-inner relative overflow-hidden group select-none"
-                    >
-                      {newLogo ? (
-                        newLogo.startsWith("data:image") || newLogo.startsWith("http") ? (
-                          <img src={newLogo} alt="Preview" className="w-full h-full object-contain p-2" />
-                        ) : (
-                          <span className="text-3xl animate-pixel-bounce">{newLogo}</span>
-                        )
-                      ) : (
-                        <span className="text-3xl text-stone-600">➕</span>
-                      )}
-                      
-                      {/* Subtle hover overlay */}
-                      <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                        <span className="text-5xs font-pixel uppercase text-stone-300">Upload</span>
-                      </div>
-                    </label>
-                    
-                    <input
-                      type="file"
-                      id="logo-upload"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          // Enforce 2MB size limit
-                          if (file.size > 2 * 1024 * 1024) {
-                            alert("File size exceeds the 2MB limit!\n\nPlease choose a smaller image (under 2MB) to ensure smooth performance.");
-                            e.target.value = "";
-                            return;
-                          }
-                          
-                          const reader = new FileReader();
-                          reader.onload = () => {
-                            const result = reader.result;
-                            if (result && typeof result === "string") {
-                              const img = new Image();
-                              img.onload = () => {
-                                // Create canvas to resize logo to optimal size (max 128x128)
-                                const canvas = document.createElement("canvas");
-                                const MAX_WIDTH = 128;
-                                const MAX_HEIGHT = 128;
-                                let width = img.width;
-                                let height = img.height;
-
-                                if (width > height) {
-                                  if (width > MAX_WIDTH) {
-                                    height *= MAX_WIDTH / width;
-                                    width = MAX_WIDTH;
-                                  }
-                                } else {
-                                  if (height > MAX_HEIGHT) {
-                                    width *= MAX_HEIGHT / height;
-                                    height = MAX_HEIGHT;
-                                  }
-                                }
-
-                                canvas.width = width;
-                                canvas.height = height;
-                                const ctx = canvas.getContext("2d");
-                                if (ctx) {
-                                  ctx.drawImage(img, 0, 0, width, height);
-                                  // Compress as lightweight JPEG
-                                  const resizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
-                                  setNewLogo(resizedBase64);
-                                } else {
-                                  setNewLogo(result);
-                                }
-                              };
-                              img.src = result;
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className="hidden"
-                    />
-                    
-                    <div className="text-left">
-                      <span className="text-5xs font-pixel text-[#d97706] uppercase block mb-1">Image Specs</span>
-                      <p className="text-5xs text-stone-400 leading-normal max-w-[200px]">
-                        PNG, JPG, or SVG image. If skipped, your project will start with the default booster rocket (🚀).
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    className="btn-pixel btn-pixel-primary w-full py-3 text-xs tracking-wider cursor-pointer"
+              <div className="flex flex-col gap-1">
+                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Logo * (Max 2MB)</label>
+                <div className="flex items-center space-x-4">
+                  <label 
+                    htmlFor="logo-upload" 
+                    className="cursor-pointer flex flex-col items-center justify-center border border-dashed border-white/[0.08] hover:border-white/[0.15] bg-black w-16 h-16 rounded-md transition-all relative overflow-hidden group select-none"
                   >
-                    Submit Project (Stage 1: $0)
-                  </button>
+                    {newLogo ? (
+                      newLogo.startsWith("data:image") || newLogo.startsWith("http") ? (
+                        <img src={newLogo} alt="Preview" className="w-full h-full object-contain p-1.5" />
+                      ) : (
+                        <span className="text-xl animate-pixel-bounce">{newLogo}</span>
+                      )
+                    ) : (
+                      <span className="text-xl text-stone-600">＋</span>
+                    )}
+                    
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <span className="text-[9px] uppercase text-zinc-400">Upload</span>
+                    </div>
+                  </label>
+                  
+                  <input
+                    type="file"
+                    id="logo-upload"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (file.size > 2 * 1024 * 1024) {
+                          alert("File size exceeds the 2MB limit!");
+                          e.target.value = "";
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          const result = reader.result;
+                          if (result && typeof result === "string") {
+                            const img = new Image();
+                            img.onload = () => {
+                              const canvas = document.createElement("canvas");
+                              const MAX_WIDTH = 128;
+                              const MAX_HEIGHT = 128;
+                              let width = img.width;
+                              let height = img.height;
+                              if (width > height) {
+                                if (width > MAX_WIDTH) {
+                                  height *= MAX_WIDTH / width;
+                                  width = MAX_WIDTH;
+                                }
+                              } else {
+                                if (height > MAX_HEIGHT) {
+                                  width *= MAX_HEIGHT / height;
+                                  height = MAX_HEIGHT;
+                                }
+                              }
+                              canvas.width = width;
+                              canvas.height = height;
+                              const ctx = canvas.getContext("2d");
+                              if (ctx) {
+                                ctx.drawImage(img, 0, 0, width, height);
+                                const resizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
+                                setNewLogo(resizedBase64);
+                              } else {
+                                setNewLogo(result);
+                              }
+                            };
+                            img.src = result;
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="hidden"
+                  />
+                  
+                  <div className="text-left flex-1">
+                    <span className="text-[9px] font-mono text-zinc-500 uppercase block mb-0.5">Image Specs</span>
+                    <p className="text-[10px] text-zinc-500 leading-normal">
+                      PNG, JPG, or SVG image. If skipped, default 🚀 rocket booster is used.
+                    </p>
+                  </div>
                 </div>
-              </form>
-            </div>
+              </div>
 
-            <div className="text-3xs text-stone-550 mt-6 border-t border-stone-850 pt-4 font-mono">
-              * Note: In Stage 1, submissions are 100% free. Once 16 products are queued, the tournament system begins automatically.
-            </div>
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
+                <button
+                  type="button"
+                  onClick={() => setIsSubmitOpen(false)}
+                  className="px-4 py-2 border border-white/[0.08] hover:bg-white/[0.02] text-zinc-400 rounded-md text-xs transition duration-150 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer"
+                >
+                  Submit Project
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
@@ -3278,9 +3157,9 @@ export default function ArenaClient({
           Dual-Input Voting Modal
          ======================================================== */}
       {votingMatch && votingTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-scale-in text-[#faf5ef]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="fixed inset-0" 
+            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
             onClick={() => {
               setVotingMatch(null);
               setVotingTarget(null);
@@ -3289,33 +3168,49 @@ export default function ArenaClient({
               setVoteError("");
             }}
           />
-          <div className="relative w-full max-w-md bg-[#131312]/95 border border-stone-850 shadow-2xl p-6 sm:p-8 rounded-xl z-10">
-            <h3 className="font-pixel text-xs uppercase mb-1 text-[#faf5ef]">
-              Dueling Vote Box
-            </h3>
-            <span className="text-3xs font-pixel text-[#d97706] block mb-3">
-              VOTING FOR: {votingTarget.title}
-            </span>
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
+            <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
+              <h3 className="text-sm font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
+                <GitCommitIcon className="w-4 h-4 text-cyan-400" /> DUELING VOTE BOX
+              </h3>
+              <button 
+                onClick={() => {
+                  setVotingMatch(null);
+                  setVotingTarget(null);
+                  setVoteWinnerFeedback("");
+                  setVoteLoserFeedback("");
+                  setVoteError("");
+                }}
+                className="text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
+              >
+                <XIcon className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-            <p className="text-xs text-stone-400 mb-5 leading-relaxed">
-              We enforce a **Dual Feedback Loop**. To register your vote, you must bind your account and write positive critique for the winner AND constructive advice for the loser. **Every competitor leaves with real value.**
+            <div>
+              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">VOTING FOR</span>
+              <div className="text-sm font-bold text-white uppercase mt-0.5">{votingTarget.title}</div>
+            </div>
+
+            <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+              We enforce a **Dual Feedback Loop**. To register your vote, you must bind your account and write positive critique for the winner AND constructive advice for the loser.
             </p>
 
-            <form onSubmit={handleVoteSubmit} className="space-y-4">
-              {/* Functional Dual Google & GitHub Auth Card */}
-              <div className="p-4 bg-[#1c1a18] border border-stone-850 flex flex-col gap-3 shadow-pixel-sm rounded-lg text-left">
+            <form onSubmit={handleVoteSubmit} noValidate className="space-y-4 text-left">
+              {/* Auth Verification Card */}
+              <div className="p-4 bg-[#141417] border border-white/[0.06] rounded-md flex flex-col gap-3">
                 <div className="flex items-center space-x-3">
-                  <span className="w-8 h-8 bg-stone-900 border border-stone-800 flex items-center justify-center text-sm font-pixel rounded-md">
+                  <span className="w-8 h-8 bg-[#0b0b0d] border border-white/[0.06] flex items-center justify-center text-sm rounded-md">
                     {userAuthType === "github" ? "🐙" : "🔑"}
                   </span>
                   <div>
-                    <span className="text-3xs font-pixel block text-stone-400">AUTHORIZATION</span>
+                    <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block">AUTHORIZATION</span>
                     {userLoggedIn ? (
-                      <span className="text-3xs font-pixel text-[#d97706]">
-                        {mockUserTwitter} <span className="text-stone-400 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
+                      <span className="text-xs font-semibold text-white">
+                        {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                       </span>
                     ) : (
-                      <span className="text-3xs text-red-500 font-pixel uppercase font-bold">Unauthenticated</span>
+                      <span className="text-xs text-red-500 font-bold uppercase">Unauthenticated</span>
                     )}
                   </div>
                 </div>
@@ -3327,7 +3222,7 @@ export default function ArenaClient({
                         setTempAuthType("google");
                         setIsAuthOpen(true);
                       }}
-                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
+                      className="flex-1 py-1.5 px-3 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
                     >
                       Link Google
                     </button>
@@ -3337,7 +3232,7 @@ export default function ArenaClient({
                         setTempAuthType("github");
                         setIsAuthOpen(true);
                       }}
-                      className="flex-1 flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 text-3xs font-pixel uppercase font-bold rounded-md transition-all cursor-pointer shadow-pixel-xs animate-pixel-bounce"
+                      className="flex-1 py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-155 cursor-pointer"
                     >
                       Link GitHub
                     </button>
@@ -3346,7 +3241,7 @@ export default function ArenaClient({
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="text-stone-400 hover:text-stone-200 text-3xs underline font-pixel font-bold transition-all cursor-pointer self-start"
+                    className="text-zinc-400 hover:text-stone-200 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
                   >
                     Disconnect
                   </button>
@@ -3354,8 +3249,8 @@ export default function ArenaClient({
               </div>
 
               {/* Input 1: Why vote for winner */}
-              <div>
-                <label className="block text-3xs font-pixel text-stone-400 mb-1.5 uppercase">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
                   1. Why are you voting for {votingTarget.title}? (min 10 chars) *
                 </label>
                 <textarea
@@ -3364,19 +3259,19 @@ export default function ArenaClient({
                   placeholder="e.g., The core user interface is incredibly fast and intuitive."
                   value={voteWinnerFeedback}
                   onChange={(e) => setVoteWinnerFeedback(e.target.value)}
-                  className="w-full px-3 py-2 border border-stone-850 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
+                  className="bg-black border border-white/[0.08] text-xs text-zinc-300 p-2.5 rounded-md focus:outline-none focus:border-white/[0.2] resize-none"
                 />
-                <div className="flex justify-between text-3xs font-mono text-stone-400 mt-1">
+                <div className="flex justify-between text-[9px] font-mono text-zinc-500">
                   <span>Chars: {voteWinnerFeedback.length}</span>
-                  <span className={voteWinnerFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-amber-500 font-semibold"}>
+                  <span className={voteWinnerFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-zinc-500"}>
                     {voteWinnerFeedback.length >= 10 ? "✓ Ready" : `Need ${Math.max(0, 10 - voteWinnerFeedback.length)} more`}
                   </span>
                 </div>
               </div>
 
               {/* Input 2: Constructive advice for loser */}
-              <div>
-                <label className="block text-3xs font-pixel text-[#d97706] mb-1.5 uppercase">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider">
                   2. Constructive Advice for {votingTarget.id === votingMatch.productA.id ? votingMatch.productB.title : votingMatch.productA.title} (min 10 chars) *
                 </label>
                 <textarea
@@ -3385,23 +3280,23 @@ export default function ArenaClient({
                   placeholder="e.g., The tagline needs more clarity; should clarify if it exports in SVG."
                   value={voteLoserFeedback}
                   onChange={(e) => setVoteLoserFeedback(e.target.value)}
-                  className="w-full px-3 py-2 border border-amber-600/40 rounded-lg bg-stone-900 text-[#faf5ef] text-sm focus:outline-none focus:border-amber-600 transition-all"
+                  className="bg-black border border-white/[0.08] text-xs text-zinc-300 p-2.5 rounded-md focus:outline-none focus:border-white/[0.2] resize-none"
                 />
-                <div className="flex justify-between text-3xs font-mono text-stone-400 mt-1">
+                <div className="flex justify-between text-[9px] font-mono text-zinc-500">
                   <span>Chars: {voteLoserFeedback.length}</span>
-                  <span className={voteLoserFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-orange-500 font-semibold"}>
+                  <span className={voteLoserFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-zinc-500"}>
                     {voteLoserFeedback.length >= 10 ? "✓ Ready" : `Need ${Math.max(0, 10 - voteLoserFeedback.length)} more`}
                   </span>
                 </div>
               </div>
 
               {voteError && (
-                <div className="p-2.5 bg-red-950/30 text-red-400 text-3xs border border-red-900/50 font-mono">
+                <div className="p-2.5 bg-red-950/20 text-red-400 text-[10px] border border-red-900/30 font-mono rounded-md">
                   [ERROR]: {voteError}
                 </div>
               )}
 
-              <div className="flex justify-end space-x-3 pt-3 border-t border-stone-850 mt-5">
+              <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
                 <button
                   type="button"
                   onClick={() => {
@@ -3411,13 +3306,13 @@ export default function ArenaClient({
                     setVoteLoserFeedback("");
                     setVoteError("");
                   }}
-                  className="btn-pixel py-1.5 px-3 text-3xs cursor-pointer"
+                  className="px-4 py-2 border border-white/[0.08] hover:bg-white/[0.02] text-zinc-400 rounded-md text-xs transition duration-150 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="btn-pixel btn-pixel-primary py-1.5 px-4 text-3xs cursor-pointer"
+                  className="px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer"
                 >
                   Submit Dual Vote
                 </button>
@@ -3428,39 +3323,55 @@ export default function ArenaClient({
       )}
 
       {/* ========================================================
-          Developer testing console (PM Sandbox control panel)
+          Developer testing console (PM control panel)
          ======================================================== */}
       {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-4 right-4 z-40 bg-[#faf5ef]/95 backdrop-blur-md border-2 border-pixel shadow-pixel p-4 max-w-xs hover:-translate-y-1 transition-all text-[#181715]">
-          <div className="flex justify-between items-center mb-3 pb-1 border-b border-pixel">
-            <span className="text-3xs font-pixel text-[#d97706]">
-              SANDBOX_CONSOLE
+        <div className="fixed bottom-4 right-4 z-40 bg-[#0b0b0d]/98 border border-white/[0.12] rounded-md p-4 max-w-xs transition-all text-white text-xs space-y-3" style={{ willChange: "transform" }}>
+          <div className="flex justify-between items-center pb-2 border-b border-white/[0.05]">
+            <span className="font-mono text-[9px] text-zinc-500 uppercase tracking-widest">
+              DEV_CONSOLE
             </span>
-            <span className="w-2 h-2 bg-blue-600 border border-pixel animate-ping"></span>
+            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
           </div>
           <div className="space-y-2">
-            {!bracket ? (
+            {!bracket || bracket.status === "preparing" ? (
               <>
+                {bracket && (
+                  <div className="p-2 bg-white/[0.02] border border-white/[0.06] text-[10px] font-mono space-y-1 text-zinc-400 rounded mb-2">
+                    <div>STATUS: <strong className="text-emerald-400">{bracket.status}</strong></div>
+                    <div>STAGE: <strong className="text-white">WAITLIST</strong></div>
+                  </div>
+                )}
                 <button 
-                  onClick={handleAddDummy}
-                  className="w-full text-left px-2.5 py-1.5 border border-pixel hover:bg-[#fdf2e9] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
+                  onClick={handleInject16}
+                  className="w-full text-left px-2.5 py-1.5 bg-white text-black hover:bg-zinc-200 transition-all rounded-md font-semibold flex justify-between items-center p-2 cursor-pointer mb-2"
                 >
-                  <span>➕ Inject Mock Competitor</span>
-                  <span className="bg-[#fdf2e9] px-1 py-0.2 rounded font-mono font-bold text-[#181715]">{waitingProducts.length}/16</span>
-                </button>
-                <button 
-                  onClick={handleAutoFillAndStart}
-                  className="w-full text-left px-2.5 py-1.5 bg-[#181715] text-[#fcfbfa] hover:bg-[#d97706] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
-                >
-                  <span>🚀 Autofill 16 & Launch</span>
+                  <span>🚀 Inject 16 Arena Competitors</span>
                   <span className="font-mono">➔</span>
                 </button>
+                <button 
+                  onClick={handleInject20}
+                  className="w-full text-left px-2.5 py-1.5 border border-white/[0.08] hover:bg-white/[0.02] transition-all rounded-md font-mono flex justify-between items-center text-[#ffbe18] p-2 cursor-pointer mb-2"
+                >
+                  <span>＋ Inject 20 Showcase Products</span>
+                  <span className="font-mono">⚡</span>
+                </button>
+                {bracket && (
+                  <button
+                    onClick={handleAdvanceRound}
+                    className="w-full text-left px-2.5 py-1.5 bg-white text-black hover:bg-zinc-200 transition-all rounded-md font-semibold flex justify-between items-center p-2 cursor-pointer"
+                  >
+                    <span>⚡ Force Start (Skip Midnight)</span>
+                    <span className="font-mono">➔</span>
+                  </button>
+                )}
               </>
             ) : (
               <>
-                <div className="p-2 bg-[#fdf2e9] border border-pixel text-3xs font-pixel space-y-1 text-stone-700">
-                  <div>STATUS: <strong className="text-emerald-700">{bracket.status}</strong></div>
-                  <div>STAGE: <strong className="text-[#d97706]">{
+                <div className="p-2 bg-white/[0.02] border border-white/[0.06] text-[10px] font-mono space-y-1 text-zinc-400 rounded">
+                  <div>STATUS: <strong className="text-emerald-400">{bracket.status}</strong></div>
+                  <div>STAGE: <strong className="text-white">{
+                    bracket.status === "completed" ? "COMPLETED" : 
                     activeRoundNum === 1 ? "ROUND_16" : 
                     activeRoundNum === 2 ? "QUARTERS" : 
                     activeRoundNum === 3 ? "SEMIS" : "FINALS"
@@ -3469,7 +3380,7 @@ export default function ArenaClient({
                 {bracket.status === "completed" ? (
                   <button
                     onClick={handleReset}
-                    className="w-full text-left px-2.5 py-1.5 bg-stone-900 text-white hover:bg-stone-850 transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
+                    className="w-full text-left px-2.5 py-1.5 bg-[#121215] border border-white/[0.1] text-zinc-350 hover:bg-white/[0.04] transition-all rounded-md font-mono flex justify-between items-center p-2 cursor-pointer"
                   >
                     <span>🔄 Start New Season (Reset)</span>
                     <span className="font-mono">➔</span>
@@ -3477,13 +3388,9 @@ export default function ArenaClient({
                 ) : (
                   <button
                     onClick={handleAdvanceRound}
-                    className="w-full text-left px-2.5 py-1.5 bg-[#d97706] text-white hover:bg-[#181715] transition-all text-3xs rounded-none font-pixel flex justify-between items-center"
+                    className="w-full text-left px-2.5 py-1.5 bg-white text-black hover:bg-zinc-200 transition-all rounded-md font-semibold flex justify-between items-center p-2 cursor-pointer"
                   >
-                    <span>
-                      {bracket.status === "preparing" 
-                        ? "⚡ Force Start (Skip Midnight)" 
-                        : "🏆 Settle & Advance Round"}
-                    </span>
+                    <span>🏆 Settle & Advance Round</span>
                     <span className="font-mono">➔</span>
                   </button>
                 )}
@@ -3491,9 +3398,9 @@ export default function ArenaClient({
             )}
             <button 
               onClick={handleReset}
-              className="w-full text-left px-2.5 py-1.5 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-all text-3xs font-pixel"
+              className="w-full text-center py-1.5 bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-950/40 transition-all font-mono rounded-md text-[10px] cursor-pointer"
             >
-              🔄 Reset Sandbox
+              🔄 Reset Arena
             </button>
           </div>
         </div>
@@ -3503,33 +3410,33 @@ export default function ArenaClient({
           Retro Pixel Authentication Selector Modal (Twitter/X & GitHub)
          ======================================================== */}
       {isAuthOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in text-[#181715]" style={{ zIndex: 100 }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ zIndex: 100 }}>
           <div 
-            className="fixed inset-0" 
+            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
             onClick={() => {
               setIsAuthOpen(false);
             }}
           />
-          <div className="relative w-full max-w-sm bg-[#131312]/95 border border-stone-850 shadow-2xl p-6 sm:p-8 rounded-xl z-10 animate-scale-in">
-            <div className="flex justify-between items-center mb-6 border-b border-stone-850 pb-3">
-              <h3 className="font-pixel text-xs uppercase text-[#faf5ef]">
-                Link Identity
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-sm relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
+            <div className="flex justify-between items-center border-b border-white/[0.05] pb-3">
+              <h3 className="text-sm font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
+                <span>🔑 Link Identity</span>
               </h3>
               <button 
                 onClick={() => {
                   setIsAuthOpen(false);
                 }}
-                className="text-stone-400 hover:text-stone-200 text-sm font-bold transition-all cursor-pointer"
+                className="text-zinc-550 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
               >
-                ✕
+                <XIcon className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <p className="text-3xs text-stone-400 mb-6 font-mono leading-relaxed">
-              * Connect your real social profile to authorize your dual-critique voting in the combat arena. Real identity makes your feedback globally verifiable and high-trust.
+            <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+              Connect your verified developer profile to authorize dual-critique voting in the combat arena. Real identity makes feedback globally verifiable and high-trust.
             </p>
 
-            <div className="space-y-4">
+            <div className="space-y-3 pt-2">
               <button
                 type="button"
                 onClick={async () => {
@@ -3547,12 +3454,12 @@ export default function ArenaClient({
                     if (error) console.error("Google OAuth error:", error);
                   } else {
                     handleSandboxLogin("google");
-                    alert("Sandbox Mock: Google authorization linked successfully!");
+                    alert("Mock: Google authorization linked successfully!");
                   }
                 }}
-                className="w-full py-3 text-3xs font-pixel flex items-center justify-center space-x-2 bg-white text-stone-900 border border-stone-300 hover:bg-stone-100 rounded-md transition-all cursor-pointer shadow-pixel-md font-bold"
+                className="w-full py-2.5 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer flex items-center justify-center gap-2"
               >
-                <span className="text-sm">🔑</span> <span>CONNECT WITH GOOGLE</span>
+                <span>🔑 CONNECT WITH GOOGLE</span>
               </button>
  
               <button
@@ -3572,12 +3479,12 @@ export default function ArenaClient({
                     if (error) console.error("GitHub OAuth error:", error);
                   } else {
                     handleSandboxLogin("github");
-                    alert("Sandbox Mock: GitHub authorization linked successfully!");
+                    alert("Mock: GitHub authorization linked successfully!");
                   }
                 }}
-                className="w-full py-3 text-3xs font-pixel flex items-center justify-center space-x-2 bg-stone-950 text-white border border-stone-850 hover:bg-stone-900 rounded-md transition-all cursor-pointer shadow-pixel-md font-bold"
+                className="w-full py-2.5 bg-[#121215] text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-150 cursor-pointer flex items-center justify-center gap-2"
               >
-                <span className="text-sm">🐙</span> <span>CONNECT WITH GITHUB</span>
+                <span>🐙 CONNECT WITH GITHUB</span>
               </button>
             </div>
           </div>
@@ -3585,128 +3492,128 @@ export default function ArenaClient({
       )}
 
       {/* ========================================================
-          Custom Success Card Modal (Premium 8-Bit Notification Card)
+          Custom Success Card Modal
          ======================================================== */}
       {isSuccessOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fade-in" style={{ zIndex: 100 }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ zIndex: 100 }}>
           <div 
-            className="fixed inset-0" 
+            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
             onClick={() => setIsSuccessOpen(false)}
           />
-          <div className="relative w-full max-w-md bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-6 sm:p-8 rounded-none z-10 text-center animate-scale-in">
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-xs space-y-4 animate-scale-in text-center text-[#E4E4E7]">
             
-            {/* Animated Shield/Trophy Checked Icon */}
-            <div className="w-16 h-16 bg-amber-100 border-2 border-pixel rounded-none mx-auto flex items-center justify-center text-3xl mb-4 animate-pixel-bounce" style={{ borderColor: '#d97706' }}>
+            <div className="w-10 h-10 bg-white/[0.02] border border-white/[0.06] rounded-md mx-auto flex items-center justify-center text-xl font-mono">
               🛡️
             </div>
             
-            <h3 className="font-pixel text-xs uppercase text-[#181715] mb-2 tracking-wide">
+            <h3 className="text-sm font-semibold text-white uppercase tracking-tight font-sans">
               {successModalTitle}
             </h3>
             
-            <p className="text-3xs font-pixel text-[#d97706] uppercase tracking-widest block mb-4">
+            <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block">
               Submission Confirmed
-            </p>
+            </span>
 
-            <div className="bg-[#faf5ef] border-2 border-pixel p-4 text-left font-mono text-3xs text-stone-700 leading-relaxed mb-6 whitespace-pre-line shadow-pixel-sm">
+            <div className="bg-white/[0.02] border border-white/[0.06] p-4 text-left font-mono text-[10px] text-zinc-400 leading-relaxed whitespace-pre-line rounded-md">
               {successModalText}
             </div>
 
-            <button
-              onClick={() => {
-                setIsSuccessOpen(false);
-                setTimeout(() => {
-                  const element = document.getElementById("tournament-dashboard");
-                  if (element) {
-                    element.scrollIntoView({ behavior: "smooth" });
-                  }
-                }, 100);
-              }}
-              className="btn-pixel btn-pixel-primary w-full py-2.5 text-3xs tracking-wider"
-            >
-              ENTER THE ARENA ➔
-            </button>
+            {successModalTitle.includes("PROJECT SUBMITTED") ? (
+              <button
+                onClick={() => {
+                  setIsSuccessOpen(false);
+                  setCurrentView('console');
+                }}
+                className="w-full py-2.5 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
+              >
+                ENTER THE CONSOLE ➔
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setIsSuccessOpen(false);
+                  setTimeout(() => {
+                    const element = document.getElementById("tournament-dashboard");
+                    if (element) {
+                      element.scrollIntoView({ behavior: "smooth" });
+                    }
+                  }, 100);
+                }}
+                className="w-full py-2.5 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
+              >
+                ENTER THE ARENA ➔
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {/* ========================================================
-          Victory Champion Modal (Premium 8-Bit Celebration Card)
+          Victory Champion Modal
          ======================================================== */}
       {isChampionModalOpen && championWinner && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" style={{ zIndex: 110, color: '#181715' }}>
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" style={{ zIndex: 110 }}>
           <div 
-            className="fixed inset-0" 
+            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
             onClick={() => setIsChampionModalOpen(false)}
           />
-          <div className="relative w-full max-w-xl bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-8 sm:p-10 rounded-none z-10 text-center animate-scale-in" style={{ borderColor: '#d97706', color: '#181715' }}>
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-lg relative z-10 text-xs space-y-5 animate-scale-in text-center text-[#E4E4E7]">
             
-            {/* Golden decorative elements */}
-            <div className="absolute top-0 inset-x-0 h-2" style={{ background: 'linear-gradient(90deg, #fcd34d, #d97706, #fcd34d)' }} />
             <button 
               onClick={() => setIsChampionModalOpen(false)}
-              className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center border-2 border-pixel font-pixel text-xs transition-all cursor-pointer"
-              style={{ color: '#44403c', backgroundColor: '#f5f5f4', borderColor: '#181715' }}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
             >
-              ✕
+              <XIcon className="w-3.5 h-3.5" />
             </button>
 
-            {/* Header Badge */}
-            <div className="inline-flex items-center space-x-2 border font-pixel text-3xs px-4 py-1.5 uppercase mb-6 shadow-pixel-xs animate-pixel-bounce" style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', color: '#d97706' }}>
-              <span>🏆</span> <span>COLOSEUM CHAMPION DECLARED</span> <span>🏆</span>
+            <div className="inline-flex items-center space-x-2 bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-3 py-1 uppercase rounded-md">
+              <span>COLOSSEUM CHAMPION DECLARED</span>
             </div>
 
-            {/* Winner Info */}
-            <h2 className="text-3xl sm:text-4xl font-sans font-black tracking-tighter leading-none uppercase mb-4 flex items-center justify-center flex-wrap gap-2" style={{ color: '#181715' }}>
-              {renderLogo(championWinner.logo, "w-10 h-10")}
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white uppercase flex items-center justify-center gap-2">
+              {renderLogo(championWinner.logo, "w-8 h-8")}
               <span>{championWinner.title}</span>
-              {renderLogo(championWinner.logo, "w-10 h-10")}
+              {renderLogo(championWinner.logo, "w-8 h-8")}
             </h2>
-            <p className="font-sans text-xs max-w-lg mx-auto mb-8 font-semibold" style={{ color: '#78716c' }}>
+            <p className="text-zinc-400 text-xs max-w-md mx-auto leading-relaxed">
               {championWinner.tagline}
             </p>
 
             {/* Maker Spotlight Card */}
-            <div className="max-w-md mx-auto p-5 border-2 border-pixel shadow-pixel-sm mb-8" style={{ backgroundColor: '#f5f5f4', borderColor: '#181715', color: '#181715' }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3 text-left">
-                  <img src={championWinner.makerAvatar} alt="Maker" className="w-12 h-12 border border-pixel" style={{ borderColor: '#181715' }} />
-                  <div>
-                    <span className="text-4xs font-pixel block" style={{ color: '#a8a29e' }}>ARENA CONQUEROR</span>
-                    <span className="text-sm font-sans font-extrabold block" style={{ color: '#1c1917' }}>{championWinner.makerName}</span>
-                  </div>
+            <div className="p-4 border border-white/[0.06] bg-[#141417] rounded-md text-left flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <img src={championWinner.makerAvatar} alt="Maker" className="w-10 h-10 border border-white/[0.08] rounded-md" />
+                <div>
+                  <span className="text-[9px] font-mono block text-zinc-500">ARENA CONQUEROR</span>
+                  <span className="text-xs font-semibold text-zinc-200">{championWinner.makerName}</span>
                 </div>
-                
-                <a 
-                  href={`https://x.com/${championWinner.makerTwitter.replace(/^@/, "")}`}
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="btn-pixel !py-1.5 !px-3 text-4xs font-pixel"
-                  style={{ color: '#ffffff', backgroundColor: '#1c1917', borderColor: '#181715' }}
-                >
-                  FOLLOW {championWinner.makerTwitter} ➔
-                </a>
               </div>
+              
+              <a 
+                href={`https://x.com/${championWinner.makerTwitter.replace(/^@/, "")}`}
+                target="_blank" 
+                rel="noreferrer"
+                className="px-3 py-1.5 bg-white/[0.02] border border-white/[0.06] text-zinc-300 font-mono text-[9px] hover:bg-white/[0.04] hover:border-white/[0.1] hover:text-white rounded-md transition duration-150 cursor-pointer"
+              >
+                FOLLOW {championWinner.makerTwitter} ➔
+              </a>
             </div>
 
-            {/* CTAs */}
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-4">
+            <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-3 border-t border-white/[0.05]">
               <a 
                 href={championWinner.url}
                 target="_blank"
                 rel="noreferrer"
-                className="btn-pixel py-3.5 px-8 text-xs tracking-wider shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all font-pixel"
-                style={{ backgroundColor: '#d97706', color: '#ffffff', borderColor: '#181715' }}
+                className="bg-white text-black hover:bg-zinc-200 px-5 py-2.5 text-xs rounded-md font-semibold tracking-tight transition duration-150 cursor-pointer w-full sm:w-auto text-center"
               >
-                🌐 EXPLORE DEMO URL ➔
+                EXPLORE DEMO URL ➔
               </a>
               
               <button 
                 onClick={() => setIsChampionModalOpen(false)}
-                className="btn-pixel py-3.5 px-8 text-xs tracking-wider font-pixel shadow-pixel-md hover:-translate-y-0.5 active:translate-y-0 transition-all"
-                style={{ backgroundColor: '#1c1917', color: '#ffffff', borderColor: '#181715' }}
+                className="bg-[#121215] border border-white/[0.1] text-zinc-300 hover:bg-white/[0.04] hover:text-white px-5 py-2.5 text-xs rounded-md font-semibold tracking-tight transition duration-150 cursor-pointer w-full sm:w-auto"
               >
-                ⚔️ RETURN TO WHITEBOARD
+                RETURN TO WHITEBOARD
               </button>
             </div>
 
@@ -3714,163 +3621,64 @@ export default function ArenaClient({
         </div>
       )}
 
-      {/* ========================================================
-          Past Champions Hall of Valor Drawer/Modal
-         ======================================================== */}
-      {isPastChampsOpen && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in" style={{ zIndex: 120, color: '#181715' }}>
-          <div 
-            className="fixed inset-0" 
-            onClick={() => setIsPastChampsOpen(false)}
-          />
-          <div className="relative w-full max-w-4xl bg-[#faf5ef]/95 backdrop-blur-md border-4 border-pixel shadow-pixel-lg p-6 sm:p-8 rounded-none z-10 animate-scale-in" style={{ borderColor: '#d97706', color: '#181715' }}>
-            
-            {/* Header */}
-            <div className="flex justify-between items-center mb-6 border-b-2 border-pixel pb-3" style={{ borderColor: '#181715' }}>
-              <div className="flex items-center space-x-2">
-                <span className="text-xl">🏆</span>
-                <h3 className="font-pixel text-xs sm:text-sm uppercase tracking-wide" style={{ color: '#d97706' }}>
-                  THE HALL OF VALOR — HISTORIC CHAMPIONS
-                </h3>
-              </div>
-              <button 
-                onClick={() => setIsPastChampsOpen(false)}
-                className="w-8 h-8 flex items-center justify-center border-2 border-pixel font-pixel text-xs transition-all cursor-pointer"
-                style={{ color: '#44403c', backgroundColor: '#f5f5f4', borderColor: '#181715' }}
-              >
-                ✕
-              </button>
-            </div>
 
-            {/* List Grid */}
-            <div className="max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 p-1">
-                {pastChampions.map((c, idx) => (
-                  <div 
-                    key={c.id} 
-                    className="p-4 border-2 border-pixel shadow-pixel-xs flex flex-col justify-between hover:-translate-y-0.5 transition-all"
-                    style={{ backgroundColor: '#f5f5f4', borderColor: '#181715', color: '#181715' }}
-                  >
-                    <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <span className="text-2xl flex items-center justify-center">
-                          {renderLogo(c.logo, "w-8 h-8")}
-                        </span>
-                        <span className="border text-5xs font-pixel px-2 py-0.5 uppercase" style={{ backgroundColor: '#fffbeb', borderColor: '#fcd34d', color: '#d97706' }}>
-                          SEASON {String(idx + 1).padStart(2, "0")}
-                        </span>
-                      </div>
-                      <a 
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-pixel text-xs hover:underline uppercase block mb-1"
-                        style={{ color: '#181715' }}
-                      >
-                        {c.title}
-                      </a>
-                      <p className="text-4xs leading-relaxed line-clamp-2 mb-3 font-sans font-medium" style={{ color: '#78716c' }}>{c.tagline}</p>
-                    </div>
-                    
-                    <div className="flex items-center justify-between border-t border-dashed pt-3 text-4xs font-mono" style={{ borderColor: '#e7e5e4', color: '#78716c' }}>
-                      <div className="flex items-center space-x-1.5">
-                        <img src={c.makerAvatar} alt="Maker" className="w-5 h-5 border border-pixel shrink-0" style={{ borderColor: '#181715' }} />
-                        <a 
-                          href={`https://x.com/${c.makerTwitter.replace(/^@/, "")}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="hover:underline font-bold"
-                          style={{ color: '#78716c' }}
-                        >
-                          {c.makerTwitter}
-                        </a>
-                      </div>
-                      <a 
-                        href={c.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-5xs uppercase font-pixel underline"
-                        style={{ color: '#d97706' }}
-                      >
-                        DEMO
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Footer close CTA */}
-            <div className="mt-6 text-right border-t border-pixel pt-4" style={{ borderColor: '#181715' }}>
-              <button
-                onClick={() => setIsPastChampsOpen(false)}
-                className="btn-pixel py-2 px-6 text-3xs font-pixel shadow-pixel-xs transition-all"
-                style={{ backgroundColor: '#1c1917', color: '#ffffff', borderColor: '#181715' }}
-              >
-                ⚔️ CLOSE GALLERY
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ========================================================
-          Privacy Policy Modal (Premium Retro-Dark Dialog)
+          Privacy Policy Modal
          ======================================================== */}
       {isPrivacyOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in text-[#faf5ef]" style={{ zIndex: 150 }}>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ zIndex: 150 }}>
           <div 
-            className="fixed inset-0" 
+            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
             onClick={() => setIsPrivacyOpen(false)}
           />
-          <div className="relative w-full max-w-2xl bg-[#0f0e0d]/98 border-2 border-pixel shadow-[0_25px_60px_-15px_rgba(217,119,6,0.15)] p-6 sm:p-8 rounded-2xl z-10 animate-scale-in text-left" style={{ borderColor: '#d97706' }}>
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
             <button 
               onClick={() => setIsPrivacyOpen(false)}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center border border-stone-850 font-pixel text-xs transition-all cursor-pointer text-stone-400 hover:text-stone-200 hover:border-stone-600 bg-[#181715] rounded-lg shadow-sm"
+              className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
             >
-              ✕
+              <XIcon className="w-3.5 h-3.5" />
             </button>
-            <div className="flex items-center space-x-3 mb-6 border-b border-stone-850 pb-4">
-              <span className="text-2xl animate-pixel-bounce">🛡️</span>
+            <div className="flex items-center space-x-3 mb-2 border-b border-white/[0.05] pb-3">
               <div>
-                <h3 className="font-pixel text-xs sm:text-sm uppercase tracking-wider text-[#d97706] leading-none mb-1">
+                <h3 className="font-sans text-sm uppercase tracking-wider text-white font-semibold">
                   Privacy Policy
                 </h3>
-                <span className="text-5xs font-mono text-stone-500 uppercase tracking-widest block">SECURE SYSTEM MATCH DATA</span>
+                <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block mt-0.5">SECURE SYSTEM MATCH DATA</span>
               </div>
             </div>
             
-            <div className="max-h-[55vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-stone-300 space-y-5 leading-relaxed">
-              <div className="bg-[#181715] border border-stone-850 px-4 py-2.5 rounded-lg mb-2 flex items-center justify-between">
-                <span className="text-3xs font-mono text-stone-400">STATUS: ACTIVE // VERIFIED</span>
-                <span className="text-3xs font-mono text-[#d97706] font-bold">UPDATED: MAY 29, 2026</span>
+            <div className="max-h-[50vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-zinc-400 space-y-5 leading-relaxed text-left">
+              <div className="bg-white/[0.02] border border-white/[0.06] px-4 py-2.5 rounded-md mb-2 flex items-center justify-between">
+                <span className="text-[9px] font-mono text-zinc-450">STATUS: ACTIVE // VERIFIED</span>
+                <span className="text-[9px] font-mono text-zinc-500 font-semibold">UPDATED: MAY 29, 2026</span>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">1. Scope & Commitment</h4>
-                <p className="text-stone-350">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">1. Scope & Commitment</h4>
+                <p className="text-zinc-450">
                   At Indie Clash (operated by @MaberFate), we respect your privacy. This policy outlines how we handle data for our 1v1 tournament arena website. We are committed to data minimization and user security.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">2. Information We Collect</h4>
-                <div className="bg-[#181715] border border-stone-850 p-4 rounded-lg space-y-3">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">2. Information We Collect</h4>
+                <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-md space-y-3">
                   <div>
-                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-3xs px-2 py-0.5 rounded-md mb-1 font-bold">OAUTH ACCOUNT METADATA</span>
-                    <p className="text-stone-350 text-3xs leading-relaxed">
+                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">OAUTH ACCOUNT METADATA</span>
+                    <p className="text-zinc-450 text-[10px] leading-relaxed">
                       When you connect via Google or GitHub OAuth, we collect your verified email address, public profile name, avatar image URL, and auth provider details. This is necessary to verify your identity.
                     </p>
                   </div>
                   <div>
-                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-3xs px-2 py-0.5 rounded-md mb-1 font-bold">PROJECT SUBMISSION DATA</span>
-                    <p className="text-stone-350 text-3xs leading-relaxed">
+                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">PROJECT SUBMISSION DATA</span>
+                    <p className="text-zinc-450 text-[10px] leading-relaxed">
                       If you submit an indie product, we collect the title, tagline, logo/emoji, maker Twitter/X handle, and live demo URL.
                     </p>
                   </div>
                   <div>
-                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-3xs px-2 py-0.5 rounded-md mb-1 font-bold">CRITIQUES & PUBLIC VOTES</span>
-                    <p className="text-stone-350 text-3xs leading-relaxed">
+                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">CRITIQUES & PUBLIC VOTES</span>
+                    <p className="text-zinc-450 text-[10px] leading-relaxed">
                       To participate in the arena voting process, you must submit a constructive critique. We store and publicly display the critique texts you write, alongside your voting selection.
                     </p>
                   </div>
@@ -3878,45 +3686,44 @@ export default function ArenaClient({
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">3. How We Use Your Data</h4>
-                <ul className="space-y-2 text-stone-350">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">3. How We Use Your Data</h4>
+                <ul className="space-y-2 text-zinc-450">
                   <li className="flex items-start space-x-2">
-                    <span className="text-[#d97706] mt-0.5 shrink-0">✔</span>
+                    <span className="text-zinc-600 mt-0.5 shrink-0">✔</span>
                     <span><strong>Spam & Vote Rigging Prevention:</strong> Connected accounts help us prevent bots, duplicate voting, and coordinated manipulation rings.</span>
                   </li>
                   <li className="flex items-start space-x-2">
-                    <span className="text-[#d97706] mt-0.5 shrink-0">✔</span>
+                    <span className="text-zinc-600 mt-0.5 shrink-0">✔</span>
                     <span><strong>Public Duel Transparency:</strong> Constructive critiques are published on the battle whiteboard. The identity linked to your account may be shown next to your feedback.</span>
                   </li>
                   <li className="flex items-start space-x-2">
-                    <span className="text-[#d97706] mt-0.5 shrink-0">✔</span>
+                    <span className="text-zinc-600 mt-0.5 shrink-0">✔</span>
                     <span><strong>Tournament Operation:</strong> We use project details for matching, voting updates, rankings, and historical champion boards.</span>
                   </li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">4. Data Sharing & Retention</h4>
-                <p className="text-stone-350">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">4. Data Sharing & Retention</h4>
+                <p className="text-zinc-450">
                   We do not sell, rent, or lease your personal information. Your profile details, submitted critiques, and project links are publicly displayed as part of the core Indie Clash experience. All transaction sessions are handled via encrypted Supabase storage.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">5. Contact Us</h4>
-                <p className="text-stone-350">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">5. Contact Us</h4>
+                <p className="text-zinc-450">
                   For any privacy inquiries, data deletion requests, or support, reach out to us at:
-                  <a href="mailto:support@maber.xyz" className="text-[#d97706] hover:underline font-bold ml-1">support@maber.xyz</a>.
+                  <a href="mailto:support@maber.xyz" className="text-white hover:underline font-semibold ml-1">support@maber.xyz</a>.
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 text-right border-t border-stone-850 pt-4 flex justify-between items-center">
-              <span className="text-5xs font-mono text-stone-555 uppercase">INDIE CLASH PROTOCOL v1.0</span>
+            <div className="mt-4 text-right border-t border-white/[0.05] pt-4 flex justify-between items-center">
+              <span className="text-[9px] font-mono text-zinc-500 uppercase">INDIE CLASH PROTOCOL v1.0</span>
               <button
                 onClick={() => setIsPrivacyOpen(false)}
-                className="btn-pixel py-2.5 px-6 text-3xs font-pixel shadow-pixel-xs transition-all bg-[#1c1917] text-white border-2 hover:bg-stone-900 rounded-lg cursor-pointer"
-                style={{ borderColor: '#d97706' }}
+                className="py-2.5 px-6 text-xs font-mono transition-all bg-white hover:bg-zinc-200 text-black font-semibold rounded-md cursor-pointer"
               >
                 ACCEPT & CLOSE
               </button>
@@ -3926,104 +3733,181 @@ export default function ArenaClient({
       )}
 
       {/* ========================================================
-          Terms of Use Modal (Premium Retro-Dark Dialog)
+          Terms of Use Modal
          ======================================================== */}
       {isTermsOpen && (
-        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md animate-fade-in text-[#faf5ef]" style={{ zIndex: 150 }}>
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ zIndex: 150 }}>
           <div 
-            className="fixed inset-0" 
+            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
             onClick={() => setIsTermsOpen(false)}
           />
-          <div className="relative w-full max-w-2xl bg-[#0f0e0d]/98 border-2 border-pixel shadow-[0_25px_60px_-15px_rgba(217,119,6,0.15)] p-6 sm:p-8 rounded-2xl z-10 animate-scale-in text-left" style={{ borderColor: '#d97706' }}>
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
             <button 
               onClick={() => setIsTermsOpen(false)}
-              className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center border border-stone-850 font-pixel text-xs transition-all cursor-pointer text-stone-400 hover:text-stone-200 hover:border-stone-600 bg-[#181715] rounded-lg shadow-sm"
+              className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
             >
-              ✕
+              <XIcon className="w-3.5 h-3.5" />
             </button>
-            <div className="flex items-center space-x-3 mb-6 border-b border-stone-850 pb-4">
-              <span className="text-2xl animate-pixel-bounce">📜</span>
+            <div className="flex items-center space-x-3 mb-2 border-b border-white/[0.05] pb-3">
               <div>
-                <h3 className="font-pixel text-xs sm:text-sm uppercase tracking-wider text-[#d97706] leading-none mb-1">
+                <h3 className="font-sans text-sm uppercase tracking-wider text-white font-semibold">
                   Terms of Use
                 </h3>
-                <span className="text-5xs font-mono text-stone-500 uppercase tracking-widest block">ARENA DEPLOY RULES & POLICY</span>
+                <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block mt-0.5">ARENA DEPLOY RULES & POLICY</span>
               </div>
             </div>
             
-            <div className="max-h-[55vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-stone-300 space-y-5 leading-relaxed">
-              <div className="bg-[#181715] border border-stone-850 px-4 py-2.5 rounded-lg mb-2 flex items-center justify-between">
-                <span className="text-3xs font-mono text-stone-400">LICENSE AGREEMENT: PUBLIC ACCESS</span>
-                <span className="text-3xs font-mono text-[#d97706] font-bold">UPDATED: MAY 29, 2026</span>
+            <div className="max-h-[50vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-zinc-400 space-y-5 leading-relaxed text-left">
+              <div className="bg-white/[0.02] border border-white/[0.06] px-4 py-2.5 rounded-md mb-2 flex items-center justify-between">
+                <span className="text-[9px] font-mono text-zinc-450">LICENSE AGREEMENT: PUBLIC ACCESS</span>
+                <span className="text-[9px] font-mono text-zinc-500 font-semibold">UPDATED: MAY 29, 2026</span>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">1. Acceptance of Terms</h4>
-                <p className="text-stone-350">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">1. Acceptance of Terms</h4>
+                <p className="text-zinc-450">
                   By accessing and using Indie Clash (located at this website, created by @MaberFate), you agree to be bound by these Terms of Use. If you do not agree, please discontinue use immediately.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">2. Description of Service</h4>
-                <p className="text-stone-350">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">2. Description of Service</h4>
+                <p className="text-zinc-450">
                   Indie Clash is a 1v1 product tournament bracket platform. Users submit project details, connect identity via OAuth, and participate in peer-critique voting to rank products in live battles.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">3. Battle Arena Fair Play Policy</h4>
-                <div className="bg-[#181715] border border-stone-850 p-4 rounded-lg space-y-3 text-3xs text-stone-350 leading-relaxed">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">3. Battle Arena Fair Play Policy</h4>
+                <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-md space-y-3 text-[10px] text-zinc-455 leading-relaxed">
                   <div>
-                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#dc2626] font-mono text-4xs px-2 py-0.5 rounded-md mb-1 font-bold">ZERO TOLERANCE: BOT ACTIVITY</span>
+                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">ZERO TOLERANCE: BOT ACTIVITY</span>
                     <p>You may not use automated scripts, bots, or fake accounts to generate votes or project queues.</p>
                   </div>
                   <div>
-                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#dc2626] font-mono text-4xs px-2 py-0.5 rounded-md mb-1 font-bold">ZERO TOLERANCE: COORDINATED MANIPULATION</span>
+                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">ZERO TOLERANCE: COORDINATED MANIPULATION</span>
                     <p>Coordinated upvote manipulation, review exchanges, or purchasing of votes is strictly prohibited.</p>
                   </div>
                   <div>
-                    <span className="inline-block bg-stone-900 border border-stone-800 text-[#d97706] font-mono text-4xs px-2 py-0.5 rounded-md mb-1 font-bold">REQUIRED: DUAL CRITIQUE LOCK</span>
+                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">REQUIRED: DUAL CRITIQUE LOCK</span>
                     <p>You must leave a constructive critique of at least 10 characters summarizing positive points for the winner and actionable feedback for the runner-up. Low-effort or spam text will invalidate the vote.</p>
                   </div>
-                  <p className="text-amber-500 font-bold border-t border-stone-800 pt-2 font-pixel text-4xs uppercase">
+                  <p className="text-zinc-450 font-medium border-t border-white/[0.06] pt-2 font-mono text-[9px] uppercase">
                     ※ Violation results in permanent disqualification of products from current brackets & hall of valor.
                   </p>
                 </div>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">4. Intellectual Property & Submissions</h4>
-                <p className="text-stone-350">
-                  You retain ownership of all intellectual property rights to the products you submit. By submitting a product, you grant Indie Clash a worldwide, non-exclusive, royalty-free license to display your product details (title, tagline, emoji, screenshots, maker info, and URL) publicly in the arena.
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">4. Intellectual Property & Submissions</h4>
+                <p className="text-zinc-450">
+                  You retain ownership of all intellectual property rights to the products you submit. By submitting a product, you grant Indie Clash a worldwide, non-exclusive, royalty-free license to display your product details (title, tagline, logo/emoji, screenshots, maker info, and URL) publicly in the arena.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">5. Limitation of Liability</h4>
-                <p className="text-stone-350">
+                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">5. Limitation of Liability</h4>
+                <p className="text-zinc-455">
                   Indie Clash is provided "as is" and "as available". We do not guarantee uninterrupted service or error-free matchups. We reserve the right to modify, pause, or terminate tournament systems, brackets, or database values at our sole discretion without notice.
-                </p>
-              </div>
-
-              <div>
-                <h4 className="font-pixel text-3xs text-[#faf5ef] uppercase mb-1.5 border-l-2 border-[#d97706] pl-2">6. Contact & Support</h4>
-                <p className="text-stone-350">
-                  If you have questions, reports of abuse, or need support, contact our team at:
-                  <a href="mailto:support@maber.xyz" className="text-[#d97706] hover:underline font-bold ml-1">support@maber.xyz</a>.
                 </p>
               </div>
             </div>
 
-            <div className="mt-6 text-right border-t border-stone-850 pt-4 flex justify-between items-center">
-              <span className="text-5xs font-mono text-stone-555 uppercase">ARENA CORE CODE CONDITIONS v1.0</span>
+            <div className="mt-4 text-right border-t border-white/[0.05] pt-4 flex justify-between items-center">
+              <span className="text-[9px] font-mono text-zinc-500 uppercase">INDIE CLASH PROTOCOL v1.0</span>
               <button
                 onClick={() => setIsTermsOpen(false)}
-                className="btn-pixel py-2.5 px-6 text-3xs font-pixel shadow-pixel-xs transition-all bg-[#1c1917] text-white border-2 hover:bg-stone-900 rounded-lg cursor-pointer"
-                style={{ borderColor: '#d97706' }}
+                className="py-2.5 px-6 text-xs font-mono transition-all bg-white hover:bg-zinc-200 text-black font-semibold rounded-md cursor-pointer"
               >
                 ACCEPT & CLOSE
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          Product Details Popover Card
+         ======================================================== */}
+      {activeCardProduct && (
+        <div className="fixed inset-0 z-[160] flex items-center justify-center p-4" style={{ zIndex: 160 }}>
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-fade-in" 
+            onClick={() => setActiveCardProduct(null)}
+          />
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-xl p-5 w-full max-w-sm relative z-10 text-xs space-y-4 animate-scale-in text-left text-[#E4E4E7] shadow-2xl shadow-black/80">
+            {/* Top close button */}
+            <button 
+              onClick={() => setActiveCardProduct(null)}
+              className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1.5 rounded-md border border-white/[0.05] cursor-pointer"
+            >
+              <XIcon className="w-3 h-3" />
+            </button>
+
+            {/* Main product display */}
+            <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
+              <div className="w-12 h-12 bg-white/[0.03] border border-white/[0.08] rounded-xl flex items-center justify-center text-2xl shadow-inner">
+                {renderLogo(activeCardProduct.logo, "w-8 h-8 object-contain")}
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wide">
+                  {activeCardProduct.title}
+                </h3>
+              </div>
+            </div>
+
+            {/* Tagline */}
+            <p className="text-zinc-350 text-[11px] leading-relaxed font-sans">
+              {activeCardProduct.tagline}
+            </p>
+
+            {/* URL Link Section */}
+            <div className="bg-white/[0.02] border border-white/[0.05] p-3 rounded-lg flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="2" y1="12" x2="22" y2="12"></line>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                </svg>
+                <span className="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">LIVE DEMO URL</span>
+              </div>
+              <a 
+                href={activeCardProduct.url} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                onClick={() => synthClick(400, "sine", 0.08)}
+                className="text-amber-400 hover:text-amber-300 font-semibold transition-colors flex items-center gap-1 group text-[11px] border-b border-amber-400/30 hover:border-amber-300"
+              >
+                VIEW DEMO <span className="group-hover:translate-x-0.5 transition-transform">➔</span>
+              </a>
+            </div>
+
+            {/* Maker details footer */}
+            <div className="pt-3 border-t border-dashed border-white/[0.08] flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+              <div className="flex items-center gap-2">
+                {activeCardProduct.makerAvatar ? (
+                  <img 
+                    src={activeCardProduct.makerAvatar.split("#")[0]} 
+                    alt={activeCardProduct.makerName} 
+                    className="w-5 h-5 rounded-full border border-white/[0.1] object-cover"
+                  />
+                ) : (
+                  <div className="w-5 h-5 rounded-full border border-white/[0.1] bg-white/[0.03] flex items-center justify-center text-[8px]">👤</div>
+                )}
+                <span className="text-zinc-300 hover:text-white transition-colors">
+                  {activeCardProduct.makerTwitter || `@${activeCardProduct.makerName.toLowerCase().replace(/\s/g, "")}`}
+                </span>
+              </div>
+              <span>
+                {(() => {
+                  try {
+                    const d = new Date(activeCardProduct.submittedAt);
+                    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+                  } catch (e) {
+                    return "";
+                  }
+                })()}
+              </span>
             </div>
           </div>
         </div>

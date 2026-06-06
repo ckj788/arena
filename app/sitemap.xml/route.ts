@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
 import { SEED_PRODUCTS } from "@/lib/mockData";
 
 export const dynamic = "force-dynamic";
@@ -14,22 +14,22 @@ export async function GET() {
     try {
       // 1. Fetch all submitted products for reviews
       const { data: products } = await supabase
-        .from("shipandbattle_products")
-        .select("shipandbattle_id, shipandbattle_submitted_at");
+        .from(`${DB_PREFIX}products`)
+        .select(`${DB_PREFIX}id, ${DB_PREFIX}submitted_at`);
 
       if (products) {
-        products.forEach(p => {
-          const id = p.shipandbattle_id;
-          const date = p.shipandbattle_submitted_at
-            ? new Date(p.shipandbattle_submitted_at).toISOString().split("T")[0]
+        products.forEach((p: any) => {
+          const id = p[`${DB_PREFIX}id`];
+          const date = p[`${DB_PREFIX}submitted_at`]
+            ? new Date(p[`${DB_PREFIX}submitted_at`]).toISOString().split("T")[0]
             : new Date().toISOString().split("T")[0];
 
           urls.push(`
             <url>
-              <loc>${baseUrl}/reviews/${id}</loc>
-              <lastmod>${date}</lastmod>
-              <changefreq>weekly</changefreq>
-              <priority>0.8</priority>
+               <loc>${baseUrl}/reviews/${id}</loc>
+               <lastmod>${date}</lastmod>
+               <changefreq>weekly</changefreq>
+               <priority>0.8</priority>
             </url>
           `);
         });
@@ -37,17 +37,17 @@ export async function GET() {
 
       // 2. Fetch all matches for versus duels
       const { data: matches } = await supabase
-        .from("shipandbattle_matches")
-        .select("shipandbattle_product_a_id, shipandbattle_product_b_id");
+        .from(`${DB_PREFIX}matches`)
+        .select(`${DB_PREFIX}product_a_id, ${DB_PREFIX}product_b_id`);
 
       if (matches) {
-        matches.forEach(m => {
-          const slug = `${m.shipandbattle_product_a_id}-vs-${m.shipandbattle_product_b_id}`;
+        matches.forEach((m: any) => {
+          const slug = `${m[`${DB_PREFIX}product_a_id`]}-vs-${m[`${DB_PREFIX}product_b_id`]}`;
           urls.push(`
             <url>
-              <loc>${baseUrl}/versus/${slug}</loc>
-              <changefreq>daily</changefreq>
-              <priority>0.8</priority>
+               <loc>${baseUrl}/versus/${slug}</loc>
+               <changefreq>daily</changefreq>
+               <priority>0.8</priority>
             </url>
           `);
         });

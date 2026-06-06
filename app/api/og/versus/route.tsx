@@ -1,5 +1,5 @@
 import { ImageResponse } from "next/og";
-import { supabase } from "@/lib/supabaseClient";
+import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
 import { SEED_PRODUCTS } from "@/lib/mockData";
 
 export const runtime = "edge";
@@ -11,38 +11,60 @@ export async function GET(request: Request) {
     if (!slug) return new Response("Missing slug parameter", { status: 400 });
 
     const parts = slug.split("-vs-");
+    const isComparison = parts.length === 2;
     const [slugA, slugB] = parts;
 
     let productA: any = null;
     let productB: any = null;
+    let winRate = 75;
+    let totalDuels = 4;
 
-    if (supabase && slugA && slugB) {
+    if (supabase && slugA) {
       try {
         const { data: pA } = await supabase
-          .from("shipandbattle_products")
+          .from(`${DB_PREFIX}products`)
           .select("*")
-          .eq("shipandbattle_id", slugA)
-          .single();
-
-        const { data: pB } = await supabase
-          .from("shipandbattle_products")
-          .select("*")
-          .eq("shipandbattle_id", slugB)
+          .eq(`${DB_PREFIX}id`, slugA)
           .single();
 
         if (pA) {
+          const rawPA = pA as any;
           productA = {
-            title: pA.shipandbattle_title,
-            logo: pA.shipandbattle_logo,
-            votesCount: pA.shipandbattle_votes_count,
+            title: rawPA[`${DB_PREFIX}title`],
+            logo: rawPA[`${DB_PREFIX}logo`],
+            votesCount: rawPA[`${DB_PREFIX}votes_count`],
+            tagline: rawPA[`${DB_PREFIX}tagline`],
+            shipTimeframe: rawPA[`${DB_PREFIX}ship_timeframe`],
           };
+
+          if (!isComparison) {
+            const { data: matches } = await supabase
+              .from(`${DB_PREFIX}matches`)
+              .select("*")
+              .or(`${DB_PREFIX}product_a_id.eq.${slugA},${DB_PREFIX}product_b_id.eq.${slugA}`);
+            if (matches) {
+              totalDuels = matches.length;
+              const winCount = matches.filter((m: any) => m[`${DB_PREFIX}winner_id`] === slugA).length;
+              winRate = totalDuels > 0 ? Math.round((winCount / totalDuels) * 100) : 75;
+            }
+          }
         }
-        if (pB) {
-          productB = {
-            title: pB.shipandbattle_title,
-            logo: pB.shipandbattle_logo,
-            votesCount: pB.shipandbattle_votes_count,
-          };
+
+        if (isComparison && slugB) {
+          const { data: pB } = await supabase
+            .from(`${DB_PREFIX}products`)
+            .select("*")
+            .eq(`${DB_PREFIX}id`, slugB)
+            .single();
+
+          if (pB) {
+            const rawPB = pB as any;
+            productB = {
+              title: rawPB[`${DB_PREFIX}title`],
+              logo: rawPB[`${DB_PREFIX}logo`],
+              votesCount: rawPB[`${DB_PREFIX}votes_count`],
+            };
+          }
         }
       } catch (e) {
         console.error("Supabase query error in OG route:", e);
@@ -50,9 +72,9 @@ export async function GET(request: Request) {
     }
 
     // Fallback mock definitions if DB returns empty
-    if (!productA || !productB) {
+    if (!productA || (isComparison && !productB)) {
       const seedA = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugA?.toLowerCase());
-      const seedB = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugB?.toLowerCase());
+      const seedB = isComparison ? SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugB?.toLowerCase()) : null;
 
       const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -60,13 +82,17 @@ export async function GET(request: Request) {
         title: seedA ? seedA.title : capitalize(slugA || "Product A"),
         logo: seedA ? seedA.logo : "🚀",
         votesCount: 42,
+        tagline: seedA ? seedA.tagline : "Innovative developer utility shipped in public sprint.",
+        shipTimeframe: seedA ? seedA.shipTimeframe : "48h",
       };
 
-      productB = productB || {
-        title: seedB ? seedB.title : capitalize(slugB || "Product B"),
-        logo: seedB ? seedB.logo : "⚔️",
-        votesCount: 37,
-      };
+      if (isComparison) {
+        productB = productB || {
+          title: seedB ? seedB.title : capitalize(slugB || "Product B"),
+          logo: seedB ? seedB.logo : "⚔️",
+          votesCount: 37,
+        };
+      }
     }
 
     const renderOgLogo = (logoStr: string) => {
@@ -90,7 +116,7 @@ export async function GET(request: Request) {
 
     // Generate dynamic 1200x630 layout
     return new ImageResponse(
-      (
+      isComparison ? (
         <div
           style={{
             height: "100%",
@@ -246,6 +272,131 @@ export async function GET(request: Request) {
               >
                 {productB.votesCount} votes
               </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            height: "100%",
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: "#070503",
+            backgroundImage: "radial-gradient(circle at top, #1e1309 0%, #070503 80%)",
+            border: "16px solid #ffbe18",
+            padding: "50px 60px",
+          }}
+        >
+          {/* Top Banner Tag */}
+          <div
+            style={{
+              display: "flex",
+              fontSize: "22px",
+              color: "#ffbe18",
+              fontWeight: "900",
+              letterSpacing: "4px",
+              textTransform: "uppercase",
+              border: "1px solid rgba(255, 190, 24, 0.3)",
+              backgroundColor: "rgba(255, 190, 24, 0.05)",
+              padding: "8px 24px",
+              borderRadius: "40px",
+              marginBottom: "35px",
+            }}
+          >
+            🛡️ FOUNDER CRITIQUES & DUEL STATS 🛡️
+          </div>
+
+          {/* Main Info */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "100%",
+              gap: "40px",
+              marginBottom: "35px",
+            }}
+          >
+            {/* Logo */}
+            <div
+              style={{
+                fontSize: "96px",
+                backgroundColor: "rgba(255, 255, 255, 0.03)",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                borderRadius: "24px",
+                width: "150px",
+                height: "150px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                boxShadow: "0 8px 16px rgba(0,0,0,0.4)",
+                overflow: "hidden",
+              }}
+            >
+              {renderOgLogo(productA.logo)}
+            </div>
+
+            {/* Title & Tagline */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "flex-start",
+                justifyContent: "center",
+                maxWidth: "600px",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "52px",
+                  color: "#ffffff",
+                  fontWeight: "900",
+                  lineHeight: "1.1",
+                }}
+              >
+                {productA.title}
+              </span>
+              <span
+                style={{
+                  fontSize: "22px",
+                  color: "#faf5ef",
+                  opacity: 0.6,
+                  marginTop: "12px",
+                  fontWeight: "300",
+                  lineHeight: "1.4",
+                }}
+              >
+                {productA.tagline || "Innovative developer utility shipped in public sprint."}
+              </span>
+            </div>
+          </div>
+
+          {/* Stats Bar */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              width: "80%",
+              backgroundColor: "rgba(255, 255, 255, 0.02)",
+              border: "1px solid rgba(255, 255, 255, 0.06)",
+              padding: "16px 32px",
+              borderRadius: "16px",
+            }}
+          >
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <span style={{ fontSize: "14px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}>Win Rate</span>
+              <span style={{ fontSize: "28px", color: "#ffbe18", fontWeight: "bold", marginTop: "4px" }}>{winRate}%</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <span style={{ fontSize: "14px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}>Total Duels</span>
+              <span style={{ fontSize: "28px", color: "#fff", fontWeight: "bold", marginTop: "4px" }}>{totalDuels} duels</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <span style={{ fontSize: "14px", color: "#888", textTransform: "uppercase", letterSpacing: "1px" }}>Total Votes</span>
+              <span style={{ fontSize: "28px", color: "#fff", fontWeight: "bold", marginTop: "4px" }}>{productA.votesCount} votes</span>
             </div>
           </div>
         </div>
