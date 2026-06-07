@@ -2281,7 +2281,7 @@ export default function ArenaClient({
 
           {/* Audit logs stream table format only, strictly no cards */}
           <div 
-            className="border border-white/[0.05] bg-[#070709]/40 rounded-md overflow-hidden h-[520px] relative"
+            className="border border-white/[0.05] bg-[#070709]/40 rounded-md overflow-hidden h-[960px] relative"
             style={{
               maskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
               WebkitMaskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
@@ -2331,7 +2331,7 @@ export default function ArenaClient({
                         <div className="flex flex-wrap items-center gap-2">
                           <a 
                             href={`/reviews/${item.id}`}
-                            className="font-bold text-white text-sm hover:underline hover:text-[#ffbe18] transition"
+                            className="font-bold text-white text-sm hover:underline hover:text-[#ffbe18] transition relative z-10 cursor-pointer"
                           >
                             {item.title}
                           </a>
@@ -2340,9 +2340,11 @@ export default function ArenaClient({
                             <a 
                               href={`https://x.com/${item.makerTwitter ? item.makerTwitter.replace(/^@/, "") : ""}`}
                               target="_blank"
-                              rel="noreferrer"
-                              className="hover:underline hover:text-white transition duration-150"
-                              onClick={(e) => e.stopPropagation()}
+                              rel="noopener noreferrer"
+                              className="hover:underline hover:text-white transition duration-150 relative z-10 cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
                             >
                               {item.makerTwitter}
                             </a>
