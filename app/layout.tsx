@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     siteName: "Indie Clash",
     images: [
       {
-        url: "https://www.indieclash.com/colosseum_arena_pixel.png",
+        url: "https://www.indieclash.com/og-image.png",
         width: 1200,
         height: 630,
         alt: "INDIE CLASH Arena Preview",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "INDIE CLASH — 1v1 Product Tournament Arena",
     description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
-    images: ["https://www.indieclash.com/colosseum_arena_pixel.png"],
+    images: ["https://www.indieclash.com/og-image.png"],
   },
 };
 
