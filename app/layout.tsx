@@ -17,6 +17,27 @@ const outfit = Outfit({
 export const metadata: Metadata = {
   title: "INDIE CLASH — 1v1 Product Tournament Arena",
   description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
+  openGraph: {
+    title: "INDIE CLASH — 1v1 Product Tournament Arena",
+    description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
+    url: "https://www.indieclash.com",
+    siteName: "Indie Clash",
+    images: [
+      {
+        url: "https://www.indieclash.com/colosseum_arena_pixel.png",
+        width: 1200,
+        height: 630,
+        alt: "INDIE CLASH Arena Preview",
+      }
+    ],
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "INDIE CLASH — 1v1 Product Tournament Arena",
+    description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
+    images: ["https://www.indieclash.com/colosseum_arena_pixel.png"],
+  },
 };
 
 export default function RootLayout({
