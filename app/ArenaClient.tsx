@@ -937,7 +937,7 @@ export default function ArenaClient({
         const ms = getRoundRemainingMs(roundNum, bracket.roundStartedAt || new Date().toISOString());
         setActiveRoundRemainingMs(ms);
         
-        if (ms <= 0) {
+        if (ms <= 0 && !supabase) {
           const advanced = advanceTournamentRound(bracket);
           
           if (advanced.status === "completed" && advanced.winner) {
