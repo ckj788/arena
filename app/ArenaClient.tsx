@@ -917,7 +917,7 @@ export default function ArenaClient({
         const ms = getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
         setCountdownToMidnightMs(ms);
         
-        if (ms <= 0) {
+        if (ms <= 0 && !supabase) {
           const activeBracket = {
             ...bracket,
             status: "active" as const,
@@ -926,9 +926,6 @@ export default function ArenaClient({
           setBracket(activeBracket);
           setActiveMatch(activeBracket.round1[0]);
           saveBracket(activeBracket);
-          if (supabase) {
-            saveCloudBracket(activeBracket).then(() => syncCloudData());
-          }
         }
       }
       

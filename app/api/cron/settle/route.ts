@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { fetchCloudBracket, saveCloudBracket, advanceTournamentRound } from "@/lib/arenaStore";
-import { getRoundRemainingMs, getActiveRound } from "@/lib/timeHelpers";
+import { fetchCloudBracket, saveCloudBracket, advanceTournamentRound, getActiveRound } from "@/lib/arenaStore";
+import { getRoundRemainingMs, getMillisecondsToNextNYMidnight } from "@/lib/timeHelpers";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +19,26 @@ export async function GET(request: Request) {
     }
 
     if (bracket.status === "preparing") {
-      return NextResponse.json({ message: "Bracket is preparing." });
+      const ms = getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
+      if (ms <= 0) {
+        console.log("[CRON] Preparing bracket timer expired. Starting season...");
+        const activeBracket = {
+          ...bracket,
+          status: "active" as const,
+          roundStartedAt: new Date().toISOString()
+        };
+        await saveCloudBracket(activeBracket);
+        return NextResponse.json({
+          message: "Tournament started successfully.",
+          status: activeBracket.status,
+          roundStartedAt: activeBracket.roundStartedAt
+        });
+      }
+      return NextResponse.json({ 
+        message: "Bracket is preparing. Countdown to midnight active.",
+        remainingMs: ms,
+        closesInHours: (ms / (1000 * 60 * 60)).toFixed(2)
+      });
     }
 
     if (bracket.status === "active") {
