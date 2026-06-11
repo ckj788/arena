@@ -503,6 +503,7 @@ export default function ArenaClient({
   const isResettingRef = useRef(false);
   const isSyncLockedRef = useRef(false);
   const isRolloverPendingRef = useRef(false);
+  const isSettleRequestedRef = useRef(false);
   useEffect(() => {
     latestBracketRef.current = bracket;
   }, [bracket]);
@@ -917,15 +918,34 @@ export default function ArenaClient({
         const ms = getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
         setCountdownToMidnightMs(ms);
         
-        if (ms <= 0 && !supabase) {
-          const activeBracket = {
-            ...bracket,
-            status: "active" as const,
-            roundStartedAt: new Date().toISOString()
-          };
-          setBracket(activeBracket);
-          setActiveMatch(activeBracket.round1[0]);
-          saveBracket(activeBracket);
+        if (ms <= 0) {
+          if (!supabase) {
+            const activeBracket = {
+              ...bracket,
+              status: "active" as const,
+              roundStartedAt: new Date().toISOString()
+            };
+            setBracket(activeBracket);
+            setActiveMatch(activeBracket.round1[0]);
+            saveBracket(activeBracket);
+          } else {
+            // Trigger JIT start for preparing bracket
+            if (!isSettleRequestedRef.current) {
+              isSettleRequestedRef.current = true;
+              fetch("/api/arena/settle")
+                .then(res => res.json())
+                .then(data => {
+                  console.log("[INDIE CLASH] JIT Season Start:", data);
+                  syncCloudData();
+                })
+                .catch(err => console.error("[INDIE CLASH] JIT Season Start error:", err))
+                .finally(() => {
+                  setTimeout(() => {
+                    isSettleRequestedRef.current = false;
+                  }, 10000);
+                });
+            }
+          }
         }
       }
       
@@ -934,51 +954,55 @@ export default function ArenaClient({
         const ms = getRoundRemainingMs(roundNum, bracket.roundStartedAt || new Date().toISOString());
         setActiveRoundRemainingMs(ms);
         
-        if (ms <= 0 && !supabase) {
-          const advanced = advanceTournamentRound(bracket);
-          
-          if (advanced.status === "completed" && advanced.winner) {
-            const champ = advanced.winner;
-            setPastChampions(prev => {
-              if (prev.some(x => x.id === champ.id)) return prev;
-              return [...prev, champ];
-            });
-            if (!supabase) {
+        if (ms <= 0) {
+          if (!supabase) {
+            const advanced = advanceTournamentRound(bracket);
+            
+            if (advanced.status === "completed" && advanced.winner) {
+              const champ = advanced.winner;
+              setPastChampions(prev => {
+                if (prev.some(x => x.id === champ.id)) return prev;
+                return [...prev, champ];
+              });
               const localChamps = loadLocalPastChampions();
               if (!localChamps.some(c => c.id === champ.id)) {
                 localChamps.push(champ);
                 saveLocalPastChampions(localChamps);
               }
-            }
-            setBracket(null);
-            setActiveMatch(null);
-            saveBracket(null);
-            if (supabase) {
-              saveCloudBracket(advanced).then(() => {
-                syncCloudData();
-                // Auto-rollover: check if next season can start
-                fetchCloudProducts().then(latestProds => {
-                  tryAutoRollover(latestProds);
-                });
-              });
-            } else {
+              setBracket(null);
+              setActiveMatch(null);
+              saveBracket(null);
               // Auto-rollover for local mode
               const latestProds = loadProducts();
               tryAutoRollover(latestProds);
+            } else {
+              setBracket(advanced);
+              const nextRound = getActiveRound(advanced);
+              let nextActive = null;
+              if (nextRound === 1) nextActive = advanced.round1.find(m => !m.winnerId) || advanced.round1[0];
+              else if (nextRound === 2) nextActive = advanced.round2.find(m => !m.winnerId) || advanced.round2[0];
+              else if (nextRound === 3) nextActive = advanced.round3.find(m => !m.winnerId) || advanced.round3[0];
+              else if (nextRound === 4) nextActive = advanced.round4.find(m => !m.winnerId) || advanced.round4[0];
+              
+              setActiveMatch(nextActive || null);
+              saveBracket(advanced);
             }
           } else {
-            setBracket(advanced);
-            const nextRound = getActiveRound(advanced);
-            let nextActive = null;
-            if (nextRound === 1) nextActive = advanced.round1.find(m => !m.winnerId) || advanced.round1[0];
-            else if (nextRound === 2) nextActive = advanced.round2.find(m => !m.winnerId) || advanced.round2[0];
-            else if (nextRound === 3) nextActive = advanced.round3.find(m => !m.winnerId) || advanced.round3[0];
-            else if (nextRound === 4) nextActive = advanced.round4.find(m => !m.winnerId) || advanced.round4[0];
-            
-            setActiveMatch(nextActive || null);
-            saveBracket(advanced);
-            if (supabase) {
-              saveCloudBracket(advanced).then(() => syncCloudData());
+            // Trigger JIT settlement for active bracket
+            if (!isSettleRequestedRef.current) {
+              isSettleRequestedRef.current = true;
+              fetch("/api/arena/settle")
+                .then(res => res.json())
+                .then(data => {
+                  console.log("[INDIE CLASH] JIT Settle:", data);
+                  syncCloudData();
+                })
+                .catch(err => console.error("[INDIE CLASH] JIT Settle error:", err))
+                .finally(() => {
+                  setTimeout(() => {
+                    isSettleRequestedRef.current = false;
+                  }, 10000);
+                });
             }
           }
         }
