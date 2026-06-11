@@ -14,6 +14,14 @@ export const supabase =
           detectSessionInUrl: false,
           flowType: "implicit",
         },
+        global: {
+          fetch: (url, options) => {
+            return fetch(url, {
+              ...options,
+              cache: "no-store",
+            });
+          },
+        },
       })
     : null;
 
