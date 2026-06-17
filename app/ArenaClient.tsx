@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { gsap } from "gsap";
 import { Product, Match, Bracket } from "@/lib/mockData";
 import {
   loadProducts,
@@ -2120,6 +2121,107 @@ export default function ArenaClient({
     return [];
   }, [bracket]);
 
+  // 1. GSAP: Animate Hero and page intro on boot
+  useEffect(() => {
+    if (isBooted) {
+      // Animate Hero Monospace Badge
+      gsap.fromTo(
+        ".hero-badge",
+        { opacity: 0, scale: 0.3, y: -20 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.7)" }
+      );
+      // Animate Hero main title
+      gsap.fromTo(
+        ".hero-title",
+        { opacity: 0, y: 40 },
+        { opacity: 1, y: 0, duration: 0.8, delay: 0.15, ease: "power3.out" }
+      );
+      // Animate Hero tagline/description
+      gsap.fromTo(
+        ".hero-desc",
+        { opacity: 0, y: 25 },
+        { opacity: 1, y: 0, duration: 0.8, delay: 0.3, ease: "power3.out" }
+      );
+      // Animate Hero stats badge
+      gsap.fromTo(
+        ".hero-stats",
+        { opacity: 0, scale: 0.8, y: 15 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.5, delay: 0.45, ease: "back.out(1.2)" }
+      );
+      // Animate Today's Releases section
+      gsap.fromTo(
+        "#launches-section",
+        { opacity: 0, y: 30 },
+        { opacity: 1, y: 0, duration: 1, delay: 0.6, ease: "power2.out" }
+      );
+    }
+  }, [isBooted]);
+
+  // 2. GSAP: Animate match slate list items on mount/round change
+  useEffect(() => {
+    if (currentRoundMatches && currentRoundMatches.length > 0) {
+      gsap.fromTo(
+        ".match-card-item",
+        { opacity: 0, x: -25 },
+        { opacity: 1, x: 0, duration: 0.45, stagger: 0.06, ease: "power2.out", overwrite: "auto" }
+      );
+    }
+  }, [activeRoundNum, currentRoundMatches]);
+
+  // 3. GSAP: Animate Battle Inspector contents when activeMatch changes
+  useEffect(() => {
+    if (activeMatch) {
+      // Intro animations for cards and center VS block
+      gsap.fromTo(
+        ".inspector-panel",
+        { borderAlpha: 0.08, backgroundColor: "rgba(10, 10, 12, 0.4)" },
+        { duration: 0.4, ease: "power1.out" }
+      );
+      gsap.fromTo(
+        ".inspector-title",
+        { opacity: 0, y: -10 },
+        { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }
+      );
+      gsap.fromTo(
+        ".inspector-card-a",
+        { opacity: 0, x: -40, scale: 0.96 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.45, ease: "power3.out" }
+      );
+      gsap.fromTo(
+        ".inspector-card-b",
+        { opacity: 0, x: 40, scale: 0.96 },
+        { opacity: 1, x: 0, scale: 1, duration: 0.45, ease: "power3.out" }
+      );
+      gsap.fromTo(
+        ".inspector-vs",
+        { scale: 0.3, rotation: -90, opacity: 0 },
+        { scale: 1, rotation: 0, opacity: 1, duration: 0.55, ease: "back.out(1.8)" }
+      );
+    }
+  }, [activeMatch?.id]);
+
+  // 4. GSAP: Rumble impact effect when swords clash (on new vote)
+  useEffect(() => {
+    if (isSwordsClashing) {
+      // Scale pop and bounce the central VS block
+      gsap.timeline()
+        .to(".inspector-vs", { scale: 1.35, duration: 0.08, ease: "power1.out" })
+        .to(".inspector-vs", { scale: 1, duration: 0.25, ease: "bounce.out" });
+
+      // Stiff side-shake for product cards to emulate shockwave
+      gsap.fromTo(
+        ".inspector-card-a",
+        { x: -12 },
+        { x: 0, duration: 0.25, ease: "elastic.out(1, 0.35)", overwrite: "auto" }
+      );
+      gsap.fromTo(
+        ".inspector-card-b",
+        { x: 12 },
+        { x: 0, duration: 0.25, ease: "elastic.out(1, 0.35)", overwrite: "auto" }
+      );
+    }
+  }, [isSwordsClashing]);
+
   return (
     <div className={`min-h-screen bg-[#030303] text-[#E4E4E7] font-sans selection:bg-[#E4E4E7] selection:text-black antialiased relative pb-24 overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
       
@@ -2247,32 +2349,32 @@ export default function ArenaClient({
         <>
           {/* Hero Banner */}
           <section className="py-24 border-b border-white/[0.05] relative overflow-hidden bg-gradient-to-b from-white/[0.01] to-transparent">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          
-          {/* Micro monospace badge on top */}
-          <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.15] px-3 py-1 rounded-md mb-8">
-            FREE INDIE LAUNCH PLATFORM
-          </div>
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+              
+              {/* Micro monospace badge on top */}
+              <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.15] px-3 py-1 rounded-md mb-8 hero-badge">
+                FREE INDIE LAUNCH PLATFORM
+              </div>
 
-          {/* Extreme large title font bold tracking tight */}
-          <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-white uppercase mb-6 leading-none">
-            Every Indie Product<br />
-            <span className="text-zinc-500 font-mono font-medium">DESERVES TO BE SEEN</span>
-          </h1>
+              {/* Extreme large title font bold tracking tight */}
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-white uppercase mb-6 leading-none hero-title">
+                Every Indie Product<br />
+                <span className="text-zinc-500 font-mono font-medium">DESERVES TO BE SEEN</span>
+              </h1>
 
-          {/* Centered brief description, restricted width */}
-          <p className="max-w-[780px] mx-auto text-sm sm:text-base md:text-md text-zinc-400 leading-relaxed font-sans tracking-wide">
-            Submit for free. Get real exposure and a permanent SEO backlink. Then prove it in the 1v1 Arena, where builders compete through honest peer critiques, not vanity upvotes.
-          </p>
+              {/* Centered brief description, restricted width */}
+              <p className="max-w-[780px] mx-auto text-sm sm:text-base md:text-md text-zinc-400 leading-relaxed font-sans tracking-wide hero-desc">
+                Submit for free. Get real exposure and a permanent SEO backlink. Then prove it in the 1v1 Arena, where builders compete through honest peer critiques, not vanity upvotes.
+              </p>
 
-          <div className="mt-8 flex flex-wrap justify-center gap-4 text-[10px] font-mono text-zinc-500">
-            <span className="bg-[#0b0b0c] border border-white/[0.05] px-2.5 py-1 rounded-md uppercase tracking-wider">
-              Products Submitted: <span className="text-white font-semibold">{products.length}</span>
-            </span>
-          </div>
+              <div className="mt-8 flex flex-wrap justify-center gap-4 text-[10px] font-mono text-zinc-500 hero-stats">
+                <span className="bg-[#0b0b0c] border border-white/[0.05] px-2.5 py-1 rounded-md uppercase tracking-wider">
+                  Products Submitted: <span className="text-white font-semibold">{products.length}</span>
+                </span>
+              </div>
 
-        </div>
-      </section>
+            </div>
+          </section>
 
       {/* CORE APP WRAPPER LAYOUT */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -2505,7 +2607,7 @@ export default function ArenaClient({
                           setActiveMatch(duel);
                           pushToast(`Inspecting matchup: ${duel.productA.title} vs ${duel.productB.title}`, "info");
                         }}
-                        className={`p-4 bg-[#0a0a0c]/80 border rounded-md cursor-pointer transition-all duration-200 text-left hover:border-white/[0.15] hover:bg-[#0e0e11]/80 hover:-translate-y-0.5 ${
+                        className={`p-4 bg-[#0a0a0c]/80 border rounded-md cursor-pointer transition-all duration-200 text-left hover:border-white/[0.15] hover:bg-[#0e0e11]/80 hover:-translate-y-0.5 match-card-item ${
                           isSelected ? "border-white/[0.2] bg-[#121215]/90 shadow-[0_0_15px_rgba(255,255,255,0.02)]" : "border-white/[0.05]"
                         }`}
                       >
@@ -2577,12 +2679,11 @@ export default function ArenaClient({
                     const ratioB = sumVotes > 0 ? 100 - ratioA : 50;
                     
 
-
                     return (
-                      <div className="bg-[#0a0a0c]/80 border border-white/[0.08] rounded-md overflow-hidden premium-glass p-6 md:p-8 space-y-6 transition-all duration-300 animate-fade-in-blur">
+                      <div className="bg-[#0a0a0c]/80 border border-white/[0.08] rounded-md overflow-hidden premium-glass p-6 md:p-8 space-y-6 transition-all duration-300 animate-fade-in-blur inspector-panel">
                         
                         {/* Title Bar */}
-                        <div className="flex items-center justify-between border-b border-white/[0.04] pb-4">
+                        <div className="flex items-center justify-between border-b border-white/[0.04] pb-4 inspector-title">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-[9px] uppercase tracking-wider font-semibold bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded text-zinc-300">
                               ROUND {activeRoundNum} // BATTLE INSPECTOR
@@ -2591,7 +2692,7 @@ export default function ArenaClient({
                           <div>
                             {isDuelActive ? (
                               <span className="text-[9px] font-mono text-emerald-400 bg-emerald-400/[0.05] border border-emerald-400/[0.15] px-2 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
-                                <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                                 DECISION OPEN
                               </span>
                             ) : (
@@ -2606,7 +2707,7 @@ export default function ArenaClient({
                         <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
                           
                           {/* Product A block */}
-                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px]">
+                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px] inspector-card-a">
                             <div>
                               <div className="flex justify-between items-center mb-2">
                                 <span className="text-base">{renderLogo(duel.productA?.logo, "w-6 h-6")}</span>
@@ -2652,7 +2753,7 @@ export default function ArenaClient({
                           </div>
 
                           {/* VS center block */}
-                          <div className="md:col-span-1 flex flex-col items-center justify-center py-2">
+                          <div className="md:col-span-1 flex flex-col items-center justify-center py-2 inspector-vs">
                             <span className="text-zinc-700 font-mono tracking-widest text-[9px] uppercase">VS</span>
                             <div className="flex flex-col items-center mt-2 leading-tight">
                               <span className="font-mono font-bold text-lg text-white">{ratioA}%</span>
@@ -2662,7 +2763,7 @@ export default function ArenaClient({
                           </div>
 
                           {/* Product B block */}
-                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px]">
+                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px] inspector-card-b">
                             <div>
                               <div className="flex justify-between items-center mb-2">
                                 <span className="text-base">{renderLogo(duel.productB?.logo, "w-6 h-6")}</span>
