@@ -476,7 +476,7 @@ export async function saveCloudBracket(b: Bracket): Promise<void> {
 }
 
 // 4. 获取当前云端活跃的 Bracket 晋级树
-export async function fetchCloudBracket(): Promise<Bracket | null> {
+export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise<Bracket | null> {
   if (!supabase) return loadBracket();
 
   // A. 先抓取当前活跃（集结中/进行中）的最近一条对局树记录
@@ -507,7 +507,7 @@ export async function fetchCloudBracket(): Promise<Bracket | null> {
   }
 
   // C. 载入云端产品库以便装配成嵌套对象
-  const allProducts = await fetchCloudProducts();
+  const allProducts = preFetchedProducts || await fetchCloudProducts();
   const prodMap = new Map<string, Product>();
   allProducts.forEach(p => prodMap.set(p.id, p));
 
@@ -629,7 +629,7 @@ export function saveLocalPastChampions(champs: Product[]) {
 }
 
 // 6. 获取云端所有历史完结赛季的冠军项目
-export async function fetchCloudPastChampions(): Promise<Product[]> {
+export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): Promise<Product[]> {
   if (!supabase) {
     return loadLocalPastChampions();
   }
@@ -642,6 +642,12 @@ export async function fetchCloudPastChampions(): Promise<Product[]> {
   const winnerIds = bData.map((x: any) => x[`${DB_PREFIX}winner_id`]).filter(Boolean);
   if (winnerIds.length === 0) return [];
   
+  if (preFetchedProducts) {
+    const prodMap = new Map<string, Product>();
+    preFetchedProducts.forEach(p => prodMap.set(p.id, p));
+    return winnerIds.map(id => prodMap.get(id)).filter(Boolean) as Product[];
+  }
+
   const { data: pData, error: pErr } = await supabase
     .from(`${DB_PREFIX}products`)
     .select("*")

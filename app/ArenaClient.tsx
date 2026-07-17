@@ -574,14 +574,18 @@ export default function ArenaClient({
       } catch (e) {}
     }
 
-    // 2. Render cached data instantly in 0ms if it exists
-    if (memoryCache.products && memoryCache.products.length > 0) {
+    // 2. Render cached data instantly in 0ms if it exists, ONLY if current state is empty
+    const isProductsEmpty = !products || products.length === 0;
+    const isChampsEmpty = !pastChampions || pastChampions.length === 0;
+    const isBracketEmpty = !bracket;
+
+    if (isProductsEmpty && memoryCache.products && memoryCache.products.length > 0) {
       setProducts(memoryCache.products);
     }
-    if (memoryCache.champs && memoryCache.champs.length > 0) {
+    if (isChampsEmpty && memoryCache.champs && memoryCache.champs.length > 0) {
       setPastChampions(memoryCache.champs);
     }
-    if (memoryCache.bracket) {
+    if (isBracketEmpty && memoryCache.bracket) {
       setBracket(memoryCache.bracket);
       const b = memoryCache.bracket;
       const round = getActiveRound(b);
@@ -650,6 +654,13 @@ export default function ArenaClient({
 
   // Initial Load
   useEffect(() => {
+    // Populate memory cache with fresh server initial props immediately on mount to prevent cache downgrade & redundant DB queries
+    memoryCache.products = initialProducts;
+    memoryCache.champs = initialPastChampions;
+    memoryCache.bracket = initialBracket;
+    memoryCache.lastFetchTime = Date.now();
+    isInitialSyncDone.current = true;
+
     // Check if Supabase keys exist
     if (supabase) {
       syncCloudData();

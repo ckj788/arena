@@ -6,11 +6,11 @@ import { fetchCloudProducts, fetchCloudPastChampions, fetchCloudBracket } from "
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  // Fetch products, past champions, and the active bracket from Supabase in parallel on the server
-  const [initialProducts, initialPastChampions, initialBracket] = await Promise.all([
-    fetchCloudProducts(),
-    fetchCloudPastChampions(),
-    fetchCloudBracket()
+  // Fetch products, then use them in memory to get champions and bracket in parallel
+  const initialProducts = await fetchCloudProducts();
+  const [initialPastChampions, initialBracket] = await Promise.all([
+    fetchCloudPastChampions(initialProducts),
+    fetchCloudBracket(initialProducts)
   ]);
 
   return (
