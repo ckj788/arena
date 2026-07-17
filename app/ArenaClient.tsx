@@ -680,9 +680,7 @@ export default function ArenaClient({
     }
 
     // Trigger CRT power-on tube boot up
-    setTimeout(() => {
-      setIsBooted(true);
-    }, 100);
+    setIsBooted(true);
 
     // Generate random pixel particles for background atmosphere
     const generated = Array.from({ length: 12 }).map((_, i) => ({
@@ -2132,35 +2130,57 @@ export default function ArenaClient({
     return [];
   }, [bracket]);
 
-  // GSAP animation guards to prevent initial SSR mount reset flash
-  const isFirstRenderRef = useRef(true);
-  const prevActiveMatchIdRef = useRef<string | undefined>(activeMatch?.id);
-  const prevRoundNumRef = useRef<number>(activeRoundNum);
-
+  // 1. GSAP: Animate Hero and page intro on boot
   useEffect(() => {
-    isFirstRenderRef.current = false;
-  }, []);
+    if (isBooted) {
+      // Animate Hero Monospace Badge
+      gsap.fromTo(
+        ".hero-badge",
+        { opacity: 0, scale: 0.3, y: -20 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.7)" }
+      );
+      // Animate Hero main title
+      gsap.fromTo(
+        ".hero-title",
+        { opacity: 0, y: 40 },
+        { opacity: 1, y: 0, duration: 0.8, delay: 0.15, ease: "power3.out" }
+      );
+      // Animate Hero tagline/description
+      gsap.fromTo(
+        ".hero-desc",
+        { opacity: 0, y: 25 },
+        { opacity: 1, y: 0, duration: 0.8, delay: 0.3, ease: "power3.out" }
+      );
+      // Animate Hero stats badge
+      gsap.fromTo(
+        ".hero-stats",
+        { opacity: 0, scale: 0.8, y: 15 },
+        { opacity: 1, scale: 1, y: 0, duration: 0.5, delay: 0.45, ease: "back.out(1.2)" }
+      );
+      // Animate Today's Releases section
+      gsap.fromTo(
+        "#launches-section",
+        { opacity: 0, y: 30 },
+        { opacity: 1, y: 0, duration: 1, delay: 0.6, ease: "power2.out" }
+      );
+    }
+  }, [isBooted]);
 
-  // 1. GSAP: Animate match slate list items ONLY when active round changes (skip initial mount to prevent SSR flash)
+  // 2. GSAP: Animate match slate list items on mount/round change
   useEffect(() => {
-    if (isFirstRenderRef.current) return;
-    if (prevRoundNumRef.current !== activeRoundNum) {
-      prevRoundNumRef.current = activeRoundNum;
-      if (currentRoundMatches && currentRoundMatches.length > 0) {
-        gsap.fromTo(
-          ".match-card-item",
-          { opacity: 0, x: -25 },
-          { opacity: 1, x: 0, duration: 0.45, stagger: 0.06, ease: "power2.out", overwrite: "auto" }
-        );
-      }
+    if (currentRoundMatches && currentRoundMatches.length > 0) {
+      gsap.fromTo(
+        ".match-card-item",
+        { opacity: 0, x: -25 },
+        { opacity: 1, x: 0, duration: 0.45, stagger: 0.06, ease: "power2.out", overwrite: "auto" }
+      );
     }
   }, [activeRoundNum, currentRoundMatches]);
 
-  // 2. GSAP: Animate Battle Inspector contents ONLY when user selects a different match (skip initial mount to prevent SSR flash)
+  // 3. GSAP: Animate Battle Inspector contents when activeMatch changes
   useEffect(() => {
-    if (isFirstRenderRef.current) return;
-    if (activeMatch && prevActiveMatchIdRef.current !== activeMatch.id) {
-      prevActiveMatchIdRef.current = activeMatch.id;
+    if (activeMatch) {
+      // Intro animations for cards and center VS block
       gsap.fromTo(
         ".inspector-panel",
         { borderAlpha: 0.08, backgroundColor: "rgba(10, 10, 12, 0.4)" },
@@ -2189,7 +2209,7 @@ export default function ArenaClient({
     }
   }, [activeMatch?.id]);
 
-  // 3. GSAP: Rumble impact effect when swords clash (on new vote)
+  // 4. GSAP: Rumble impact effect when swords clash (on new vote)
   useEffect(() => {
     if (isSwordsClashing) {
       // Scale pop and bounce the central VS block
