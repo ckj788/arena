@@ -9,18 +9,19 @@ const BRACKET_KEY = "arena_bracket_v1";
 // ========================================================
 
 export function loadProducts(): Product[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === "undefined") return SEED_PRODUCTS;
   const data = localStorage.getItem(PRODUCTS_KEY);
   if (!data) {
     try {
-      localStorage.setItem(PRODUCTS_KEY, JSON.stringify([]));
+      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(SEED_PRODUCTS));
     } catch (e) {}
-    return [];
+    return SEED_PRODUCTS;
   }
   try {
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return parsed && parsed.length > 0 ? parsed : SEED_PRODUCTS;
   } catch (e) {
-    return [];
+    return SEED_PRODUCTS;
   }
 }
 
@@ -46,13 +47,16 @@ export function saveProducts(products: Product[]) {
 }
 
 export function loadBracket(): Bracket | null {
-  if (typeof window === "undefined") return null;
+  if (typeof window === "undefined") {
+    return buildInitialBracket(SEED_PRODUCTS).bracket;
+  }
   const data = localStorage.getItem(BRACKET_KEY);
-  if (!data) return null;
+  if (!data) return buildInitialBracket(SEED_PRODUCTS).bracket;
   try {
-    return JSON.parse(data);
+    const parsed = JSON.parse(data);
+    return parsed || buildInitialBracket(SEED_PRODUCTS).bracket;
   } catch (e) {
-    return null;
+    return buildInitialBracket(SEED_PRODUCTS).bracket;
   }
 }
 
@@ -382,16 +386,21 @@ function fromDbMatch(row: any, productA: Product, productB: Product): Match {
 // 1. 获取云端所有参赛项目列表
 export async function fetchCloudProducts(): Promise<Product[]> {
   if (!supabase) return loadProducts();
-  const { data, error } = await supabase
-    .from(`${DB_PREFIX}products`)
-    .select("*")
-    .order(`${DB_PREFIX}submitted_at`, { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from(`${DB_PREFIX}products`)
+      .select("*")
+      .order(`${DB_PREFIX}submitted_at`, { ascending: true });
 
-  if (error) {
-    console.error("Error fetching cloud products:", error);
+    if (error || !data) {
+      console.warn("⚠️ [INDIE CLASH] Cloud products fetch warning, using fallback store:", error?.message || error);
+      return loadProducts();
+    }
+    return data.map(fromDbProduct);
+  } catch (err: any) {
+    console.warn("⚠️ [INDIE CLASH] Cloud products network exception, using fallback store:", err?.message || err);
     return loadProducts();
   }
-  return data.map(fromDbProduct);
 }
 
 // 2. 上传/更新单个项目至云端
@@ -479,74 +488,77 @@ export async function saveCloudBracket(b: Bracket): Promise<void> {
 export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise<Bracket | null> {
   if (!supabase) return loadBracket();
 
-  // A. 先抓取当前活跃（集结中/进行中）的最近一条对局树记录
-  const { data: bData, error: bErr } = await supabase
-    .from(`${DB_PREFIX}brackets`)
-    .select("*")
-    .in(`${DB_PREFIX}status`, ["preparing", "active"])
-    .order(`${DB_PREFIX}created_at`, { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  try {
+    // A. 先抓取当前活跃（集结中/进行中）的最近一条对局树记录
+    const { data: bData, error: bErr } = await supabase
+      .from(`${DB_PREFIX}brackets`)
+      .select("*")
+      .in(`${DB_PREFIX}status`, ["preparing", "active"])
+      .order(`${DB_PREFIX}created_at`, { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-  if (bErr) {
-    console.error("Error fetching active bracket:", bErr);
+    if (bErr || !bData) {
+      if (bErr) console.warn("⚠️ [INDIE CLASH] Active bracket fetch issue, using fallback:", bErr?.message || bErr);
+      return loadBracket();
+    }
+
+    // B. 抓取该对局树下的所有场次
+    const { data: mData, error: mErr } = await supabase
+      .from(`${DB_PREFIX}matches`)
+      .select("*")
+      .eq(`${DB_PREFIX}bracket_id`, bData[`${DB_PREFIX}id`]);
+
+    if (mErr || !mData) {
+      if (mErr) console.warn("⚠️ [INDIE CLASH] Bracket matches fetch issue, using fallback:", mErr?.message || mErr);
+      return loadBracket();
+    }
+
+    // C. 载入云端产品库以便装配成嵌套对象
+    const allProducts = preFetchedProducts || await fetchCloudProducts();
+    const prodMap = new Map<string, Product>();
+    allProducts.forEach(p => prodMap.set(p.id, p));
+
+    const round1: Match[] = [];
+    const round2: Match[] = [];
+    const round3: Match[] = [];
+    const round4: Match[] = [];
+
+    mData.forEach(m => {
+      const prodA = prodMap.get(m[`${DB_PREFIX}product_a_id`]);
+      const prodB = prodMap.get(m[`${DB_PREFIX}product_b_id`]);
+      if (!prodA || !prodB) return;
+
+      const matchObj = fromDbMatch(m, prodA, prodB);
+      if (m[`${DB_PREFIX}round_number`] === 1) round1.push(matchObj);
+      else if (m[`${DB_PREFIX}round_number`] === 2) round2.push(matchObj);
+      else if (m[`${DB_PREFIX}round_number`] === 3) round3.push(matchObj);
+      else if (m[`${DB_PREFIX}round_number`] === 4) round4.push(matchObj);
+    });
+
+    // 排序以防乱序
+    const sortByMatchId = (x: Match, y: Match) => x.id.localeCompare(y.id);
+    round1.sort(sortByMatchId);
+    round2.sort(sortByMatchId);
+    round3.sort(sortByMatchId);
+    round4.sort(sortByMatchId);
+
+    const finalWinner = bData[`${DB_PREFIX}winner_id`] ? prodMap.get(bData[`${DB_PREFIX}winner_id`]) : undefined;
+
+    return {
+      id: bData[`${DB_PREFIX}id`],
+      status: bData[`${DB_PREFIX}status`],
+      winner: finalWinner,
+      roundStartedAt: bData[`${DB_PREFIX}round_started_at`],
+      round1,
+      round2,
+      round3,
+      round4
+    };
+  } catch (err: any) {
+    console.warn("⚠️ [INDIE CLASH] Cloud bracket network exception, using fallback:", err?.message || err);
     return loadBracket();
   }
-
-  if (!bData) return null;
-
-  // B. 抓取该对局树下的所有场次
-  const { data: mData, error: mErr } = await supabase
-    .from(`${DB_PREFIX}matches`)
-    .select("*")
-    .eq(`${DB_PREFIX}bracket_id`, bData[`${DB_PREFIX}id`]);
-
-  if (mErr) {
-    console.error("Error fetching bracket matches:", mErr);
-    return null;
-  }
-
-  // C. 载入云端产品库以便装配成嵌套对象
-  const allProducts = preFetchedProducts || await fetchCloudProducts();
-  const prodMap = new Map<string, Product>();
-  allProducts.forEach(p => prodMap.set(p.id, p));
-
-  const round1: Match[] = [];
-  const round2: Match[] = [];
-  const round3: Match[] = [];
-  const round4: Match[] = [];
-
-  mData.forEach(m => {
-    const prodA = prodMap.get(m[`${DB_PREFIX}product_a_id`]);
-    const prodB = prodMap.get(m[`${DB_PREFIX}product_b_id`]);
-    if (!prodA || !prodB) return;
-
-    const matchObj = fromDbMatch(m, prodA, prodB);
-    if (m[`${DB_PREFIX}round_number`] === 1) round1.push(matchObj);
-    else if (m[`${DB_PREFIX}round_number`] === 2) round2.push(matchObj);
-    else if (m[`${DB_PREFIX}round_number`] === 3) round3.push(matchObj);
-    else if (m[`${DB_PREFIX}round_number`] === 4) round4.push(matchObj);
-  });
-
-  // 排序以防乱序
-  const sortByMatchId = (x: Match, y: Match) => x.id.localeCompare(y.id);
-  round1.sort(sortByMatchId);
-  round2.sort(sortByMatchId);
-  round3.sort(sortByMatchId);
-  round4.sort(sortByMatchId);
-
-  const finalWinner = bData[`${DB_PREFIX}winner_id`] ? prodMap.get(bData[`${DB_PREFIX}winner_id`]) : undefined;
-
-  return {
-    id: bData[`${DB_PREFIX}id`],
-    status: bData[`${DB_PREFIX}status`],
-    winner: finalWinner,
-    roundStartedAt: bData[`${DB_PREFIX}round_started_at`],
-    round1,
-    round2,
-    round3,
-    round4
-  };
 }
 
 // 5. 永久清除云端对局数据并重置（彻底清空所有数据库表以支持沙箱重置）
@@ -633,26 +645,31 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
   if (!supabase) {
     return loadLocalPastChampions();
   }
-  const { data: bData, error: bErr } = await supabase
-    .from(`${DB_PREFIX}brackets`)
-    .select(`${DB_PREFIX}winner_id`)
-    .eq(`${DB_PREFIX}status`, "completed");
-  
-  if (bErr || !bData) return [];
-  const winnerIds = bData.map((x: any) => x[`${DB_PREFIX}winner_id`]).filter(Boolean);
-  if (winnerIds.length === 0) return [];
-  
-  if (preFetchedProducts) {
-    const prodMap = new Map<string, Product>();
-    preFetchedProducts.forEach(p => prodMap.set(p.id, p));
-    return winnerIds.map(id => prodMap.get(id)).filter(Boolean) as Product[];
-  }
-
-  const { data: pData, error: pErr } = await supabase
-    .from(`${DB_PREFIX}products`)
-    .select("*")
-    .in(`${DB_PREFIX}id`, winnerIds);
+  try {
+    const { data: bData, error: bErr } = await supabase
+      .from(`${DB_PREFIX}brackets`)
+      .select(`${DB_PREFIX}winner_id`)
+      .eq(`${DB_PREFIX}status`, "completed");
     
-  if (pErr || !pData) return [];
-  return pData.map(fromDbProduct);
+    if (bErr || !bData) return [];
+    const winnerIds = bData.map((x: any) => x[`${DB_PREFIX}winner_id`]).filter(Boolean);
+    if (winnerIds.length === 0) return [];
+    
+    if (preFetchedProducts) {
+      const prodMap = new Map<string, Product>();
+      preFetchedProducts.forEach(p => prodMap.set(p.id, p));
+      return winnerIds.map(id => prodMap.get(id)).filter(Boolean) as Product[];
+    }
+
+    const { data: pData, error: pErr } = await supabase
+      .from(`${DB_PREFIX}products`)
+      .select("*")
+      .in(`${DB_PREFIX}id`, winnerIds);
+      
+    if (pErr || !pData) return [];
+    return pData.map(fromDbProduct);
+  } catch (err: any) {
+    console.warn("⚠️ [INDIE CLASH] Cloud past champions network exception:", err?.message || err);
+    return loadLocalPastChampions();
+  }
 }

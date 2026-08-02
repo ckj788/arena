@@ -2132,39 +2132,37 @@ export default function ArenaClient({
 
   // 1. GSAP: Animate Hero and page intro on boot
   useEffect(() => {
-    if (isBooted) {
-      // Animate Hero Monospace Badge
-      gsap.fromTo(
-        ".hero-badge",
-        { opacity: 0, scale: 0.3, y: -20 },
-        { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.7)" }
-      );
-      // Animate Hero main title
-      gsap.fromTo(
-        ".hero-title",
-        { opacity: 0, y: 40 },
-        { opacity: 1, y: 0, duration: 0.8, delay: 0.15, ease: "power3.out" }
-      );
-      // Animate Hero tagline/description
-      gsap.fromTo(
-        ".hero-desc",
-        { opacity: 0, y: 25 },
-        { opacity: 1, y: 0, duration: 0.8, delay: 0.3, ease: "power3.out" }
-      );
-      // Animate Hero stats badge
-      gsap.fromTo(
-        ".hero-stats",
-        { opacity: 0, scale: 0.8, y: 15 },
-        { opacity: 1, scale: 1, y: 0, duration: 0.5, delay: 0.45, ease: "back.out(1.2)" }
-      );
-      // Animate Today's Releases section
-      gsap.fromTo(
-        "#launches-section",
-        { opacity: 0, y: 30 },
-        { opacity: 1, y: 0, duration: 1, delay: 0.6, ease: "power2.out" }
-      );
-    }
-  }, [isBooted]);
+    // Animate Hero Monospace Badge
+    gsap.fromTo(
+      ".hero-badge",
+      { opacity: 0, scale: 0.3, y: -20 },
+      { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.7)" }
+    );
+    // Animate Hero main title
+    gsap.fromTo(
+      ".hero-title",
+      { opacity: 0, y: 40 },
+      { opacity: 1, y: 0, duration: 0.8, delay: 0.15, ease: "power3.out" }
+    );
+    // Animate Hero tagline/description
+    gsap.fromTo(
+      ".hero-desc",
+      { opacity: 0, y: 25 },
+      { opacity: 1, y: 0, duration: 0.8, delay: 0.3, ease: "power3.out" }
+    );
+    // Animate Hero stats badge
+    gsap.fromTo(
+      ".hero-stats",
+      { opacity: 0, scale: 0.8, y: 15 },
+      { opacity: 1, scale: 1, y: 0, duration: 0.5, delay: 0.45, ease: "back.out(1.2)" }
+    );
+    // Animate Today's Releases section
+    gsap.fromTo(
+      "#launches-section",
+      { opacity: 0, y: 30 },
+      { opacity: 1, y: 0, duration: 1, delay: 0.6, ease: "power2.out" }
+    );
+  }, []);
 
   // 2. GSAP: Animate match slate list items on mount/round change
   useEffect(() => {
