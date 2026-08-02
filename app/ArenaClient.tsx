@@ -567,7 +567,9 @@ export default function ArenaClient({
         const raw = localStorage.getItem("indieclash_client_cache");
         if (raw) {
           const parsed = JSON.parse(raw);
-          if (parsed) {
+          if (parsed && parsed.products) {
+            // Filter out any mock SEED_PRODUCTS from previous offline cache
+            parsed.products = parsed.products.filter((p: any) => p.id && !p.id.startsWith("p1") && !p.id.startsWith("p2") && !p.id.startsWith("p3") && !p.id.startsWith("p4") && !p.id.startsWith("p5") && !p.id.startsWith("p6") && !p.id.startsWith("p7") && !p.id.startsWith("p8") && !p.id.startsWith("p9") && p.makerName !== "Lucas Kent");
             memoryCache = parsed;
           }
         }
