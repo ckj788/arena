@@ -9,19 +9,13 @@ const BRACKET_KEY = "arena_bracket_v1";
 // ========================================================
 
 export function loadProducts(): Product[] {
-  if (typeof window === "undefined") return SEED_PRODUCTS;
+  if (typeof window === "undefined") return [];
   const data = localStorage.getItem(PRODUCTS_KEY);
-  if (!data) {
-    try {
-      localStorage.setItem(PRODUCTS_KEY, JSON.stringify(SEED_PRODUCTS));
-    } catch (e) {}
-    return SEED_PRODUCTS;
-  }
+  if (!data) return [];
   try {
-    const parsed = JSON.parse(data);
-    return parsed && parsed.length > 0 ? parsed : SEED_PRODUCTS;
+    return JSON.parse(data) || [];
   } catch (e) {
-    return SEED_PRODUCTS;
+    return [];
   }
 }
 
@@ -47,16 +41,14 @@ export function saveProducts(products: Product[]) {
 }
 
 export function loadBracket(): Bracket | null {
-  if (typeof window === "undefined") {
-    return buildInitialBracket(SEED_PRODUCTS).bracket;
-  }
+  if (typeof window === "undefined") return null;
   const data = localStorage.getItem(BRACKET_KEY);
-  if (!data) return buildInitialBracket(SEED_PRODUCTS).bracket;
+  if (!data) return null;
   try {
     const parsed = JSON.parse(data);
-    return parsed || buildInitialBracket(SEED_PRODUCTS).bracket;
+    return parsed || null;
   } catch (e) {
-    return buildInitialBracket(SEED_PRODUCTS).bracket;
+    return null;
   }
 }
 
