@@ -14,15 +14,18 @@ import {
   advanceTournamentRound,
   addDummyMaker,
   fetchCloudProducts,
-  upsertCloudProduct,
-  saveCloudBracket,
   fetchCloudBracket,
-  clearCloudData,
   fetchCloudPastChampions,
   loadLocalPastChampions,
   saveLocalPastChampions,
   fromDbProduct
 } from "@/lib/arenaStore";
+import {
+  castArenaVote,
+  enqueueArenaProduct,
+  requestArenaSettlement,
+  submitArenaProduct,
+} from "@/lib/arenaApi";
 import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
 import {
   getMillisecondsToNextNYMidnight,
@@ -942,12 +945,10 @@ export default function ArenaClient({
             saveBracket(activeBracket);
           } else {
             // Trigger JIT start for preparing bracket
-            if (!isSettleRequestedRef.current) {
+            if (userLoggedIn && !isSettleRequestedRef.current) {
               isSettleRequestedRef.current = true;
-              fetch("/api/arena/settle")
-                .then(res => res.json())
-                .then(data => {
-                  console.log("[INDIE CLASH] JIT Season Start:", data);
+              requestArenaSettlement()
+                .then(() => {
                   syncCloudData();
                 })
                 .catch(err => console.error("[INDIE CLASH] JIT Season Start error:", err))
@@ -1001,12 +1002,10 @@ export default function ArenaClient({
             }
           } else {
             // Trigger JIT settlement for active bracket
-            if (!isSettleRequestedRef.current) {
+            if (userLoggedIn && !isSettleRequestedRef.current) {
               isSettleRequestedRef.current = true;
-              fetch("/api/arena/settle")
-                .then(res => res.json())
-                .then(data => {
-                  console.log("[INDIE CLASH] JIT Settle:", data);
+              requestArenaSettlement()
+                .then(() => {
                   syncCloudData();
                 })
                 .catch(err => console.error("[INDIE CLASH] JIT Settle error:", err))
@@ -1097,23 +1096,9 @@ export default function ArenaClient({
     setVoteLoserFeedback("");
 
     if (supabase) {
-      pushToast("Resetting cloud database...", "info");
-      clearCloudData()
-        .then(() => Promise.all(mockShowcase.map(p => upsertCloudProduct(p))))
-        .then(() => {
-          pushToast("Database reset successfully!", "success");
-          // Hold the isResettingRef = true lock for an extra 1500ms so all delayed
-          // database deletion events from the WebSocket channel are safely ignored.
-          setTimeout(() => {
-            isResettingRef.current = false;
-            syncCloudData();
-          }, 1500);
-        })
-        .catch((e) => {
-          isResettingRef.current = false;
-          console.error("Error resetting sandbox cloud database:", e);
-          pushToast(`Reset failed: ${e.message || "Unknown error"}`, "info");
-        });
+      isResettingRef.current = false;
+      pushToast("Cloud reset is disabled. Use the authenticated admin endpoint.", "info");
+      syncCloudData();
     } else {
       isResettingRef.current = false;
       pushToast("Local sandbox reset successfully!", "success");
@@ -1182,38 +1167,18 @@ export default function ArenaClient({
       setBracket(newB);
       setActiveMatch(newB.round1[0]);
       if (supabase) {
-        // Sync updated product statuses to cloud
-        Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
-          .then(() => saveCloudBracket(newB))
-          .then(() => {
-            setTimeout(() => {
-              isSyncLockedRef.current = false;
-              syncCloudData();
-            }, 800);
-          }).catch((err) => {
-            isSyncLockedRef.current = false;
-            console.error("Error saving initial cloud bracket:", err);
-          });
+        isSyncLockedRef.current = false;
+        pushToast("Cloud fixture injection is disabled for safety.", "info");
+        syncCloudData();
       } else {
         isSyncLockedRef.current = false;
       }
     };
 
     if (supabase) {
-      Promise.all(newAdded.map(p => upsertCloudProduct(p))).then(() => {
-        pushToast("16 Arena Competitors successfully injected!");
-        if (!bracket && !isRolloverPendingRef.current) {
-          setTimeout(startTournament, 300);
-        } else {
-          setTimeout(() => {
-            isSyncLockedRef.current = false;
-            syncCloudData();
-          }, 800);
-        }
-      }).catch((err) => {
-        isSyncLockedRef.current = false;
-        console.error("Error uploading injected competitors:", err);
-      });
+      isSyncLockedRef.current = false;
+      pushToast("Cloud fixture injection is disabled for safety.", "info");
+      syncCloudData();
     } else {
       pushToast("16 Arena Competitors successfully injected!");
       if (!bracket && !isRolloverPendingRef.current) {
@@ -1235,16 +1200,9 @@ export default function ArenaClient({
     saveProducts(currentProducts);
 
     if (supabase) {
-      Promise.all(newAdded.map(p => upsertCloudProduct(p))).then(() => {
-        pushToast("20 Mock Competitors successfully injected!");
-        setTimeout(() => {
-          isSyncLockedRef.current = false;
-          syncCloudData();
-        }, 800);
-      }).catch((err) => {
-        isSyncLockedRef.current = false;
-        console.error("Error uploading showcase products:", err);
-      });
+      isSyncLockedRef.current = false;
+      pushToast("Cloud fixture injection is disabled for safety.", "info");
+      syncCloudData();
     } else {
       isSyncLockedRef.current = false;
       pushToast("20 Mock Competitors successfully injected (Local)!");
@@ -1252,7 +1210,7 @@ export default function ArenaClient({
   };
 
   // Onboard Submission
-  const handleSubmitProduct = (e: React.FormEvent) => {
+  const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userLoggedIn) {
       synthClick(150, "sawtooth", 0.12);
@@ -1266,8 +1224,7 @@ export default function ArenaClient({
       return;
     }
 
-    // Limit to one product per person in the current season (waiting or active)
-    const isAdmin = userEmail && ["zyc729@outlook.com", "easoncheung9@gmail.com"].includes(userEmail.toLowerCase());
+    // Fast client-side feedback; the server independently enforces this limit by auth user ID.
     const hasExisting = products.some(p => {
       if (p.queueStatus !== "waiting" && p.queueStatus !== "active") return false;
       if (userSupabaseId && p.creator_uid === userSupabaseId) return true;
@@ -1278,7 +1235,7 @@ export default function ArenaClient({
       return false;
     });
 
-    if (hasExisting && !isAdmin) {
+    if (hasExisting) {
       synthClick(150, "sawtooth", 0.12);
       alert("Submission Limit Exceeded!\n\nTo ensure fair play, each maker is allowed only ONE product in the waiting list or active queue per tournament cycle.");
       return;
@@ -1286,202 +1243,150 @@ export default function ArenaClient({
 
     const normalizedUrl = newUrl.startsWith("http") ? newUrl : `https://${newUrl}`;
 
-    // Generate clean semantic URL slug from product website domain
-    let parsedSlug = "product";
-    try {
-      const parsedUrl = new URL(normalizedUrl);
-      let host = parsedUrl.hostname.toLowerCase();
-      host = host.replace(/^www\./, "");
-      const hostParts = host.split(".");
-      if (hostParts.length > 2 && ["app", "dev", "www", "play", "get", "use", "try", "go", "my"].includes(hostParts[0])) {
-        parsedSlug = hostParts[1];
-      } else {
-        parsedSlug = hostParts[0];
-      }
-      parsedSlug = parsedSlug.replace(/[^a-z0-9-]/g, "");
-    } catch (e) {
-      parsedSlug = newTitle.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-    }
-    if (!parsedSlug) {
-      parsedSlug = `product-${Date.now()}`;
-    }
-
-    // Ensure 100% uniqueness in DB to prevent primary key collision
-    let uniqueSlug = parsedSlug;
-    let collisionCount = 1;
-    while (products.some(p => p.id.toLowerCase() === uniqueSlug.toLowerCase())) {
-      uniqueSlug = `${parsedSlug}-${Math.random().toString(36).substring(2, 5)}`;
-      collisionCount++;
-      if (collisionCount > 10) break;
-    }
-
-    const newProd: Product = {
-      id: uniqueSlug,
-      title: newTitle,
-      tagline: newTagline,
-      url: normalizedUrl,
-      shipTimeframe: newTimeframe,
-      makerName: newMaker || "Anonymous Maker",
-      makerTwitter: newTwitter ? (newTwitter.startsWith("@") ? newTwitter : `@${newTwitter}`) : "@anonymous",
-      makerAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces" + 
-        (userLoggedIn ? `#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}&pushed=false` : ""),
-      logo: newLogo,
-      submittedAt: new Date().toISOString(),
-      queueStatus: "waiting",
-      votesCount: 0,
-      creatorUsername: mockUserTwitter,
-      creator_uid: userSupabaseId
-    } as any;
-
-    const updated = [...products, newProd];
-    synthClick(600, "sine", 0.15, 0.06);
-    setProducts(updated);
-    saveProducts(updated);
-
-    // Save project ID to local browser's claimed products list for 100% reliable local claim
-    if (typeof window !== "undefined") {
-      try {
-        const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
-        myIds.push(newProd.id);
-        localStorage.setItem("my_arena_products", JSON.stringify(myIds));
-      } catch (e) {}
-    }
-
-    // Acquire Sync Lock to prevent race condition pullbacks
     isSyncLockedRef.current = true;
+    try {
+      let newProd: Product;
+      const makerName = newMaker || "Anonymous Maker";
+      const makerTwitter = newTwitter ? (newTwitter.startsWith("@") ? newTwitter : `@${newTwitter}`) : "@anonymous";
+      const makerAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces";
 
-    setNewTitle("");
-    setNewTagline("");
-    setNewUrl("");
-    setNewMaker("");
-    setNewTwitter("");
-    setIsSubmitOpen(false);
-
-    const finishSubmit = () => {
-      const queuedList = updated.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
-      if (queuedList.length >= 16 && !bracket && !isRolloverPendingRef.current) {
-        setTimeout(() => {
-          setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
-          setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
-          setIsSuccessOpen(true);
-          const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(updated);
-          setProducts(newProds);
-          setBracket(newB);
-          setActiveMatch(newB.round1[0]);
-          if (supabase) {
-            Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
-              .then(() => saveCloudBracket(newB))
-              .then(() => {
-                setTimeout(() => {
-                  isSyncLockedRef.current = false;
-                  syncCloudData();
-                }, 800);
-              }).catch(() => {
-                isSyncLockedRef.current = false;
-              });
-          } else {
-            isSyncLockedRef.current = false;
-          }
-        }, 500);
+      if (supabase) {
+        newProd = await submitArenaProduct({
+          title: newTitle,
+          tagline: newTagline,
+          url: normalizedUrl,
+          shipTimeframe: newTimeframe,
+          makerName,
+          makerTwitter,
+          makerAvatar,
+          logo: newLogo,
+        });
       } else {
-        if (submitSource === 'home') {
-          setSuccessModalTitle("PROJECT SUBMITTED 🛡️");
-          setSuccessModalText("Your product has been successfully submitted and is now live on the Releases list!\n\nTo enter the 1v1 Arena matchmaking queue, click 'ENTER THE CONSOLE' below and click 'Push to Arena'.");
-          setIsSuccessOpen(true);
-        } else {
-          pushToast("Product successfully submitted!", "success");
+        let parsedSlug = newTitle.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+        try {
+          const host = new URL(normalizedUrl).hostname.toLowerCase().replace(/^www\./, "");
+          parsedSlug = host.split(".")[0].replace(/[^a-z0-9-]/g, "") || parsedSlug;
+        } catch {}
+        if (!parsedSlug) parsedSlug = `product-${Date.now()}`;
+        let uniqueSlug = parsedSlug;
+        while (products.some(p => p.id.toLowerCase() === uniqueSlug.toLowerCase())) {
+          uniqueSlug = `${parsedSlug}-${Math.random().toString(36).slice(2, 8)}`;
         }
-        setTimeout(() => {
-          isSyncLockedRef.current = false;
-          syncCloudData();
-        }, 800);
+        newProd = {
+          id: uniqueSlug,
+          title: newTitle,
+          tagline: newTagline,
+          url: normalizedUrl,
+          shipTimeframe: newTimeframe,
+          makerName,
+          makerTwitter,
+          makerAvatar: `${makerAvatar}#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}&pushed=false`,
+          logo: newLogo,
+          submittedAt: new Date().toISOString(),
+          queueStatus: "waiting",
+          votesCount: 0,
+          creatorUsername: mockUserTwitter,
+          creator_uid: userSupabaseId,
+          arenaEnqueued: false,
+        };
       }
-    };
 
-    if (supabase) {
-      upsertCloudProduct(newProd).then(() => {
-        finishSubmit();
-      }).catch((err) => {
-        isSyncLockedRef.current = false;
-        console.error("Error submitting product:", err);
-      });
-    } else {
-      finishSubmit();
+      const updated = [...products, newProd];
+      synthClick(600, "sine", 0.15, 0.06);
+      setProducts(updated);
+      saveProducts(updated);
+
+      if (typeof window !== "undefined") {
+        try {
+          const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
+          if (!myIds.includes(newProd.id)) myIds.push(newProd.id);
+          localStorage.setItem("my_arena_products", JSON.stringify(myIds));
+        } catch {}
+      }
+
+      setNewTitle("");
+      setNewTagline("");
+      setNewUrl("");
+      setNewMaker("");
+      setNewTwitter("");
+      setIsSubmitOpen(false);
+      if (submitSource === "home") {
+        setSuccessModalTitle("PROJECT SUBMITTED 🛡️");
+        setSuccessModalText("Your product has been successfully submitted and is now live on the Releases list!\n\nTo enter the 1v1 Arena matchmaking queue, click 'ENTER THE CONSOLE' below and click 'Push to Arena'.");
+        setIsSuccessOpen(true);
+      } else {
+        pushToast("Product successfully submitted!", "success");
+      }
+      if (supabase) await syncCloudData();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to submit this product.";
+      pushToast(message, "info");
+    } finally {
+      isSyncLockedRef.current = false;
     }
   };
 
   // Push project to arena waitlist matchmaking queue
-  const handlePushToQueue = (productId: string) => {
+  const handlePushToQueue = async (productId: string) => {
     synthClick(300, "sine", 0.05);
-    const updated = products.map(p => {
-      if (p.id === productId && p.makerAvatar) {
-        const cleanedAvatar = p.makerAvatar.replace("pushed=false", "pushed=true");
-        return { ...p, makerAvatar: cleanedAvatar };
-      }
-      return p;
-    });
-    setProducts(updated);
-    saveProducts(updated);
-
-    // Acquire Sync Lock to prevent race condition pullbacks
     isSyncLockedRef.current = true;
-
-    const pushedProduct = updated.find(p => p.id === productId);
-    
-    const finishPush = () => {
-      pushToast(`Product successfully enqueued in matchmaking waitlist!`, "success");
-
-      // Check if we hit 16 queued products to trigger matchmaking
-      const queuedList = updated.filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")));
-      if (queuedList.length >= 16 && !bracket && !isRolloverPendingRef.current) {
-        setTimeout(() => {
+    try {
+      if (supabase) {
+        const { bracketStarted } = await enqueueArenaProduct(productId);
+        pushToast("Product successfully enqueued in matchmaking waitlist!", "success");
+        if (bracketStarted) {
           setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
           setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
           setIsSuccessOpen(true);
-          const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(updated);
-          setProducts(newProds);
-          setBracket(newB);
-          setActiveMatch(newB.round1[0]);
-          if (supabase) {
-            Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
-              .then(() => saveCloudBracket(newB))
-              .then(() => {
-                setTimeout(() => {
-                  isSyncLockedRef.current = false;
-                  syncCloudData();
-                }, 800);
-              }).catch(() => {
-                isSyncLockedRef.current = false;
-              });
-          } else {
-            isSyncLockedRef.current = false;
-          }
-        }, 500);
-      } else {
-        setTimeout(() => {
-          isSyncLockedRef.current = false;
-          syncCloudData();
-        }, 800);
+        }
+        await syncCloudData();
+        return;
       }
-    };
 
-    if (pushedProduct && supabase) {
-      upsertCloudProduct(pushedProduct).then(() => {
-        finishPush();
-      }).catch((err) => {
-        isSyncLockedRef.current = false;
-        console.error("Error pushing product to queue:", err);
+      const updated = products.map(p => {
+        if (p.id !== productId) return p;
+        return {
+          ...p,
+          arenaEnqueued: true,
+          makerAvatar: p.makerAvatar?.replace("pushed=false", "pushed=true") || p.makerAvatar,
+        };
       });
-    } else {
-      finishPush();
+      setProducts(updated);
+      saveProducts(updated);
+      pushToast("Product successfully enqueued in matchmaking waitlist!", "success");
+
+      const queuedList = updated.filter(
+        p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))),
+      );
+      if (queuedList.length >= 16 && !bracket && !isRolloverPendingRef.current) {
+        const { bracket: newBracket, updatedProducts } = buildInitialBracket(updated);
+        setProducts(updatedProducts);
+        saveProducts(updatedProducts);
+        setBracket(newBracket);
+        saveBracket(newBracket);
+        setActiveMatch(newBracket.round1[0]);
+        setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
+        setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
+        setIsSuccessOpen(true);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unable to enqueue this product.";
+      pushToast(message, "info");
+    } finally {
+      isSyncLockedRef.current = false;
     }
   };
 
 
   // Auto-Rollover: After a season completes, check if ≥16 products are queued and auto-start the next season
   const tryAutoRollover = (currentProducts: Product[]) => {
+    // Cloud rollover is serialized by the protected settlement route and its database lock.
+    if (supabase) {
+      isRolloverPendingRef.current = false;
+      return;
+    }
     const waitingQueue = currentProducts.filter(
-      p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))
+      p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
     );
     if (waitingQueue.length >= 16) {
       isRolloverPendingRef.current = true;
@@ -1493,24 +1398,10 @@ export default function ArenaClient({
         setBracket(newB);
         setActiveMatch(newB.round1[0]);
         pushToast("New season started automatically! 16 products matched.", "success");
-        if (supabase) {
-          Promise.all(newProds.filter(p => p.queueStatus === "active").map(p => upsertCloudProduct(p)))
-            .then(() => saveCloudBracket(newB))
-            .then(() => {
-              setTimeout(() => {
-                isSyncLockedRef.current = false;
-                isRolloverPendingRef.current = false;
-                syncCloudData();
-              }, 800);
-            }).catch((err) => {
-              isSyncLockedRef.current = false;
-              isRolloverPendingRef.current = false;
-              console.error("Error matching next season in cloud:", err);
-            });
-        } else {
-          isSyncLockedRef.current = false;
-          isRolloverPendingRef.current = false;
-        }
+        saveProducts(newProds);
+        saveBracket(newB);
+        isSyncLockedRef.current = false;
+        isRolloverPendingRef.current = false;
       }, 3000);
     } else {
       isRolloverPendingRef.current = false;
@@ -1520,6 +1411,10 @@ export default function ArenaClient({
   // Advance Round
   const handleAdvanceRound = () => {
     if (!bracket) return;
+    if (supabase) {
+      pushToast("Cloud force-advance is disabled. Settlement is handled by the protected server workflow.", "info");
+      return;
+    }
     
     let updated;
     if (bracket.status === "preparing") {
@@ -1536,46 +1431,23 @@ export default function ArenaClient({
     // Acquire Sync Lock to prevent race condition pullbacks
     isSyncLockedRef.current = true;
 
-    const finishAdvance = () => {
-      setTimeout(() => {
-        isSyncLockedRef.current = false;
-        syncCloudData();
-      }, 800);
-    };
-
     if (updated.status === "completed" && updated.winner) {
       const champ = updated.winner;
       setPastChampions(prev => {
         if (prev.some(x => x.id === champ.id)) return prev;
         return [...prev, champ];
       });
-      if (!supabase) {
-        const localChamps = loadLocalPastChampions();
-        if (!localChamps.some(c => c.id === champ.id)) {
-          localChamps.push(champ);
-          saveLocalPastChampions(localChamps);
-        }
+      const localChamps = loadLocalPastChampions();
+      if (!localChamps.some(c => c.id === champ.id)) {
+        localChamps.push(champ);
+        saveLocalPastChampions(localChamps);
       }
       setBracket(null);
       setActiveMatch(null);
       saveBracket(null);
-      if (supabase) {
-        saveCloudBracket(updated).then(() => {
-          finishAdvance();
-          // Auto-rollover: check if next season can start
-          fetchCloudProducts().then(latestProds => {
-            tryAutoRollover(latestProds);
-          });
-        }).catch((err) => {
-          isSyncLockedRef.current = false;
-          console.error("Error saving cloud bracket:", err);
-        });
-      } else {
-        isSyncLockedRef.current = false;
-        // Auto-rollover for local mode
-        const latestProds = loadProducts();
-        tryAutoRollover(latestProds);
-      }
+      isSyncLockedRef.current = false;
+      const latestProds = loadProducts();
+      tryAutoRollover(latestProds);
     } else {
       setBracket(updated);
       
@@ -1588,19 +1460,13 @@ export default function ArenaClient({
       
       setActiveMatch(nextActive || null);
 
-      if (supabase) {
-        saveCloudBracket(updated).then(finishAdvance).catch((err) => {
-          isSyncLockedRef.current = false;
-          console.error("Error saving cloud bracket:", err);
-        });
-      } else {
-        isSyncLockedRef.current = false;
-      }
+      saveBracket(updated);
+      isSyncLockedRef.current = false;
     }
   };
 
   // Submit vote with dual-input feedback
-  const handleVoteSubmit = (e: React.FormEvent) => {
+  const handleVoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!userLoggedIn) {
       synthClick(150, "sawtooth", 0.12);
@@ -1617,22 +1483,48 @@ export default function ArenaClient({
     const round = getActiveRound(bracket);
 
     // Limit to one vote per user per separate 1v1 matchup (within a round)
-    const alreadyVotedOnThisMatch = votingMatch.votedUserIds && votingMatch.votedUserIds.includes(mockUserTwitter);
+    const localVoterId = userSupabaseId || mockUserTwitter;
+    const alreadyVotedOnThisMatch = votingMatch.votedUserIds?.some(
+      id => id === localVoterId || id === mockUserTwitter,
+    );
     if (alreadyVotedOnThisMatch) {
       synthClick(180, "sawtooth", 0.1);
       setVoteError("Voting Limit Reached! To ensure fair play, you can only cast ONE vote per separate 1v1 matchup.");
       return;
     }
     const voteForA = votingMatch?.productA && votingTarget.id === votingMatch.productA.id;
+    let exactVotesA = voteForA ? votingMatch.votesA + 1 : votingMatch.votesA;
+    let exactVotesB = voteForA ? votingMatch.votesB : votingMatch.votesB + 1;
+    let persistedVoterId = localVoterId;
+
+    if (supabase) {
+      try {
+        const result = await castArenaVote({
+          matchId: votingMatch.id,
+          votedProductId: votingTarget.id,
+          winnerFeedback: voteWinnerFeedback,
+          loserFeedback: voteLoserFeedback,
+        });
+        exactVotesA = result.votesA;
+        exactVotesB = result.votesB;
+        persistedVoterId = result.voterId;
+      } catch (error) {
+        synthClick(180, "sawtooth", 0.1);
+        setVoteError(error instanceof Error ? error.message : "Unable to record your vote.");
+        return;
+      }
+    }
 
     const updateVotes = (matches: Match[]): Match[] => {
       return matches.map(m => {
         if (m.id === votingMatch.id) {
           return {
             ...m,
-            votesA: voteForA ? m.votesA + 1 : m.votesA,
-            votesB: !voteForA ? m.votesB + 1 : m.votesB,
-            votedUserIds: [...m.votedUserIds, mockUserTwitter]
+            votesA: exactVotesA,
+            votesB: exactVotesB,
+            votedUserIds: m.votedUserIds.includes(persistedVoterId)
+              ? m.votedUserIds
+              : [...m.votedUserIds, persistedVoterId]
           };
         }
         return m;
@@ -1646,7 +1538,7 @@ export default function ArenaClient({
     else if (round === 4) nextBracket.round4 = updateVotes(nextBracket.round4);
 
     setBracket(nextBracket);
-    saveBracket(nextBracket);
+    if (!supabase) saveBracket(nextBracket);
 
     let freshMatch = null;
     if (round === 1) freshMatch = nextBracket.round1.find(m => m.id === votingMatch.id);
@@ -1664,46 +1556,8 @@ export default function ArenaClient({
       setIsSwordsClashing(false);
     }, 450);
 
-    // Sync to Supabase
-    if (supabase && freshMatch) {
-      // 1. Insert dual critique vote
-      // Rigid database CHECK constraint restricts auth type column to 'twitter' or 'github'.
-      // Bypassed database constraint by mapping 'google' login provider to 'twitter' during DB insertion.
-      supabase
-        .from(`${DB_PREFIX}votes`)
-        .insert({
-          [`${DB_PREFIX}match_id`]: freshMatch.id,
-          [`${DB_PREFIX}voter_username`]: mockUserTwitter,
-          [`${DB_PREFIX}voter_auth_type`]: userAuthType === "google" ? "twitter" : userAuthType,
-          [`${DB_PREFIX}voted_product_id`]: votingTarget.id,
-          [`${DB_PREFIX}feedback_winner`]: voteWinnerFeedback,
-          [`${DB_PREFIX}feedback_loser`]: voteLoserFeedback
-        } as any)
-        .then(({ error }) => {
-          if (error) console.error("Error inserting realtime vote:", error);
-        });
-
-      // 2. Update match votes in database
-      supabase
-        .from(`${DB_PREFIX}matches`)
-        .upsert({
-          [`${DB_PREFIX}id`]: freshMatch.id,
-          [`${DB_PREFIX}bracket_id`]: nextBracket.id,
-          [`${DB_PREFIX}round_number`]: freshMatch.roundNumber,
-          [`${DB_PREFIX}product_a_id`]: freshMatch.productA?.id || "",
-          [`${DB_PREFIX}product_b_id`]: freshMatch.productB?.id || "",
-          [`${DB_PREFIX}votes_a`]: freshMatch.votesA,
-          [`${DB_PREFIX}votes_b`]: freshMatch.votesB,
-          [`${DB_PREFIX}winner_id`]: freshMatch.winnerId || null,
-          [`${DB_PREFIX}voted_user_ids`]: freshMatch.votedUserIds
-        } as any)
-        .then(({ error }) => {
-          if (error) console.error("Error updating realtime match:", error);
-        });
-    }
-
-    // Also save locally for local mode
-    if (typeof window !== "undefined") {
+    // Keep the offline sandbox self-contained. Cloud votes are persisted only by the atomic RPC.
+    if (!supabase && typeof window !== "undefined") {
       try {
         const localVotes = JSON.parse(localStorage.getItem("arena_votes_v1") || "[]");
         localVotes.push({
@@ -1957,8 +1811,12 @@ export default function ArenaClient({
       const csvRows = [headers.join(",")];
       
       critiques.forEach(c => {
-        // Escape double quotes and commas for safe CSV format
-        const escapeCSV = (str: string) => `"${str.replace(/"/g, '""')}"`;
+        // Quotes protect CSV structure; the leading apostrophe prevents spreadsheet
+        // applications from executing user-authored feedback as a formula.
+        const escapeCSV = (str: string) => {
+          const neutralized = /^[=+\-@\t\r]/.test(str) ? `'${str}` : str;
+          return `"${neutralized.replace(/"/g, '""')}"`;
+        };
         const row = [
           escapeCSV(c.voter),
           escapeCSV(c.provider),
@@ -1975,10 +1833,12 @@ export default function ArenaClient({
       
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `${product.title.replace(/\s+/g, "_")}_critiques.csv`);
+      const safeFilename = product.title.replace(/[^a-z0-9._-]+/gi, "_").replace(/^_+|_+$/g, "") || "product";
+      link.setAttribute("download", `${safeFilename}_critiques.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error("CSV Export failed:", err);
       alert(`Error exporting critiques: ${err.message || err}`);
@@ -2100,7 +1960,7 @@ export default function ArenaClient({
   const activeRoundNum = bracket ? getActiveRound(bracket) : 0;
   const queuedProducts = useMemo(() => {
     return products
-      .filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
+      .filter(p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))))
       .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
   }, [products]);
   const lineupProducts = useMemo(() => {
@@ -2373,7 +2233,7 @@ export default function ArenaClient({
 
               {/* Centered brief description, restricted width */}
               <p className="max-w-[780px] mx-auto text-sm sm:text-base md:text-md text-zinc-400 leading-relaxed font-sans tracking-wide hero-desc">
-                Submit for free. Get real exposure and a permanent SEO backlink. Then prove it in the 1v1 Arena, where builders compete through honest peer critiques, not vanity upvotes.
+                Submit for free, publish a public product profile, and meet builders who care about what you shipped. Then prove it in the 1v1 Arena through honest peer critiques, not vanity upvotes.
               </p>
 
               <div className="mt-8 flex flex-wrap justify-center gap-4 text-[10px] font-mono text-zinc-500 hero-stats">
@@ -2444,7 +2304,7 @@ export default function ArenaClient({
                     >
                       {/* Left segment */}
                       <div className="flex items-center gap-3 shrink-0">
-                        {item.makerAvatar && item.makerAvatar.includes("pushed=false") ? (
+                        {!(item.arenaEnqueued ?? (!item.makerAvatar || !item.makerAvatar.includes("pushed=false"))) ? (
                           <span className="text-[10px] font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded border border-white/[0.06] uppercase tracking-wider">
                             showcase
                           </span>
@@ -2462,7 +2322,7 @@ export default function ArenaClient({
                       <div className="flex-1 min-w-0 text-left">
                         <div className="flex flex-wrap items-center gap-2">
                           <a 
-                            href={`/reviews/${item.id}`}
+                            href={`/products/${item.id}`}
                             className="font-bold text-white text-sm hover:underline hover:text-[#ffbe18] transition relative z-10 cursor-pointer"
                           >
                             {item.title}
@@ -2472,7 +2332,7 @@ export default function ArenaClient({
                             <a 
                               href={`https://x.com/${item.makerTwitter ? item.makerTwitter.replace(/^@/, "") : ""}`}
                               target="_blank"
-                              rel="noopener noreferrer"
+                              rel="ugc noopener noreferrer"
                               className="hover:underline hover:text-white transition duration-150 relative z-10 cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
@@ -2492,7 +2352,7 @@ export default function ArenaClient({
                         <a 
                           href={item.url}
                           target="_blank" 
-                          rel="noreferrer"
+                          rel="ugc noopener noreferrer"
                           className="text-[10px] font-mono text-zinc-500 hover:text-white inline-flex items-center gap-1"
                         >
                           Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-650" />
@@ -2698,7 +2558,15 @@ export default function ArenaClient({
                               ROUND {activeRoundNum} // BATTLE INSPECTOR
                             </span>
                           </div>
-                          <div>
+                          <div className="flex items-center gap-3">
+                            {duel.productA && duel.productB ? (
+                              <a
+                                href={`/versus/${duel.productA.id}-vs-${duel.productB.id}`}
+                                className="font-mono text-[9px] uppercase tracking-wider text-zinc-500 transition hover:text-white"
+                              >
+                                Public matchup ↗
+                              </a>
+                            ) : null}
                             {isDuelActive ? (
                               <span className="text-[9px] font-mono text-emerald-400 bg-emerald-400/[0.05] border border-emerald-400/[0.15] px-2 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -2722,7 +2590,9 @@ export default function ArenaClient({
                                 <span className="text-base">{renderLogo(duel.productA?.logo, "w-6 h-6")}</span>
                                 <span className="text-[9px] font-mono text-zinc-500">{duel.productA?.makerTwitter}</span>
                               </div>
-                              <h3 className="text-base font-bold text-white truncate">{duel.productA?.title || "Pending"}</h3>
+                              <h3 className="truncate text-base font-bold text-white">
+                                {duel.productA ? <a href={`/products/${duel.productA.id}`} className="transition hover:text-[#ffbe18]">{duel.productA.title}</a> : "Pending"}
+                              </h3>
                               <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productA?.tagline}</p>
                             </div>
                             <div className="mt-4 space-y-2">
@@ -2730,7 +2600,7 @@ export default function ArenaClient({
                                 <a
                                   href={duel.productA.url}
                                   target="_blank"
-                                  rel="noreferrer"
+                                  rel="ugc noopener noreferrer"
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -2778,7 +2648,9 @@ export default function ArenaClient({
                                 <span className="text-base">{renderLogo(duel.productB?.logo, "w-6 h-6")}</span>
                                 <span className="text-[9px] font-mono text-zinc-500">{duel.productB?.makerTwitter}</span>
                               </div>
-                              <h3 className="text-base font-bold text-white truncate">{duel.productB?.title || "Pending"}</h3>
+                              <h3 className="truncate text-base font-bold text-white">
+                                {duel.productB ? <a href={`/products/${duel.productB.id}`} className="transition hover:text-[#ffbe18]">{duel.productB.title}</a> : "Pending"}
+                              </h3>
                               <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productB?.tagline}</p>
                             </div>
                             <div className="mt-4 space-y-2">
@@ -2786,7 +2658,7 @@ export default function ArenaClient({
                                 <a
                                   href={duel.productB.url}
                                   target="_blank"
-                                  rel="noreferrer"
+                                  rel="ugc noopener noreferrer"
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -3018,7 +2890,7 @@ export default function ArenaClient({
                       </span>
                     </div>
                     <a 
-                      href={`/reviews/${c.id}`}
+                      href={`/products/${c.id}`}
                       className="font-sans text-xs hover:underline uppercase block mb-1 text-white font-semibold tracking-wide hover:text-[#ffbe18] transition"
                     >
                       {c.title}
@@ -3032,7 +2904,7 @@ export default function ArenaClient({
                       <a 
                         href={`https://x.com/${c.makerTwitter.replace(/^@/, "")}`}
                         target="_blank"
-                        rel="noreferrer"
+                        rel="ugc noopener noreferrer"
                         className="hover:underline font-semibold text-zinc-400 hover:text-white"
                       >
                         {c.makerTwitter}
@@ -3041,7 +2913,7 @@ export default function ArenaClient({
                     <a 
                       href={c.url}
                       target="_blank"
-                      rel="noreferrer"
+                      rel="ugc noopener noreferrer"
                       className="text-[10px] uppercase font-mono underline text-white hover:text-zinc-300 transition-colors"
                     >
                       DEMO
@@ -3856,7 +3728,7 @@ export default function ArenaClient({
               <a 
                 href={`https://x.com/${championWinner.makerTwitter.replace(/^@/, "")}`}
                 target="_blank" 
-                rel="noreferrer"
+                rel="ugc noopener noreferrer"
                 className="px-3 py-1.5 bg-white/[0.02] border border-white/[0.06] text-zinc-300 font-mono text-[9px] hover:bg-white/[0.04] hover:border-white/[0.1] hover:text-white rounded-md transition duration-150 cursor-pointer"
               >
                 FOLLOW {championWinner.makerTwitter} ➔
@@ -3867,7 +3739,7 @@ export default function ArenaClient({
               <a 
                 href={championWinner.url}
                 target="_blank"
-                rel="noreferrer"
+                rel="ugc noopener noreferrer"
                 className="bg-white text-black hover:bg-zinc-200 px-5 py-2.5 text-xs rounded-md font-semibold tracking-tight transition duration-150 cursor-pointer w-full sm:w-auto text-center"
               >
                 EXPLORE DEMO URL ➔
@@ -4138,7 +4010,7 @@ export default function ArenaClient({
               <a 
                 href={activeCardProduct.url} 
                 target="_blank" 
-                rel="noopener noreferrer"
+                rel="ugc noopener noreferrer"
                 onClick={() => synthClick(400, "sine", 0.08)}
                 className="text-amber-400 hover:text-amber-300 font-semibold transition-colors flex items-center gap-1 group text-[11px] border-b border-amber-400/30 hover:border-amber-300"
               >

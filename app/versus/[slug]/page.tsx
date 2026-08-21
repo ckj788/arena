@@ -1,500 +1,265 @@
-import { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
-import { SEED_PRODUCTS } from "@/lib/mockData";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound, permanentRedirect } from "next/navigation";
+import { getVersusSeoData } from "@/lib/server/publicSeoData";
+import { absoluteUrl, isPublicImageUrl, publicHttpUrl, serializeJsonLd } from "@/lib/site";
 
 interface Props {
   params: Promise<{ slug: string }>;
 }
 
-// 1. Dynamic Meta Generator (Crucial for pSEO)
+export const revalidate = 1800;
+
+function descriptionFor(productA: string, productB: string) {
+  return `Compare ${productA} and ${productB} in their recorded Indie Clash matchup. See the actual vote result, product details, makers, and builder feedback.`;
+}
+
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  const parts = slug.split("-vs-");
-  if (parts.length !== 2) return {};
+  const data = await getVersusSeoData(slug);
+  if (!data) notFound();
 
-  const [slugA, slugB] = parts;
-
-  let titleA = slugA;
-  let titleB = slugB;
-
-  if (supabase) {
-    const { data: products } = await supabase
-      .from(`${DB_PREFIX}products`)
-      .select(`${DB_PREFIX}title`)
-      .in(`${DB_PREFIX}id`, [slugA, slugB]);
-
-    if (products && products.length >= 2) {
-      titleA = (products[0] as any)[`${DB_PREFIX}title`];
-      titleB = (products[1] as any)[`${DB_PREFIX}title`];
-    }
-  } else {
-    const pA = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugA.toLowerCase());
-    const pB = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugB.toLowerCase());
-    if (pA && pB) {
-      titleA = pA.title;
-      titleB = pB.title;
-    }
-  }
-
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  titleA = cap(titleA);
-  titleB = cap(titleB);
+  const { productA, productB, canonicalSlug } = data;
+  const canonicalPath = `/versus/${canonicalSlug}`;
+  const description = descriptionFor(productA.title, productB.title);
+  const image = `/api/og/versus?slug=${encodeURIComponent(canonicalSlug)}`;
 
   return {
-    title: `${titleA} vs ${titleB} | Community Comparison & Live Duel on INDIE CLASH`,
-    description: `Honest side-by-side comparison of ${titleA} and ${titleB}. Read verified maker critiques, live tournament votes, and deep peer reviews.`,
+    title: `${productA.title} vs ${productB.title}`,
+    description,
+    alternates: { canonical: canonicalPath },
     openGraph: {
-      title: `${titleA} vs ${titleB} — Who Wins this Startup Duel?`,
-      description: `Compare ${titleA} and ${titleB} features, ship timeframes, and developer votes. Trade deep peer reviews on INDIE CLASH.`,
-      url: `https://www.indieclash.com/versus/${slug}`,
-      siteName: "INDIE CLASH",
-      images: [
-        {
-          url: `/api/og/versus?slug=${slug}`,
-          width: 1200,
-          height: 630,
-          alt: `${titleA} vs ${titleB} Startup Duel`,
-        },
-      ],
+      title: `${productA.title} vs ${productB.title} — Arena Matchup`,
+      description,
+      url: canonicalPath,
+      siteName: "Indie Clash",
       type: "website",
+      images: [{ url: image, width: 1200, height: 630, alt: `${productA.title} vs ${productB.title}` }],
     },
     twitter: {
       card: "summary_large_image",
-      title: `${titleA} vs ${titleB} — Who Wins this Startup Duel?`,
-      description: `Compare ${titleA} and ${titleB} features, ship timeframes, and developer votes. Trade deep peer reviews on INDIE CLASH.`,
-      images: [`/api/og/versus?slug=${slug}`],
+      title: `${productA.title} vs ${productB.title} — Arena Matchup`,
+      description,
+      images: [image],
     },
   };
 }
 
-// 2. Pre-generate popular matchups at build time (SSG)
-export async function generateStaticParams() {
-  return [
-    { slug: "zenjournal-vs-logocraft" },
-    { slug: "quickcron-vs-cardioai" },
-    { slug: "typeflow-vs-siteshot" },
-  ];
-}
-
-export const revalidate = 1800; // Settle cache every 30 minutes in background
-
-const renderLogo = (logoStr: string, className = "w-10 h-10 object-contain") => {
-  if (!logoStr) return null;
-  const isImg = logoStr.startsWith("data:image") || logoStr.startsWith("http") || logoStr.startsWith("/");
-  if (isImg) {
-    return <img src={logoStr} alt="Logo" className={`${className} inline-block shrink-0 rounded-md object-contain`} />;
+function ProductLogo({ logo, title }: { logo: string; title: string }) {
+  if (!logo) return <span className="text-4xl" aria-hidden="true">🚀</span>;
+  if (logo.startsWith("data:image") || logo.startsWith("http") || logo.startsWith("/")) {
+    return <img src={logo} alt={`${title} logo`} className="h-12 w-12 rounded-lg object-contain" />;
   }
-  return <span className="inline-block shrink-0 text-4xl">{logoStr}</span>;
-};
+  return <span className="text-5xl" aria-hidden="true">{logo}</span>;
+}
 
 export default async function VersusPage({ params }: Props) {
   const { slug } = await params;
-  const parts = slug.split("-vs-");
-  if (parts.length !== 2) notFound();
+  const data = await getVersusSeoData(slug);
+  if (!data) notFound();
+  if (slug !== data.canonicalSlug) permanentRedirect(`/versus/${data.canonicalSlug}`);
 
-  const [slugA, slugB] = parts;
-
-  let productA: any = null;
-  let productB: any = null;
-  let matchesVotes: any[] = [];
-
-  if (supabase) {
-    const { data: pA } = await supabase
-      .from(`${DB_PREFIX}products`)
-      .select("*")
-      .eq(`${DB_PREFIX}id`, slugA)
-      .single();
-
-    const { data: pB } = await supabase
-      .from(`${DB_PREFIX}products`)
-      .select("*")
-      .eq(`${DB_PREFIX}id`, slugB)
-      .single();
-
-    if (pA && pB) {
-      const rawPA = pA as any;
-      const rawPB = pB as any;
-      productA = {
-        id: rawPA[`${DB_PREFIX}id`],
-        title: rawPA[`${DB_PREFIX}title`],
-        tagline: rawPA[`${DB_PREFIX}tagline`],
-        url: rawPA[`${DB_PREFIX}url`],
-        shipTimeframe: rawPA[`${DB_PREFIX}ship_timeframe`],
-        makerName: rawPA[`${DB_PREFIX}maker_name`],
-        makerTwitter: rawPA[`${DB_PREFIX}maker_twitter`],
-        makerAvatar: rawPA[`${DB_PREFIX}maker_avatar`],
-        logo: rawPA[`${DB_PREFIX}logo`],
-        votesCount: rawPA[`${DB_PREFIX}votes_count`],
-      };
-
-      productB = {
-        id: rawPB[`${DB_PREFIX}id`],
-        title: rawPB[`${DB_PREFIX}title`],
-        tagline: rawPB[`${DB_PREFIX}tagline`],
-        url: rawPB[`${DB_PREFIX}url`],
-        shipTimeframe: rawPB[`${DB_PREFIX}ship_timeframe`],
-        makerName: rawPB[`${DB_PREFIX}maker_name`],
-        makerTwitter: rawPB[`${DB_PREFIX}maker_twitter`],
-        makerAvatar: rawPB[`${DB_PREFIX}maker_avatar`],
-        logo: rawPB[`${DB_PREFIX}logo`],
-        votesCount: rawPB[`${DB_PREFIX}votes_count`],
-      };
-
-      const { data: vData } = await supabase
-        .from(`${DB_PREFIX}votes`)
-        .select("*")
-        .in(`${DB_PREFIX}voted_product_id`, [slugA, slugB])
-        .limit(10);
-      
-      if (vData) {
-        matchesVotes = vData.map((v: any) => ({
-          id: v[`${DB_PREFIX}id`],
-          voter: v[`${DB_PREFIX}voter_username`],
-          votedId: v[`${DB_PREFIX}voted_product_id`],
-          winnerFeedback: v[`${DB_PREFIX}feedback_winner`],
-          loserFeedback: v[`${DB_PREFIX}feedback_loser`],
-        }));
-      }
-    }
-  }
-
-  if (!productA || !productB) {
-    const seedA = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugA.toLowerCase());
-    const seedB = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugB.toLowerCase());
-
-    if (!seedA || !seedB) {
-      const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-      productA = {
-        id: slugA,
-        title: capitalize(slugA),
-        tagline: "Innovative developer utility shipped in public sprint.",
-        url: `https://${slugA}.xyz`,
-        shipTimeframe: "48h",
-        makerName: "Indie Builder",
-        makerTwitter: `@${slugA}_maker`,
-        makerAvatar: "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces",
-        logo: "🚀",
-        votesCount: 42,
-      };
-
-      productB = {
-        id: slugB,
-        title: capitalize(slugB),
-        tagline: "High-performance micro-SaaS created in a 24h sprint.",
-        url: `https://${slugB}.xyz`,
-        shipTimeframe: "24h",
-        makerName: "SaaS Gladiator",
-        makerTwitter: `@${slugB}_maker`,
-        makerAvatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop&crop=faces",
-        logo: "⚔️",
-        votesCount: 37,
-      };
-    } else {
-      productA = seedA;
-      productB = seedB;
-    }
-
-    matchesVotes = [
+  const { productA, productB, match, critiques, canonicalSlug } = data;
+  const canonicalUrl = absoluteUrl(`/versus/${canonicalSlug}`);
+  const totalVotes = match.votesA + match.votesB;
+  const percentA = totalVotes ? Math.round((match.votesA / totalVotes) * 100) : 50;
+  const percentB = totalVotes ? 100 - percentA : 50;
+  const productAUrl = absoluteUrl(`/products/${encodeURIComponent(productA.id)}`);
+  const productBUrl = absoluteUrl(`/products/${encodeURIComponent(productB.id)}`);
+  const productAWebsite = publicHttpUrl(productA.url);
+  const productBWebsite = publicHttpUrl(productB.url);
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@graph": [
       {
-        id: "v1",
-        voter: "@sam_indie",
-        votedId: productA.id,
-        winnerFeedback: "Beautiful minimalism! Focuses entirely on lightning fast load speed.",
-        loserFeedback: "Features are a bit sparse. Needs a standard CSV download button.",
+        "@type": "Product",
+        "@id": `${productAUrl}#product`,
+        name: productA.title,
+        description: productA.tagline,
+        url: productAUrl,
+        image: isPublicImageUrl(productA.logo)
+          ? (productA.logo.startsWith("/") ? absoluteUrl(productA.logo) : productA.logo)
+          : undefined,
+        sameAs: productAWebsite,
       },
       {
-        id: "v2",
-        voter: "@chloe_codes",
-        votedId: productB.id,
-        winnerFeedback: "The dynamic real-time reporting is incredibly intuitive and gorgeous.",
-        loserFeedback: "Mobile viewport has minor horizontal overflows on the leaderboard.",
+        "@type": "Product",
+        "@id": `${productBUrl}#product`,
+        name: productB.title,
+        description: productB.tagline,
+        url: productBUrl,
+        image: isPublicImageUrl(productB.logo)
+          ? (productB.logo.startsWith("/") ? absoluteUrl(productB.logo) : productB.logo)
+          : undefined,
+        sameAs: productBWebsite,
       },
       {
-        id: "v3",
-        voter: "@lucas_ship",
-        votedId: productA.id,
-        winnerFeedback: "Excellent typography and off-white CSS color layout. Restores focus.",
-        loserFeedback: "The input box cursor reset delays the flow when typing quickly.",
-      }
-    ];
-  }
+        "@type": "WebPage",
+        "@id": canonicalUrl,
+        name: `${productA.title} vs ${productB.title}`,
+        description: descriptionFor(productA.title, productB.title),
+        url: canonicalUrl,
+        about: [{ "@id": `${productAUrl}#product` }, { "@id": `${productBUrl}#product` }],
+        mainEntity: {
+          "@type": "ItemList",
+          numberOfItems: 2,
+          itemListElement: [
+            { "@type": "ListItem", position: 1, item: { "@id": `${productAUrl}#product` } },
+            { "@type": "ListItem", position: 2, item: { "@id": `${productBUrl}#product` } },
+          ],
+        },
+        breadcrumb: { "@id": `${canonicalUrl}#breadcrumb` },
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": `${canonicalUrl}#breadcrumb`,
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Indie Clash", item: absoluteUrl("/") },
+          { "@type": "ListItem", position: 2, name: "Arena matchups", item: absoluteUrl("/#arena-section") },
+          { "@type": "ListItem", position: 3, name: `${productA.title} vs ${productB.title}`, item: canonicalUrl },
+        ],
+      },
+    ],
+  };
 
-  const votesA = productA.votesCount || 0;
-  const votesB = productB.votesCount || 0;
-  const totalVotes = votesA + votesB || 1;
-  const percentA = Math.round((votesA / totalVotes) * 100);
-  const percentB = 100 - percentA;
+  const productCards = [
+    { product: productA, votes: match.votesA, percent: percentA, website: productAWebsite },
+    { product: productB, votes: match.votesB, percent: percentB, website: productBWebsite },
+  ];
 
   return (
     <div className="min-h-screen bg-[#0B0B0C] text-white antialiased selection:bg-white selection:text-black">
-      {/* 🌌 Background grid and ambient glows */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#0c0c0e] via-[#0B0B0C] to-[#0B0B0C] pointer-events-none" />
-      
-      {/* ⚔️ Premium header container */}
-      <header className="relative border-b border-white/[0.06] py-4 backdrop-blur-md bg-black/20 sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
-          <a href="/" className="flex items-center gap-2 group">
-            <span className="text-2xl font-semibold tracking-tighter bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent group-hover:text-zinc-300 transition">
-              INDIE CLASH
-            </span>
-            <span className="text-[10px] font-mono border border-white/[0.08] px-1.5 py-0.5 rounded bg-white/[0.02] text-zinc-400 tracking-wider font-mono uppercase">
-              Arena
-            </span>
-          </a>
-          <a 
-            href="/"
-            className="text-xs border border-white/[0.1] hover:bg-white/[0.04] text-zinc-300 hover:text-white transition px-3.5 py-1.5 rounded-md"
-          >
-            Enter Arena ➔
-          </a>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
+
+      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-black/50 py-4 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
+          <Link href="/" className="flex items-center gap-2">
+            <span className="text-2xl font-semibold tracking-tighter">INDIE CLASH</span>
+            <span className="rounded border border-white/[0.08] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-zinc-400">Arena</span>
+          </Link>
+          <Link href="/#arena-section" className="rounded-md border border-white/[0.1] px-3.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.04] hover:text-white">Enter arena</Link>
         </div>
       </header>
 
-      <main className="relative max-w-6xl mx-auto px-4 py-12 animate-fade-in-blur">
-        {/* H1 SEO Breadcrumbs */}
-        <nav className="text-xs text-zinc-500 mb-8 flex items-center gap-2 font-mono">
-          <a href="/" className="hover:text-white transition">INDIE CLASH</a>
-          <span>/</span>
-          <span className="text-zinc-450">VERSUS ARENA</span>
-          <span>/</span>
-          <span className="text-white font-semibold">{productA.title} vs {productB.title}</span>
+      <main className="relative mx-auto max-w-6xl px-4 py-10 sm:py-14">
+        <nav aria-label="Breadcrumb" className="mb-8 flex flex-wrap items-center gap-2 font-mono text-xs text-zinc-500">
+          <Link href="/" className="transition hover:text-white">Indie Clash</Link>
+          <span aria-hidden="true">/</span>
+          <Link href="/#arena-section" className="transition hover:text-white">Arena matchups</Link>
+          <span aria-hidden="true">/</span>
+          <span aria-current="page" className="text-zinc-300">{productA.title} vs {productB.title}</span>
         </nav>
 
-        {/* 🏆 Versus Duel Screen Banner */}
-        <div className="relative text-center mb-16">
-          <div className="inline-block relative mb-4">
-            
-            <div className="relative bg-[#121215] border border-white/[0.06] px-4 py-1.5 rounded-full text-xs font-mono uppercase tracking-widest text-zinc-400 flex items-center gap-2">
-              <span>Season 1 Matchup</span>
-              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-            </div>
-          </div>
-          
-          <h1 className="text-3xl md:text-5xl font-semibold tracking-tight text-white mb-4">
-            {productA.title} <span className="text-zinc-500 font-light italic text-3xl md:text-5xl mx-2">vs</span> {productB.title}
+        <header className="mb-12 text-center">
+          <span className="inline-flex rounded-full border border-[#A78BFA]/20 bg-[#A78BFA]/[0.06] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[#A78BFA]">
+            Recorded round {match.roundNumber} matchup
+          </span>
+          <h1 className="mx-auto mt-5 max-w-5xl text-3xl font-semibold tracking-tight sm:text-5xl">
+            <Link href={`/products/${productA.id}`} className="transition hover:text-[#ffbe18]">{productA.title}</Link>
+            <span className="mx-3 font-light italic text-zinc-600">vs</span>
+            <Link href={`/products/${productB.id}`} className="transition hover:text-[#ffbe18]">{productB.title}</Link>
           </h1>
-          <p className="text-base md:text-lg text-zinc-450 max-w-2xl mx-auto font-light leading-relaxed">
-            A battle of minimalist execution. Read authentic peer critiques, see the builder community votes, and analyze their scores.
-          </p>
-        </div>
+          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">A real Indie Clash matchup with its recorded result, product details, and vote-by-vote builder feedback.</p>
+        </header>
 
-        {/* ⚡ Dynamic Clash Split Meter */}
-        <div className="relative bg-[#121215]/80 border border-white/[0.06] p-8 rounded-xl mb-16 overflow-hidden backdrop-blur-md">
-          <div className="absolute inset-0 bg-gradient-to-b from-white/[0.02] to-transparent pointer-events-none" />
-          
-          <div className="flex justify-between items-end mb-4 font-mono text-sm">
-            <div className="text-left">
-              <span className="block text-2xl font-semibold text-white">{percentA}%</span>
-              <span className="text-xs text-zinc-500">{productA.title} ({votesA} votes)</span>
+        <section aria-label="Match result" className="mb-10 rounded-2xl border border-white/[0.08] bg-[#121215]/85 p-6 sm:p-8">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <div>
+              <strong className="block text-3xl">{percentA}%</strong>
+              <span className="text-sm text-zinc-500">{productA.title} · {match.votesA} votes</span>
             </div>
-            <div className="w-8 h-8 rounded-full border border-white/[0.08] bg-black flex items-center justify-center font-semibold text-xs text-white shadow">
-              VS
-            </div>
+            <span className="rounded-full border border-white/[0.08] px-3 py-1 font-mono text-xs text-zinc-400">{totalVotes} total votes</span>
             <div className="text-right">
-              <span className="block text-2xl font-semibold text-white">{percentB}%</span>
-              <span className="text-xs text-zinc-500">{productB.title} ({votesB} votes)</span>
+              <strong className="block text-3xl">{percentB}%</strong>
+              <span className="text-sm text-zinc-500">{productB.title} · {match.votesB} votes</span>
             </div>
           </div>
-
-          {/* ⚔️ Dual Gradient Progress Bar */}
-          <div className="w-full h-1 bg-zinc-900 overflow-hidden flex relative select-none rounded-full">
-            <div style={{ width: `${percentA}%` }} className="h-full bg-white transition-all duration-1000 ease-out" />
-            <div style={{ width: `${percentB}%` }} className="h-full bg-zinc-800 transition-all duration-1000 ease-out flex-1" />
+          <div className="flex h-2 overflow-hidden rounded-full bg-zinc-900" role="img" aria-label={`${productA.title} ${percentA} percent, ${productB.title} ${percentB} percent`}>
+            <div className="bg-white" style={{ width: `${percentA}%` }} />
+            <div className="bg-[#A78BFA]" style={{ width: `${percentB}%` }} />
           </div>
-        </div>
+          {match.winnerId ? (
+            <p className="mt-4 text-center text-sm text-zinc-400">Winner: <strong className="text-white">{match.winnerId === productA.id ? productA.title : productB.title}</strong></p>
+          ) : (
+            <p className="mt-4 text-center text-sm text-zinc-500">This matchup is still open.</p>
+          )}
+        </section>
 
-        {/* 💻 Side-by-Side Product Matrices */}
-        <div className="grid md:grid-cols-2 gap-8 mb-16">
-          {/* Product A Matrix Card */}
-          <div className="bg-[#121215] border border-white/[0.06] p-8 rounded-xl hover:border-white/[0.12] transition duration-300 relative group overflow-hidden">
-            
-            
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-lg bg-[#141417] border border-white/[0.06] flex items-center justify-center overflow-hidden">
-                {renderLogo(productA.logo, "w-10 h-10")}
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white tracking-tight">{productA.title}</h3>
-              </div>
-            </div>
-
-            <p className="text-zinc-400 text-sm font-light mb-8 leading-relaxed italic h-12">
-              "{productA.tagline}"
-            </p>
-
-            <hr className="border-white/[0.06] mb-6" />
-
-            <div className="space-y-3.5 text-sm font-mono">
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Makers Name:</span>
-                <span className="text-white/90">{productA.makerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Maker Twitter:</span>
-                <a 
-                  href={`https://twitter.com/${productA.makerTwitter?.replace(/^@/, "")}`}
-                  target="_blank"
-                  className="text-zinc-400 hover:underline text-zinc-300 transition"
-                >
-                  {productA.makerTwitter}
-                </a>
-              </div>
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-zinc-500">Product Live URL:</span>
-                <a 
-                  href={productA.url} 
-                  target="_blank"
-                  className="text-xs bg-white/10 border border-orange-500/30 text-zinc-400 hover:bg-white/20 transition px-3 py-1 rounded-lg"
-                >
-                  Visit Live Site ➔
-                </a>
-              </div>
-            </div>
-          </div>
-
-          {/* Product B Matrix Card */}
-          <div className="bg-[#121215] border border-white/[0.06] p-8 rounded-xl hover:border-white/[0.12] transition duration-300 relative group overflow-hidden">
-            
-
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 rounded-lg bg-[#141417] border border-white/[0.06] flex items-center justify-center overflow-hidden">
-                {renderLogo(productB.logo, "w-10 h-10")}
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold text-white tracking-tight">{productB.title}</h3>
-              </div>
-            </div>
-
-            <p className="text-zinc-400 text-sm font-light mb-8 leading-relaxed italic h-12">
-              "{productB.tagline}"
-            </p>
-
-            <hr className="border-white/[0.06] mb-6" />
-
-            <div className="space-y-3.5 text-sm font-mono">
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Makers Name:</span>
-                <span className="text-white/90">{productB.makerName}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-zinc-500">Maker Twitter:</span>
-                <a 
-                  href={`https://twitter.com/${productB.makerTwitter?.replace(/^@/, "")}`}
-                  target="_blank"
-                  className="text-zinc-400 hover:underline text-zinc-300 transition"
-                >
-                  {productB.makerTwitter}
-                </a>
-              </div>
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-zinc-500">Product Live URL:</span>
-                <a 
-                  href={productB.url} 
-                  target="_blank"
-                  className="text-xs bg-zinc-600/10 border border-indigo-500/30 text-zinc-400 hover:bg-zinc-600/20 transition px-3 py-1 rounded-lg"
-                >
-                  Visit Live Site ➔
-                </a>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 🛡️ The Critique Vault — Direct Peer Critiques split columns */}
-        <section className="bg-[#120d09]/30 border border-white/[0.06] p-8 rounded-3xl mb-16">
-          <h2 className="text-2xl font-semibold text-white mb-2 flex items-center gap-2">
-            🛡️ The Critique Vault
-          </h2>
-          <p className="text-sm text-zinc-450 mb-8 font-light max-w-xl">
-            Verified builders on Google & GitHub voted and left honest, zero-sugar critiques to help makers validate their idea.
-          </p>
-
-          <div className="grid md:grid-cols-2 gap-8">
-            {/* Column A */}
-            <div className="space-y-6">
-              <h3 className="text-xs font-mono tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-white" />
-                Verified Critiques: {productA.title}
-              </h3>
-              
-              <div className="space-y-4">
-                {matchesVotes.filter(v => v.votedId === productA.id || v.winnerFeedback).slice(0, 3).map((v, i) => (
-                  <div key={i} className="border border-white/[0.06] bg-[#141417] p-5 rounded-lg border border-white/[0.06] text-sm leading-relaxed relative hover:border-white/[0.15] transition">
-                    <span className="absolute -top-2 left-4 px-2 py-0.5 bg-zinc-950 border border-white/[0.08] rounded text-[10px] font-mono text-zinc-500">
-                      {v.voter}
-                    </span>
-                    <div className="pt-2 space-y-2">
-                      <p className="text-white/90 font-medium">✨ Good points:</p>
-                      <p className="text-zinc-400 font-light italic">"{v.winnerFeedback || "Incredibly clean layout, simplifies core functions perfectly."}"</p>
-                      <p className="text-zinc-400/90 font-medium pt-1">⚠️ Constructive Critique:</p>
-                      <p className="text-zinc-450 font-light text-xs italic">"{v.loserFeedback || "Needs some tooltips on layout setup options for better accessibility."}"</p>
-                    </div>
+        <section aria-labelledby="comparison-heading">
+          <h2 id="comparison-heading" className="sr-only">Product comparison</h2>
+          <div className="grid gap-6 md:grid-cols-2">
+            {productCards.map(({ product, votes, percent, website }) => (
+              <article key={product.id} className="rounded-2xl border border-white/[0.08] bg-[#121215]/85 p-6 sm:p-8">
+                <div className="flex items-center gap-4">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
+                    <ProductLogo logo={product.logo} title={product.title} />
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Column B */}
-            <div className="space-y-6">
-              <h3 className="text-xs font-mono tracking-widest text-zinc-500 uppercase mb-4 flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-zinc-600" />
-                Verified Critiques: {productB.title}
-              </h3>
-
-              <div className="space-y-4">
-                {matchesVotes.filter(v => v.votedId === productB.id || v.loserFeedback).slice(0, 3).map((v, i) => (
-                  <div key={i} className="border border-white/[0.06] bg-[#141417] p-5 rounded-lg border border-white/[0.06] text-sm leading-relaxed relative hover:border-white/[0.15] transition">
-                    <span className="absolute -top-2 left-4 px-2 py-0.5 bg-zinc-950 border border-white/[0.08] rounded text-[10px] font-mono text-zinc-500">
-                      {v.voter}
-                    </span>
-                    <div className="pt-2 space-y-2">
-                      <p className="text-white/90 font-medium">✨ Good points:</p>
-                      <p className="text-zinc-400 font-light italic">"{v.winnerFeedback || "Dynamic visual statistics are absolutely state-of-the-art."}"</p>
-                      <p className="text-zinc-400/90 font-medium pt-1">⚠️ Constructive Critique:</p>
-                      <p className="text-zinc-450 font-light text-xs italic">"{v.loserFeedback || "Layout has minor padding offsets on tablet screens when rotating."}"</p>
-                    </div>
+                  <div>
+                    <h3 className="text-2xl font-semibold"><Link href={`/products/${product.id}`} className="transition hover:text-[#ffbe18]">{product.title}</Link></h3>
+                    <span className="font-mono text-xs text-zinc-500">{votes} votes · {percent}%</span>
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
+                <p className="mt-6 min-h-14 text-sm leading-7 text-zinc-300">{product.tagline}</p>
+                <dl className="mt-6 space-y-3 border-t border-white/[0.06] pt-5 text-sm">
+                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">Maker</dt><dd className="text-right text-zinc-200">{product.makerName}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">Build timeframe</dt><dd className="text-zinc-200">{product.shipTimeframe}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">All-time arena votes</dt><dd className="text-zinc-200">{product.votesCount}</dd></div>
+                </dl>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link href={`/products/${product.id}`} className="rounded-lg border border-white/[0.1] px-4 py-2 text-xs font-semibold transition hover:bg-white/[0.05]">View profile</Link>
+                  {website ? <a href={website} target="_blank" rel="ugc noopener noreferrer" className="rounded-lg bg-white px-4 py-2 text-xs font-semibold text-black transition hover:bg-zinc-200">Visit product ↗</a> : null}
+                </div>
+              </article>
+            ))}
           </div>
         </section>
 
-        {/* 🚀 Dynamic Final CTA Banner */}
-        <section className="relative rounded-3xl bg-[#121215] border border-white/[0.08] p-8 md:p-12 overflow-hidden flex flex-col md:flex-row justify-between items-center gap-8 rounded-xl">
-          <div className="absolute top-0 left-0 w-full h-full bg-[linear-gradient(to_bottom,rgba(255,255,255,0.02),transparent)] pointer-events-none" />
-          <div className="text-center md:text-left">
-            <h2 className="text-2xl md:text-3xl font-semibold text-white mb-3">
-              Is your product ready to enter the Arena?
-            </h2>
-            <p className="text-sm md:text-base text-[#faf5ef]/70 font-light max-w-xl">
-              Submit your project, duel other makers, collect zero-sugar critiques from verified founders, and rank on the leaderboards.
-            </p>
+        <section className="mt-12" aria-labelledby="feedback-heading">
+          <div className="mb-6 border-b border-white/[0.08] pb-4">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Vote context</p>
+            <h2 id="feedback-heading" className="mt-1 text-2xl font-semibold">Builder feedback from this matchup</h2>
           </div>
-          <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto shrink-0">
-            <a 
-              href="/"
-              className="w-full sm:w-auto bg-[#ffbe18] hover:bg-[#e0a612] text-black font-semibold text-sm px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:scale-[1.02] transition text-center"
-            >
-              Challenge {productA.title} Now ➔
-            </a>
+          {critiques.length ? (
+            <div className="grid gap-6 md:grid-cols-2">
+              {[productA, productB].map((product) => {
+                const productFeedback = critiques.map((critique) => ({
+                  id: critique.id,
+                  voter: critique.voter,
+                  body: critique.votedProductId === product.id ? critique.winnerFeedback : critique.loserFeedback,
+                  kind: critique.votedProductId === product.id ? "Reason for the vote" : "Constructive critique",
+                })).filter((item) => item.body.trim());
+                return (
+                  <div key={product.id}>
+                    <h3 className="mb-4 font-semibold">Feedback about <Link href={`/products/${product.id}`} className="underline decoration-white/20 underline-offset-4 hover:decoration-white">{product.title}</Link></h3>
+                    <div className="space-y-4">
+                      {productFeedback.map((feedback) => (
+                        <article key={`${product.id}-${feedback.id}`} className="rounded-xl border border-white/[0.07] bg-[#121215]/70 p-5">
+                          <div className="mb-3 flex flex-wrap justify-between gap-2 font-mono text-[11px]"><span className="text-zinc-300">{feedback.voter}</span><span className="text-zinc-500">{feedback.kind}</span></div>
+                          <p className="text-sm leading-7 text-zinc-300">{feedback.body}</p>
+                        </article>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-white/[0.08] p-8 text-sm text-zinc-500">No public critique was submitted in this matchup.</p>
+          )}
+        </section>
+
+        <section className="mt-14 flex flex-col items-start justify-between gap-6 rounded-2xl border border-[#ffbe18]/20 bg-[#ffbe18]/[0.05] p-8 sm:flex-row sm:items-center">
+          <div>
+            <h2 className="text-2xl font-semibold">Put your product in the arena</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Publish a real product profile, face other builders, and collect actionable feedback.</p>
           </div>
+          <Link href="/" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-black">Submit a product</Link>
         </section>
       </main>
 
-      {/* 🛡️ Footer */}
-      <footer className="border-t border-white/[0.06] py-12 bg-[#0B0B0C] font-mono text-xs text-zinc-650 mt-16 relative">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-          <div>
-            © 2026 INDIE CLASH. Voted and shipped by public creators.
-          </div>
-          <div className="flex gap-6">
-            <a href="/" className="hover:text-white transition">Colosseum Arena</a>
-            <a href="/" className="hover:text-white transition">Leaderboard</a>
-            <a href="/" className="hover:text-white transition">Critique Vault</a>
-          </div>
-        </div>
+      <footer className="relative mt-16 border-t border-white/[0.06] py-10 text-center font-mono text-xs text-zinc-600">
+        © 2026 Indie Clash. Match results are based on recorded community votes.
       </footer>
     </div>
   );

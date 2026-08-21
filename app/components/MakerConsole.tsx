@@ -56,9 +56,7 @@ export default function MakerConsole({
   };
 
   const isPushed = (p: Product) => {
-    if (!p.makerAvatar) return true;
-    if (p.makerAvatar.includes("pushed=false")) return false;
-    return true;
+    return p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"));
   };
 
   const myProducts = products.filter(isProductOwner);
@@ -72,7 +70,7 @@ export default function MakerConsole({
 
   // Compute global queue for position calculation
   const globalQueue = allProducts
-    .filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
+    .filter(p => p.queueStatus === "waiting" && isPushed(p))
     .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
   const globalQueueCount = globalQueue.length;
   const arenaIsLive = activeBracket && (activeBracket.status === "active" || activeBracket.status === "preparing");
@@ -215,12 +213,12 @@ export default function MakerConsole({
 
                     <div className="flex flex-wrap items-center gap-4 self-start md:self-auto shrink-0">
                       <a
-                        href={`/reviews/${p.id}`}
+                        href={`/products/${p.id}`}
                         target="_blank"
                         rel="noreferrer"
                         className="py-1.5 px-3 border border-white/[0.08] hover:bg-white/[0.04] hover:border-white/[0.15] text-zinc-350 hover:text-white font-semibold text-[10px] rounded transition duration-150 cursor-pointer font-mono flex items-center gap-1.5"
                       >
-                        🔗 Reviews Page
+                        🔗 Product Page
                       </a>
                       {onExportCsv && (p.queueStatus === "active" || p.queueStatus === "completed") && (
                         <button

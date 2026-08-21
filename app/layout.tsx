@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Outfit } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const inter = Inter({
@@ -15,28 +16,52 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: "INDIE CLASH — 1v1 Product Tournament Arena",
-  description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
+  metadataBase: new URL(SITE_URL),
+  applicationName: SITE_NAME,
+  title: {
+    default: "Indie Clash — Discover and Duel Indie Products",
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  authors: [{ name: SITE_NAME, url: SITE_URL }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "technology",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   openGraph: {
-    title: "INDIE CLASH — 1v1 Product Tournament Arena",
-    description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
-    url: "https://www.indieclash.com",
-    siteName: "Indie Clash",
+    title: "Indie Clash — Discover and Duel Indie Products",
+    description: SITE_DESCRIPTION,
+    url: "/",
+    siteName: SITE_NAME,
+    locale: "en_US",
     images: [
       {
-        url: "https://www.indieclash.com/og-image.png",
+        url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "INDIE CLASH Arena Preview",
+        alt: "Indie Clash product launch arena",
       }
     ],
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "INDIE CLASH — 1v1 Product Tournament Arena",
-    description: "Showcase your indie products in 1v1 colosseum brackets. Ship fast, duel in public, trade deep peer critiques, and rank on the global leaderboard.",
-    images: ["https://www.indieclash.com/og-image.png"],
+    title: "Indie Clash — Discover and Duel Indie Products",
+    description: SITE_DESCRIPTION,
+    images: ["/og-image.png"],
   },
 };
 

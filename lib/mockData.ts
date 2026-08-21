@@ -13,6 +13,7 @@ export interface Product {
   votesCount: number;
   creatorUsername?: string;
   creator_uid?: string;
+  arenaEnqueued?: boolean;
 }
 
 export interface Match {

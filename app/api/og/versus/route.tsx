@@ -1,8 +1,16 @@
 import { ImageResponse } from "next/og";
-import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
-import { SEED_PRODUCTS } from "@/lib/mockData";
+import { getProductSeoData, getVersusSeoData } from "@/lib/server/publicSeoData";
+import { absoluteUrl } from "@/lib/site";
 
 export const runtime = "edge";
+
+interface OgProduct {
+  title: string;
+  logo: string;
+  votesCount: number;
+  tagline: string;
+  shipTimeframe: string;
+}
 
 export async function GET(request: Request) {
   try {
@@ -10,90 +18,29 @@ export async function GET(request: Request) {
     const slug = searchParams.get("slug");
     if (!slug) return new Response("Missing slug parameter", { status: 400 });
 
-    const parts = slug.split("-vs-");
-    const isComparison = parts.length === 2;
-    const [slugA, slugB] = parts;
+    const versusData = await getVersusSeoData(slug);
+    const productData = versusData ? null : await getProductSeoData(slug);
+    if (!versusData && !productData) return new Response("Product or matchup not found", { status: 404 });
 
-    let productA: any = null;
-    let productB: any = null;
-    let winRate = 75;
-    let totalDuels = 4;
-
-    if (supabase && slugA) {
-      try {
-        const { data: pA } = await supabase
-          .from(`${DB_PREFIX}products`)
-          .select("*")
-          .eq(`${DB_PREFIX}id`, slugA)
-          .single();
-
-        if (pA) {
-          const rawPA = pA as any;
-          productA = {
-            title: rawPA[`${DB_PREFIX}title`],
-            logo: rawPA[`${DB_PREFIX}logo`],
-            votesCount: rawPA[`${DB_PREFIX}votes_count`],
-            tagline: rawPA[`${DB_PREFIX}tagline`],
-            shipTimeframe: rawPA[`${DB_PREFIX}ship_timeframe`],
-          };
-
-          if (!isComparison) {
-            const { data: matches } = await supabase
-              .from(`${DB_PREFIX}matches`)
-              .select("*")
-              .or(`${DB_PREFIX}product_a_id.eq.${slugA},${DB_PREFIX}product_b_id.eq.${slugA}`);
-            if (matches) {
-              totalDuels = matches.length;
-              const winCount = matches.filter((m: any) => m[`${DB_PREFIX}winner_id`] === slugA).length;
-              winRate = totalDuels > 0 ? Math.round((winCount / totalDuels) * 100) : 75;
-            }
-          }
-        }
-
-        if (isComparison && slugB) {
-          const { data: pB } = await supabase
-            .from(`${DB_PREFIX}products`)
-            .select("*")
-            .eq(`${DB_PREFIX}id`, slugB)
-            .single();
-
-          if (pB) {
-            const rawPB = pB as any;
-            productB = {
-              title: rawPB[`${DB_PREFIX}title`],
-              logo: rawPB[`${DB_PREFIX}logo`],
-              votesCount: rawPB[`${DB_PREFIX}votes_count`],
-            };
-          }
-        }
-      } catch (e) {
-        console.error("Supabase query error in OG route:", e);
-      }
-    }
-
-    // Fallback mock definitions if DB returns empty
-    if (!productA || (isComparison && !productB)) {
-      const seedA = SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugA?.toLowerCase());
-      const seedB = isComparison ? SEED_PRODUCTS.find(p => p.id.toLowerCase() === slugB?.toLowerCase()) : null;
-
-      const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-      productA = productA || {
-        title: seedA ? seedA.title : capitalize(slugA || "Product A"),
-        logo: seedA ? seedA.logo : "🚀",
-        votesCount: 42,
-        tagline: seedA ? seedA.tagline : "Innovative developer utility shipped in public sprint.",
-        shipTimeframe: seedA ? seedA.shipTimeframe : "48h",
-      };
-
-      if (isComparison) {
-        productB = productB || {
-          title: seedB ? seedB.title : capitalize(slugB || "Product B"),
-          logo: seedB ? seedB.logo : "⚔️",
-          votesCount: 37,
-        };
-      }
-    }
+    const sourceA = versusData?.productA ?? productData!.product;
+    const sourceB = versusData?.productB;
+    const isComparison = Boolean(versusData && sourceB);
+    const productA: OgProduct = {
+      title: sourceA.title,
+      logo: sourceA.logo,
+      votesCount: sourceA.votesCount,
+      tagline: sourceA.tagline,
+      shipTimeframe: sourceA.shipTimeframe,
+    };
+    const productB: OgProduct | null = sourceB ? {
+      title: sourceB.title,
+      logo: sourceB.logo,
+      votesCount: sourceB.votesCount,
+      tagline: sourceB.tagline,
+      shipTimeframe: sourceB.shipTimeframe,
+    } : null;
+    const totalDuels = productData?.matchups.length ?? 0;
+    const winRate = totalDuels > 0 ? Math.round(((productData?.wins ?? 0) / totalDuels) * 100) : 0;
 
     const renderOgLogo = (logoStr: string) => {
       if (!logoStr) return null;
@@ -101,8 +48,8 @@ export async function GET(request: Request) {
       if (isImg) {
         return (
           <img
-            src={logoStr}
-            alt="Logo"
+            src={logoStr.startsWith("/") ? absoluteUrl(logoStr) : logoStr}
+            alt=""
             style={{
               width: "110px",
               height: "110px",
@@ -248,7 +195,7 @@ export async function GET(request: Request) {
                   overflow: "hidden",
                 }}
               >
-                {renderOgLogo(productB.logo)}
+                {renderOgLogo(productB!.logo)}
               </div>
               <span
                 style={{
@@ -259,7 +206,7 @@ export async function GET(request: Request) {
                   textAlign: "center",
                 }}
               >
-                {productB.title}
+                {productB!.title}
               </span>
               <span
                 style={{
@@ -270,7 +217,7 @@ export async function GET(request: Request) {
                   fontFamily: "monospace",
                 }}
               >
-                {productB.votesCount} votes
+                {productB!.votesCount} votes
               </span>
             </div>
           </div>
@@ -406,8 +353,8 @@ export async function GET(request: Request) {
         height: 630,
       }
     );
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("OpenGraph image API rendering error:", err);
-    return new Response(`Failed to generate image: ${err.message}`, { status: 500 });
+    return new Response("Failed to generate image", { status: 500 });
   }
 }

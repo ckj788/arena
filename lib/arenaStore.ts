@@ -1,4 +1,4 @@
-import { Product, Match, Bracket, SEED_PRODUCTS } from "./mockData";
+import { Product, Match, Bracket } from "./mockData";
 import { supabase, DB_PREFIX } from "./supabaseClient";
 
 const PRODUCTS_KEY = "arena_products_v1";
@@ -99,13 +99,17 @@ export function saveBracket(bracket: Bracket | null) {
 
 export function buildInitialBracket(products: Product[]): { bracket: Bracket; updatedProducts: Product[] } {
   const waitingProducts = products
-    .filter(p => p.queueStatus === "waiting" && (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
+    .filter(p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))))
     .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
   const activeProducts = waitingProducts.slice(0, 16);
+  if (activeProducts.length < 16) {
+    throw new Error("At least 16 enqueued products are required to start a bracket.");
+  }
+  const bracketId = `b_${crypto.randomUUID().replaceAll("-", "")}`;
   const round1: Match[] = [];
   for (let i = 0; i < 8; i++) {
     round1.push({
-      id: `r1_m${i + 1}`,
+      id: `${bracketId}_r1_m${i + 1}`,
       roundNumber: 1,
       productA: activeProducts[i * 2],
       productB: activeProducts[i * 2 + 1],
@@ -116,7 +120,7 @@ export function buildInitialBracket(products: Product[]): { bracket: Bracket; up
   }
 
   const bracket: Bracket = {
-    id: `b_${Date.now()}`,
+    id: bracketId,
     round1,
     round2: [],
     round3: [],
@@ -206,7 +210,7 @@ export function advanceTournamentRound(bracket: Bracket): Bracket {
     const round2: Match[] = [];
     for (let i = 0; i < 4; i++) {
       round2.push({
-        id: `r2_m${i + 1}`,
+        id: `${bracket.id}_r2_m${i + 1}`,
         roundNumber: 2,
         productA: winners[i * 2],
         productB: winners[i * 2 + 1],
@@ -223,7 +227,7 @@ export function advanceTournamentRound(bracket: Bracket): Bracket {
     const round3: Match[] = [];
     for (let i = 0; i < 2; i++) {
       round3.push({
-        id: `r3_m${i + 1}`,
+        id: `${bracket.id}_r3_m${i + 1}`,
         roundNumber: 3,
         productA: winners[i * 2],
         productB: winners[i * 2 + 1],
@@ -238,7 +242,7 @@ export function advanceTournamentRound(bracket: Bracket): Bracket {
     bracket.round3 = settleMatches(bracket.round3);
     const winners = bracket.round3.map(m => m.winnerId === m.productA.id ? m.productA : m.productB);
     const round4: Match[] = [{
-      id: `r4_m1`,
+      id: `${bracket.id}_r4_m1`,
       roundNumber: 4,
       productA: winners[0],
       productB: winners[1],
@@ -311,7 +315,7 @@ export function addDummyMaker(products: Product[]): Product[] {
 }
 
 // 映射器 1：本地 Product -> DB 产品行
-function toDbProduct(p: Product) {
+export function toDbProduct(p: Product) {
   return {
     [`${DB_PREFIX}id`]: p.id,
     [`${DB_PREFIX}title`]: p.title,
@@ -324,7 +328,10 @@ function toDbProduct(p: Product) {
     [`${DB_PREFIX}logo`]: p.logo,
     [`${DB_PREFIX}submitted_at`]: p.submittedAt,
     [`${DB_PREFIX}queue_status`]: p.queueStatus,
-    [`${DB_PREFIX}votes_count`]: p.votesCount
+    [`${DB_PREFIX}votes_count`]: p.votesCount,
+    [`${DB_PREFIX}creator_uid`]: p.creator_uid || null,
+    [`${DB_PREFIX}creator_username`]: p.creatorUsername || null,
+    [`${DB_PREFIX}arena_enqueued`]: p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))
   };
 }
 
@@ -342,12 +349,15 @@ export function fromDbProduct(row: any): Product {
     logo: row[`${DB_PREFIX}logo`],
     submittedAt: row[`${DB_PREFIX}submitted_at`],
     queueStatus: row[`${DB_PREFIX}queue_status`],
-    votesCount: row[`${DB_PREFIX}votes_count`]
+    votesCount: row[`${DB_PREFIX}votes_count`],
+    creator_uid: row[`${DB_PREFIX}creator_uid`] || undefined,
+    creatorUsername: row[`${DB_PREFIX}creator_username`] || undefined,
+    arenaEnqueued: row[`${DB_PREFIX}arena_enqueued`] ?? (!row[`${DB_PREFIX}maker_avatar`] || !row[`${DB_PREFIX}maker_avatar`].includes("pushed=false"))
   };
 }
 
 // 映射器 3：本地 Match -> DB 对局行
-function toDbMatch(m: Match, bracketId: string) {
+export function toDbMatch(m: Match, bracketId: string) {
   return {
     [`${DB_PREFIX}id`]: m.id,
     [`${DB_PREFIX}bracket_id`]: bracketId,
@@ -362,7 +372,7 @@ function toDbMatch(m: Match, bracketId: string) {
 }
 
 // 映射器 4：DB 对局行 -> 本地 Match
-function fromDbMatch(row: any, productA: Product, productB: Product): Match {
+export function fromDbMatch(row: any, productA: Product, productB: Product): Match {
   return {
     id: row[`${DB_PREFIX}id`],
     roundNumber: row[`${DB_PREFIX}round_number`],
@@ -395,88 +405,7 @@ export async function fetchCloudProducts(): Promise<Product[]> {
   }
 }
 
-// 2. 上传/更新单个项目至云端
-export async function upsertCloudProduct(p: Product): Promise<void> {
-  if (!supabase) {
-    const prods = loadProducts();
-    const idx = prods.findIndex(x => x.id === p.id);
-    if (idx >= 0) prods[idx] = p;
-    else prods.push(p);
-    saveProducts(prods);
-    return;
-  }
-  const { error } = await supabase
-    .from(`${DB_PREFIX}products`)
-    .upsert(toDbProduct(p) as any);
-
-  if (error) {
-    console.error("Error upserting product:", error);
-  }
-}
-
-// 3. 上载整个对局树与名下对局
-export async function saveCloudBracket(b: Bracket): Promise<void> {
-  if (!supabase) {
-    saveBracket(b);
-    return;
-  }
-
-  // A. 插入或更新 Bracket 根节点
-  const { error: bErr } = await supabase
-    .from(`${DB_PREFIX}brackets`)
-    .upsert({
-      [`${DB_PREFIX}id`]: b.id,
-      [`${DB_PREFIX}status`]: b.status,
-      [`${DB_PREFIX}winner_id`]: b.winner?.id || null,
-      [`${DB_PREFIX}round_started_at`]: b.roundStartedAt || new Date().toISOString()
-    } as any);
-
-  if (bErr) {
-    console.error("Error upserting bracket:", bErr);
-    return;
-  }
-
-  // B. 拍平并上传所有对局
-  const allMatches: Match[] = [
-    ...b.round1,
-    ...b.round2,
-    ...b.round3,
-    ...b.round4
-  ];
-
-  if (allMatches.length === 0) return;
-
-  const dbMatches = allMatches.map(m => toDbMatch(m, b.id));
-  const { error: mErr } = await supabase
-    .from(`${DB_PREFIX}matches`)
-    .upsert(dbMatches as any);
-
-  if (mErr) {
-    console.error("Error upserting matches:", mErr);
-  }
-
-  // C. 自动在云端更新所有参赛选手的排队状态 (preparing/active -> active, completed -> completed)
-  if (b.round1.length > 0) {
-    const targetStatus = b.status === "completed" ? "completed" : "active";
-    const productMap = new Map<string, Product>();
-    
-    b.round1.forEach(m => {
-      productMap.set(m.productA.id, { ...m.productA, queueStatus: targetStatus });
-      productMap.set(m.productB.id, { ...m.productB, queueStatus: targetStatus });
-    });
-
-    const dbProds = Array.from(productMap.values()).map(toDbProduct);
-    const { error: pErr } = await supabase
-      .from(`${DB_PREFIX}products`)
-      .upsert(dbProds as any);
-
-    if (pErr) {
-      console.error("Error updating participating product queue statuses in cloud:", pErr);
-    }
-  }
-}
-
-// 4. 获取当前云端活跃的 Bracket 晋级树
+// 2. 获取当前云端活跃的 Bracket 晋级树
 export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise<Bracket | null> {
   if (!supabase) return loadBracket();
 
@@ -552,52 +481,6 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
     return loadBracket();
   }
 }
-
-// 5. 永久清除云端对局数据并重置（彻底清空所有数据库表以支持沙箱重置）
-export async function clearCloudData(): Promise<void> {
-  if (!supabase) return;
-
-  // A. 清除所有投票与反馈
-  const { error: vErr } = await supabase
-    .from(`${DB_PREFIX}votes`)
-    .delete()
-    .neq(`${DB_PREFIX}id`, "00000000-0000-0000-0000-000000000000");
-  if (vErr) {
-    console.error("Error deleting votes:", vErr);
-    throw new Error(`Failed to delete votes: ${vErr.message}`);
-  }
-
-  // B. 清除所有对局场次
-  const { error: mErr } = await supabase
-    .from(`${DB_PREFIX}matches`)
-    .delete()
-    .neq(`${DB_PREFIX}id`, "_nonexistent_");
-  if (mErr) {
-    console.error("Error deleting matches:", mErr);
-    throw new Error(`Failed to delete matches: ${mErr.message}`);
-  }
-
-  // C. 清除所有晋级赛树
-  const { error: bErr } = await supabase
-    .from(`${DB_PREFIX}brackets`)
-    .delete()
-    .neq(`${DB_PREFIX}id`, "_nonexistent_");
-  if (bErr) {
-    console.error("Error deleting brackets:", bErr);
-    throw new Error(`Failed to delete brackets: ${bErr.message}`);
-  }
-
-  // D. 清除所有产品记录
-  const { error: pErr } = await supabase
-    .from(`${DB_PREFIX}products`)
-    .delete()
-    .neq(`${DB_PREFIX}id`, "_nonexistent_");
-  if (pErr) {
-    console.error("Error deleting products:", pErr);
-    throw new Error(`Failed to delete products: ${pErr.message}`);
-  }
-}
-
 
 const PAST_CHAMPS_KEY = "arena_past_champions_v1";
 
