@@ -208,7 +208,7 @@ export default async function VersusPage({ params }: Props) {
                 </dl>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link href={`/products/${product.id}`} className="rounded-lg border border-white/[0.1] px-4 py-2 text-xs font-semibold transition hover:bg-white/[0.05]">View profile</Link>
-                  {website ? <a href={website} target="_blank" rel="ugc noopener noreferrer" className="rounded-lg bg-white px-4 py-2 text-xs font-semibold text-black transition hover:bg-zinc-200">Visit product ↗</a> : null}
+                  {website ? <a href={website} target="_blank" rel="noopener" className="rounded-lg bg-white px-4 py-2 text-xs font-semibold text-black transition hover:bg-zinc-200">Visit {product.title} official website ↗</a> : null}
                 </div>
               </article>
             ))}

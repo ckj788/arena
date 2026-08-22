@@ -29,6 +29,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return {
     title: `${product.title} — Product Profile`,
     description,
+    authors: [{ name: product.makerName }],
     alternates: { canonical: canonicalPath },
     openGraph: {
       title: `${product.title} — Indie Product Profile`,
@@ -68,6 +69,22 @@ export default async function ProductPage({ params }: Props) {
   const productWebsite = publicHttpUrl(product.url);
   const publishedDate = product.submittedAt ? new Date(product.submittedAt) : null;
   const validPublishedDate = publishedDate && !Number.isNaN(publishedDate.getTime()) ? publishedDate : null;
+  const faqEntries = [
+    {
+      question: `What is ${product.title}?`,
+      answer: `${product.title} is an indie product by ${product.makerName}. ${product.tagline}`,
+    },
+    {
+      question: `Who made ${product.title}?`,
+      answer: `${product.title} was submitted by ${product.makerName} and shipped in ${product.shipTimeframe}.`,
+    },
+    {
+      question: `Has ${product.title} competed in the Indie Clash arena?`,
+      answer: matchups.length
+        ? `${product.title} has ${matchups.length} recorded matchup${matchups.length === 1 ? "" : "s"}, ${wins} win${wins === 1 ? "" : "s"}, and ${product.votesCount} arena vote${product.votesCount === 1 ? "" : "s"}.`
+        : `${product.title} has a public launch profile but has not entered a recorded arena matchup yet.`,
+    },
+  ];
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -103,9 +120,18 @@ export default async function ProductPage({ params }: Props) {
         "@id": `${canonicalUrl}#breadcrumb`,
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "Indie Clash", item: absoluteUrl("/") },
-          { "@type": "ListItem", position: 2, name: "Products", item: absoluteUrl("/#launches-section") },
+          { "@type": "ListItem", position: 2, name: "Products", item: absoluteUrl("/products") },
           { "@type": "ListItem", position: 3, name: product.title, item: canonicalUrl },
         ],
+      },
+      {
+        "@type": "FAQPage",
+        "@id": `${canonicalUrl}#faq`,
+        mainEntity: faqEntries.map((entry) => ({
+          "@type": "Question",
+          name: entry.question,
+          acceptedAnswer: { "@type": "Answer", text: entry.answer },
+        })),
       },
     ],
   };
@@ -121,7 +147,7 @@ export default async function ProductPage({ params }: Props) {
             <span className="text-2xl font-semibold tracking-tighter">INDIE CLASH</span>
             <span className="rounded border border-white/[0.08] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-zinc-400">Products</span>
           </Link>
-          <Link href="/#launches-section" className="rounded-md border border-white/[0.1] px-3.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.04] hover:text-white">
+          <Link href="/products" className="rounded-md border border-white/[0.1] px-3.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.04] hover:text-white">
             Discover products
           </Link>
         </div>
@@ -131,7 +157,7 @@ export default async function ProductPage({ params }: Props) {
         <nav aria-label="Breadcrumb" className="mb-8 flex flex-wrap items-center gap-2 font-mono text-xs text-zinc-500">
           <Link href="/" className="transition hover:text-white">Indie Clash</Link>
           <span aria-hidden="true">/</span>
-          <Link href="/#launches-section" className="transition hover:text-white">Products</Link>
+          <Link href="/products" className="transition hover:text-white">Products</Link>
           <span aria-hidden="true">/</span>
           <span aria-current="page" className="text-zinc-300">{product.title}</span>
         </nav>
@@ -170,8 +196,8 @@ export default async function ProductPage({ params }: Props) {
 
             <div className="mt-6 flex flex-wrap gap-3">
               {productWebsite ? (
-                <a href={productWebsite} target="_blank" rel="ugc noopener noreferrer" className="rounded-xl bg-[#ffbe18] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e0a612]">
-                  Visit product ↗
+                <a href={productWebsite} target="_blank" rel="noopener" className="rounded-xl bg-[#ffbe18] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e0a612]">
+                  Visit {product.title} official website ↗
                 </a>
               ) : null}
               {product.makerTwitter ? (
@@ -187,6 +213,17 @@ export default async function ProductPage({ params }: Props) {
 
           <div className="grid gap-10 lg:grid-cols-[minmax(0,1fr)_300px]">
             <div className="space-y-12">
+              <section aria-labelledby="about-heading">
+                <div className="mb-5 border-b border-white/[0.08] pb-4">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Product overview</p>
+                  <h2 id="about-heading" className="mt-1 text-2xl font-semibold">About {product.title}</h2>
+                </div>
+                <p className="text-base leading-8 text-zinc-300">
+                  <strong>{product.title}</strong> is an independent product created by {product.makerName}. {product.tagline}
+                  {validPublishedDate ? ` It was listed on Indie Clash on ${validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "long", day: "numeric" })}.` : ""}
+                </p>
+              </section>
+
               <section aria-labelledby="critiques-heading">
                 <div className="mb-5 flex items-end justify-between border-b border-white/[0.08] pb-4">
                   <div>
@@ -282,6 +319,19 @@ export default async function ProductPage({ params }: Props) {
               </div>
             </section>
           ) : null}
+
+          <section className="mt-16 border-t border-white/[0.08] pt-10" aria-labelledby="faq-heading">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Product questions</p>
+            <h2 id="faq-heading" className="mt-1 text-2xl font-semibold">Frequently asked questions about {product.title}</h2>
+            <div className="mt-6 divide-y divide-white/[0.06] rounded-xl border border-white/[0.07] bg-[#121215]/70 px-5">
+              {faqEntries.map((entry) => (
+                <article key={entry.question} className="py-5">
+                  <h3 className="font-semibold text-zinc-100">{entry.question}</h3>
+                  <p className="mt-2 text-sm leading-6 text-zinc-400">{entry.answer}</p>
+                </article>
+              ))}
+            </div>
+          </section>
 
           <section className="mt-16 flex flex-col items-start justify-between gap-6 rounded-2xl border border-[#ffbe18]/20 bg-[#ffbe18]/[0.05] p-8 sm:flex-row sm:items-center">
             <div>

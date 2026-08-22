@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { User } from "@supabase/supabase-js";
+import Link from "next/link";
 import { gsap } from "gsap";
 import { Product, Match, Bracket } from "@/lib/mockData";
 import {
@@ -1741,7 +1742,7 @@ export default function ArenaClient({
             </div>
 
             <nav className="hidden md:flex items-center gap-5 text-sm font-medium text-zinc-200 font-sans">
-              <a href="#launches-section" className="hover:text-white transition duration-200">Releases</a>
+              <Link href="/products" className="hover:text-white transition duration-200">Products</Link>
               <span className="text-zinc-700">/</span>
               <a href="#arena-section" className="hover:text-white transition duration-200">Arena</a>
               <span className="text-zinc-700">/</span>
@@ -1960,7 +1961,7 @@ export default function ArenaClient({
                         <a 
                           href={item.url}
                           target="_blank" 
-                          rel="ugc noopener noreferrer"
+                          rel="noopener"
                           className="text-[10px] font-mono text-zinc-500 hover:text-white inline-flex items-center gap-1"
                         >
                           Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-650" />
@@ -2208,7 +2209,7 @@ export default function ArenaClient({
                                 <a
                                   href={duel.productA.url}
                                   target="_blank"
-                                  rel="ugc noopener noreferrer"
+                                  rel="noopener"
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -2266,7 +2267,7 @@ export default function ArenaClient({
                                 <a
                                   href={duel.productB.url}
                                   target="_blank"
-                                  rel="ugc noopener noreferrer"
+                                  rel="noopener"
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -2521,7 +2522,7 @@ export default function ArenaClient({
                     <a 
                       href={c.url}
                       target="_blank"
-                      rel="ugc noopener noreferrer"
+                      rel="noopener"
                       className="text-[10px] uppercase font-mono underline text-white hover:text-zinc-300 transition-colors"
                     >
                       DEMO
@@ -3549,7 +3550,7 @@ export default function ArenaClient({
               <a 
                 href={activeCardProduct.url} 
                 target="_blank" 
-                rel="ugc noopener noreferrer"
+                rel="noopener"
                 onClick={() => synthClick(400, "sine", 0.08)}
                 className="text-amber-400 hover:text-amber-300 font-semibold transition-colors flex items-center gap-1 group text-[11px] border-b border-amber-400/30 hover:border-amber-300"
               >
