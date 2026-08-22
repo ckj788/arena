@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { settleArenaIfDue } from "@/lib/server/arenaAdmin";
-import { assertJsonRequest, authenticateRequest, jsonError } from "@/lib/server/auth";
+import { assertJsonRequest, authenticateRequest, consumeUserRateLimit, jsonError } from "@/lib/server/auth";
+import { invalidateArenaPublic } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -9,8 +10,10 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     assertJsonRequest(request, 1_024);
-    await authenticateRequest(request);
+    const { client } = await authenticateRequest(request);
+    await consumeUserRateLimit(client, "settle");
     const result = await settleArenaIfDue();
+    if (result.changed) invalidateArenaPublic();
     return NextResponse.json(result);
   } catch (error) {
     return jsonError(error);

@@ -42,6 +42,35 @@ export interface ProductSubmission {
   logo: string;
 }
 
+export async function uploadArenaLogo(logo: string): Promise<string> {
+  if (!logo.startsWith("data:image")) return logo;
+  if (!supabase) throw new Error("Cloud mode is not configured.");
+
+  const match = logo.match(/^data:image\/(png|jpeg|webp);base64,/i);
+  if (!match) throw new Error("Logo must be a PNG, JPEG, or WebP image.");
+
+  const { data, error } = await supabase.auth.getSession();
+  if (error || !data.session?.access_token) throw new Error("Your session has expired. Please sign in again.");
+
+  const response = await fetch(logo);
+  const blob = await response.blob();
+  if (blob.size > 1_000_000) throw new Error("Logo must be smaller than 1 MB after resizing.");
+
+  const uploadResponse = await fetch("/api/arena/logo", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${data.session.access_token}`,
+      "Content-Type": blob.type,
+    },
+    body: blob,
+  });
+  const payload = await uploadResponse.json().catch(() => ({})) as { url?: string; error?: string };
+  if (!uploadResponse.ok || !payload.url) {
+    throw new Error(payload.error || "Unable to upload the product logo.");
+  }
+  return payload.url;
+}
+
 export async function submitArenaProduct(input: ProductSubmission): Promise<Product> {
   const result = await authenticatedJson<{ product: Product }>("/api/arena/products", input);
   return result.product;

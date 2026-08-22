@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import { timingSafeEqual } from "node:crypto";
+import { DB_PREFIX } from "@/lib/supabaseClient";
 
 export class HttpError extends Error {
   constructor(
@@ -35,6 +36,18 @@ export interface AuthenticatedRequest {
   user: User;
   accessToken: string;
   client: SupabaseClient;
+}
+
+export type RateLimitAction = "logo" | "product_submit" | "queue" | "settle";
+
+export async function consumeUserRateLimit(client: SupabaseClient, action: RateLimitAction): Promise<void> {
+  const { error } = await client.rpc(`${DB_PREFIX}consume_rate_limit`, { p_action: action });
+  if (!error) return;
+  if (error.message.toLowerCase().includes("rate limit")) {
+    throw new HttpError(429, "Too many requests. Please try again later.");
+  }
+  console.error(`[ARENA API] Rate-limit check failed for ${action}:`, error.message);
+  throw new HttpError(503, "The abuse-protection service is unavailable.");
 }
 
 export async function authenticateRequest(request: Request): Promise<AuthenticatedRequest> {

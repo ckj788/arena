@@ -1,9 +1,10 @@
 import "server-only";
 
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
 import { fromDbProduct } from "@/lib/arenaStore";
 import { Product, SEED_PRODUCTS } from "@/lib/mockData";
-import { DB_PREFIX, supabase } from "@/lib/supabaseClient";
+import { DB_PREFIX, publicArenaTable, supabase } from "@/lib/supabaseClient";
 
 const SAFE_ID = /^[a-z0-9][a-z0-9_-]{0,99}$/i;
 
@@ -111,7 +112,7 @@ export function matchSlug(match: Pick<PublicMatch, "productAId" | "productBId">)
   return `${match.productAId}-vs-${match.productBId}`;
 }
 
-export const getProductSeoData = cache(async (rawSlug: string): Promise<ProductSeoData | null> => {
+const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<ProductSeoData | null> => {
   const slug = rawSlug.toLowerCase();
   if (!SAFE_ID.test(slug)) return null;
 
@@ -128,7 +129,7 @@ export const getProductSeoData = cache(async (rawSlug: string): Promise<ProductS
   }
 
   const { data: productRow, error: productError } = await supabase
-    .from(`${DB_PREFIX}products`)
+    .from(publicArenaTable("products"))
     .select("*")
     .eq(`${DB_PREFIX}id`, slug)
     .maybeSingle();
@@ -149,7 +150,7 @@ export const getProductSeoData = cache(async (rawSlug: string): Promise<ProductS
   ].join(",");
 
   const { data: matchRows, error: matchError } = await supabase
-    .from(`${DB_PREFIX}matches`)
+    .from(publicArenaTable("matches"))
     .select(matchFields)
     .or(`${DB_PREFIX}product_a_id.eq.${slug},${DB_PREFIX}product_b_id.eq.${slug}`)
     .limit(50);
@@ -163,17 +164,17 @@ export const getProductSeoData = cache(async (rawSlug: string): Promise<ProductS
   const [{ data: critiqueRows, error: critiqueError }, { data: opponentRows, error: opponentError }, { data: relatedRows, error: relatedError }] = await Promise.all([
     matches.length
       ? supabase
-          .from(`${DB_PREFIX}votes`)
+          .from(publicArenaTable("votes"))
           .select("*")
           .in(`${DB_PREFIX}match_id`, matches.map((match) => match.id))
           .order(`${DB_PREFIX}created_at`, { ascending: false })
           .limit(50)
       : Promise.resolve({ data: [], error: null }),
     opponentIds.length
-      ? supabase.from(`${DB_PREFIX}products`).select("*").in(`${DB_PREFIX}id`, opponentIds)
+      ? supabase.from(publicArenaTable("products")).select("*").in(`${DB_PREFIX}id`, opponentIds)
       : Promise.resolve({ data: [], error: null }),
     supabase
-      .from(`${DB_PREFIX}products`)
+      .from(publicArenaTable("products"))
       .select("*")
       .neq(`${DB_PREFIX}id`, slug)
       .order(`${DB_PREFIX}submitted_at`, { ascending: false })
@@ -220,9 +221,11 @@ export const getProductSeoData = cache(async (rawSlug: string): Promise<ProductS
     relatedProducts: (relatedRows ?? []).map(fromDbProduct),
     wins: matches.filter((match) => match.winnerId === product.id).length,
   };
-});
+}, ["arena-product-seo-v2"], { revalidate: 1800, tags: ["arena-public"] });
 
-export const getVersusSeoData = cache(async (rawSlug: string): Promise<VersusSeoData | null> => {
+export const getProductSeoData = cache(loadProductSeoData);
+
+const loadVersusSeoData = unstable_cache(async (rawSlug: string): Promise<VersusSeoData | null> => {
   const slug = rawSlug.toLowerCase();
   const candidates = versusCandidates(slug);
   if (!supabase || candidates.length === 0) return null;
@@ -245,7 +248,7 @@ export const getVersusSeoData = cache(async (rawSlug: string): Promise<VersusSeo
       `and(${DB_PREFIX}product_a_id.eq.${candidateB},${DB_PREFIX}product_b_id.eq.${candidateA})`,
     ].join(",");
     const { data, error } = await supabase
-      .from(`${DB_PREFIX}matches`)
+      .from(publicArenaTable("matches"))
       .select(matchFields)
       .or(filter)
       .limit(1)
@@ -261,11 +264,11 @@ export const getVersusSeoData = cache(async (rawSlug: string): Promise<VersusSeo
 
   const [{ data: productRows, error: productError }, { data: critiqueRows, error: critiqueError }] = await Promise.all([
     supabase
-      .from(`${DB_PREFIX}products`)
+      .from(publicArenaTable("products"))
       .select("*")
       .in(`${DB_PREFIX}id`, [match.productAId, match.productBId]),
     supabase
-      .from(`${DB_PREFIX}votes`)
+      .from(publicArenaTable("votes"))
       .select("*")
       .eq(`${DB_PREFIX}match_id`, match.id)
       .order(`${DB_PREFIX}created_at`, { ascending: false })
@@ -299,20 +302,34 @@ export const getVersusSeoData = cache(async (rawSlug: string): Promise<VersusSeo
       createdAt: stringValue(row, `${DB_PREFIX}created_at`) || undefined,
     })),
   };
-});
+}, ["arena-versus-seo-v2"], { revalidate: 1800, tags: ["arena-public"] });
 
-export async function getSitemapRecords(): Promise<{
+export const getVersusSeoData = cache(loadVersusSeoData);
+
+async function loadSitemapRecords(): Promise<{
   products: SitemapProduct[];
   matches: PublicMatch[];
 }> {
   if (!supabase) return { products: [], matches: [] };
 
-  const [{ data: productRows, error: productError }, { data: matchRows, error: matchError }] = await Promise.all([
-    supabase
-      .from(`${DB_PREFIX}products`)
-      .select(`${DB_PREFIX}id,${DB_PREFIX}submitted_at`),
-    supabase
-      .from(`${DB_PREFIX}matches`)
+  const pageSize = 1_000;
+  const productRows: DatabaseRow[] = [];
+  const matchRows: DatabaseRow[] = [];
+
+  for (let start = 0; ; start += pageSize) {
+    const { data, error } = await supabase
+      .from(publicArenaTable("products"))
+      .select(`${DB_PREFIX}id,${DB_PREFIX}submitted_at`)
+      .order(`${DB_PREFIX}id`, { ascending: true })
+      .range(start, start + pageSize - 1);
+    if (error) throw new Error(`Unable to build product sitemap: ${error.message}`);
+    productRows.push(...((data ?? []) as unknown as DatabaseRow[]));
+    if (!data || data.length < pageSize) break;
+  }
+
+  for (let start = 0; ; start += pageSize) {
+    const { data, error } = await supabase
+      .from(publicArenaTable("matches"))
       .select([
         `${DB_PREFIX}id`,
         `${DB_PREFIX}bracket_id`,
@@ -322,20 +339,27 @@ export async function getSitemapRecords(): Promise<{
         `${DB_PREFIX}votes_a`,
         `${DB_PREFIX}votes_b`,
         `${DB_PREFIX}winner_id`,
-      ].join(",")),
-  ]);
-
-  if (productError) throw new Error(`Unable to build product sitemap: ${productError.message}`);
-  if (matchError) throw new Error(`Unable to build matchup sitemap: ${matchError.message}`);
+      ].join(","))
+      .order(`${DB_PREFIX}id`, { ascending: true })
+      .range(start, start + pageSize - 1);
+    if (error) throw new Error(`Unable to build matchup sitemap: ${error.message}`);
+    matchRows.push(...((data ?? []) as unknown as DatabaseRow[]));
+    if (!data || data.length < pageSize) break;
+  }
 
   return {
-    products: ((productRows ?? []) as unknown as DatabaseRow[]).flatMap((row): SitemapProduct[] => {
+    products: productRows.flatMap((row): SitemapProduct[] => {
       const id = stringValue(row, `${DB_PREFIX}id`);
       if (!id || !SAFE_ID.test(id)) return [];
       return [{ id, submittedAt: stringValue(row, `${DB_PREFIX}submitted_at`) || undefined }];
     }),
-    matches: ((matchRows ?? []) as unknown as DatabaseRow[]).map(mapMatch).filter((match) =>
+    matches: matchRows.map(mapMatch).filter((match) =>
       Boolean(match.id && SAFE_ID.test(match.productAId) && SAFE_ID.test(match.productBId)),
     ),
   };
 }
+
+export const getSitemapRecords = unstable_cache(loadSitemapRecords, ["arena-sitemap-v2"], {
+  revalidate: 3600,
+  tags: ["arena-public"],
+});

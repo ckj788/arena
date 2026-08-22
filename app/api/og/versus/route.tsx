@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
 import { getProductSeoData, getVersusSeoData } from "@/lib/server/publicSeoData";
-import { absoluteUrl } from "@/lib/site";
+import { absoluteUrl, trustedProductImageUrl } from "@/lib/site";
 
-export const runtime = "edge";
+export const runtime = "nodejs";
 
 interface OgProduct {
   title: string;
@@ -44,11 +44,11 @@ export async function GET(request: Request) {
 
     const renderOgLogo = (logoStr: string) => {
       if (!logoStr) return null;
-      const isImg = logoStr.startsWith("data:image") || logoStr.startsWith("http") || logoStr.startsWith("/");
-      if (isImg) {
+      const trustedImage = trustedProductImageUrl(logoStr);
+      if (trustedImage) {
         return (
           <img
-            src={logoStr.startsWith("/") ? absoluteUrl(logoStr) : logoStr}
+            src={trustedImage.startsWith("/") ? absoluteUrl(trustedImage) : trustedImage}
             alt=""
             style={{
               width: "110px",
@@ -58,7 +58,8 @@ export async function GET(request: Request) {
           />
         );
       }
-      return <span style={{ fontSize: "80px" }}>{logoStr}</span>;
+      const safeEmoji = [...logoStr].length <= 8 && !/[<>]/.test(logoStr) ? logoStr : "🚀";
+      return <span style={{ fontSize: "80px" }}>{safeEmoji}</span>;
     };
 
     // Generate dynamic 1200x630 layout
@@ -351,6 +352,9 @@ export async function GET(request: Request) {
       {
         width: 1200,
         height: 630,
+        headers: {
+          "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+        },
       }
     );
   } catch (err: unknown) {

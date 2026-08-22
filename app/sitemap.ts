@@ -2,9 +2,8 @@ import type { MetadataRoute } from "next";
 import { getSitemapRecords, matchSlug } from "@/lib/server/publicSeoData";
 import { absoluteUrl } from "@/lib/site";
 
-// The shared Supabase client intentionally uses no-store reads. Marking this
-// metadata route dynamic prevents Next from mistaking that read for a static
-// generation failure and freezing a homepage-only fallback sitemap.
+// The route stays dynamic while its paginated database result is cached in the
+// data layer and invalidated after arena writes.
 export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -13,6 +12,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       url: absoluteUrl("/"),
       changeFrequency: "daily",
       priority: 1,
+    },
+    {
+      url: absoluteUrl("/privacy"),
+      changeFrequency: "yearly",
+      priority: 0.2,
+    },
+    {
+      url: absoluteUrl("/terms"),
+      changeFrequency: "yearly",
+      priority: 0.2,
     },
   ];
   const { products, matches } = await getSitemapRecords();

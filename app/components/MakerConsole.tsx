@@ -37,22 +37,9 @@ export default function MakerConsole({
       try {
         const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
         if (myIds.includes(p.id)) return true;
-      } catch (e) {}
+      } catch {}
     }
-    if (p.makerAvatar && p.makerAvatar.includes("#")) {
-      try {
-        const hash = p.makerAvatar.split("#")[1];
-        const params = new URLSearchParams(hash);
-        const creator = params.get("creator");
-        const uid = params.get("uid");
-        if (userSubId && uid && uid === userSubId) return true;
-        if (userTwitter && creator && creator.replace(/^@/, "").toLowerCase() === userTwitter.replace(/^@/, "").toLowerCase()) return true;
-      } catch (e) {}
-    }
-    if (userSubId && (p as any).creator_uid && (p as any).creator_uid === userSubId) {
-      return true;
-    }
-    return false;
+    return Boolean(userSubId && p.creator_uid === userSubId);
   };
 
   const isPushed = (p: Product) => {

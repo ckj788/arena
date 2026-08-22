@@ -16,17 +16,20 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const error = searchParams.get("error");
 
-  // If OAuth was cancelled or errored, redirect home cleanly
+  // Forward cancellation to the popup page so it can notify and close itself.
   if (error) {
     console.warn(`[Auth Callback] OAuth cancelled: ${error} - ${searchParams.get("error_description")}`);
-    return NextResponse.redirect(`${origin}/`);
+    const url = new URL(origin);
+    url.searchParams.set("error", error);
+    const description = searchParams.get("error_description");
+    if (description) url.searchParams.set("error_description", description);
+    return NextResponse.redirect(url);
   }
 
   // If we have a code, redirect to home with the code in query params
   // The Supabase client on the main page will detect and exchange it
   if (code) {
-    // Forward the code to the main page - Supabase JS with PKCE + detectSessionInUrl 
-    // will automatically pick it up from the URL
+    // Forward the code to the home page, whose PKCE handler exchanges it.
     const url = new URL(origin);
     url.searchParams.set("code", code);
     return NextResponse.redirect(url.toString());

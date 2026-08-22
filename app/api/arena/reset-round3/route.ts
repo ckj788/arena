@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resetArenaToRoundThree } from "@/lib/server/arenaAdmin";
 import { assertJsonRequest, jsonError, requireAdmin } from "@/lib/server/auth";
+import { invalidateArenaPublic } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,7 @@ export async function POST(request: Request) {
     assertJsonRequest(request, 1_024);
     await requireAdmin(request);
     const round3Matches = await resetArenaToRoundThree();
+    invalidateArenaPublic();
     return NextResponse.json({
       success: true,
       message: "Tournament restored to a fresh semifinal round.",

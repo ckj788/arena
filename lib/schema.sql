@@ -104,5 +104,6 @@ REVOKE INSERT, UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER
   ON shipandbattle_products, shipandbattle_brackets, shipandbattle_matches, shipandbattle_votes
   FROM anon, authenticated;
 
--- Apply lib/migrations/20260821_security_hardening.sql after this base schema
--- to install atomic voting, uniqueness constraints, and settlement locking.
+-- For a fresh project, apply lib/migrations/20260822_production_ready.sql next.
+-- It replaces these bootstrap read policies/Realtime entries with private base
+-- tables, safe public views, atomic RPCs, rate limits, and the logo bucket.

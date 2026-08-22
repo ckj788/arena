@@ -66,7 +66,6 @@ export interface NewProductInput {
   shipTimeframe: Product["shipTimeframe"];
   makerName: string;
   makerTwitter: string;
-  makerAvatar: string;
   logo: string;
 }
 
@@ -89,9 +88,12 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     user.user_metadata?.preferred_username ||
       user.user_metadata?.user_name ||
       user.user_metadata?.full_name ||
-      user.email ||
-      user.id,
+      `member-${user.id.slice(0, 8)}`,
   );
+  const avatarCandidate = String(user.user_metadata?.avatar_url || user.user_metadata?.picture || "");
+  const makerAvatar = /^https:\/\//i.test(avatarCandidate)
+    ? avatarCandidate
+    : "https://www.indieclash.com/og-image.png";
 
   const product: Product = {
     id,
@@ -101,7 +103,7 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     shipTimeframe: input.shipTimeframe,
     makerName: input.makerName,
     makerTwitter: input.makerTwitter,
-    makerAvatar: input.makerAvatar,
+    makerAvatar,
     logo: input.logo,
     submittedAt: new Date().toISOString(),
     queueStatus: "waiting",

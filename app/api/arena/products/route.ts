@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createProductForUser, type NewProductInput } from "@/lib/server/arenaAdmin";
-import { authenticateRequest, HttpError, jsonError, readJsonRequest } from "@/lib/server/auth";
+import { authenticateRequest, consumeUserRateLimit, HttpError, jsonError, readJsonRequest } from "@/lib/server/auth";
+import { trustedProductImageUrl } from "@/lib/site";
+import { invalidateArenaPublic } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -30,11 +32,10 @@ function safeHttpUrl(value: unknown, field: string): string {
 function safeLogo(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) return "🚀";
   const logo = value.trim();
-  if (logo.length > 220_000) throw new HttpError(400, "Logo is too large.");
-  if (/^https?:\/\//i.test(logo)) return safeHttpUrl(logo, "Logo");
-  if (/^data:image\/(png|jpe?g|webp|gif);base64,[a-z0-9+/=]+$/i.test(logo)) return logo;
+  if (logo.length > 1_000) throw new HttpError(400, "Logo URL is too large.");
+  if (/^https?:\/\//i.test(logo) && trustedProductImageUrl(logo)) return logo;
   if ([...logo].length <= 8 && !/[<>]/.test(logo)) return logo;
-  throw new HttpError(400, "Logo must be an emoji, an image URL, or a supported base64 image.");
+  throw new HttpError(400, "Logo must be an emoji or an uploaded Indie Clash image.");
 }
 
 function parseProductInput(body: unknown): NewProductInput {
@@ -48,10 +49,6 @@ function parseProductInput(body: unknown): NewProductInput {
   }
 
   const makerTwitter = requiredText(value.makerTwitter, "Maker handle", 1, 50);
-  const makerAvatar = typeof value.makerAvatar === "string" && value.makerAvatar.trim()
-    ? safeHttpUrl(value.makerAvatar, "Maker avatar")
-    : "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces";
-
   return {
     title: requiredText(value.title, "Title", 2, 80),
     tagline: requiredText(value.tagline, "Tagline", 10, 240),
@@ -59,15 +56,16 @@ function parseProductInput(body: unknown): NewProductInput {
     shipTimeframe,
     makerName: requiredText(value.makerName, "Maker name", 1, 80),
     makerTwitter: makerTwitter.startsWith("@") ? makerTwitter : `@${makerTwitter}`,
-    makerAvatar,
     logo: safeLogo(value.logo),
   };
 }
 
 export async function POST(request: Request) {
   try {
-    const { user } = await authenticateRequest(request);
+    const { user, client } = await authenticateRequest(request);
+    await consumeUserRateLimit(client, "product_submit");
     const product = await createProductForUser(user, parseProductInput(await readJsonRequest(request)));
+    invalidateArenaPublic([`/products/${encodeURIComponent(product.id)}`]);
     return NextResponse.json({ product }, { status: 201 });
   } catch (error) {
     return jsonError(error);

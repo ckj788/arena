@@ -1,11 +1,22 @@
 import type { Metadata } from "next";
+import { unstable_cache } from "next/cache";
 import ArenaClient from "./ArenaClient";
 import { fetchCloudProducts, fetchCloudPastChampions, fetchCloudBracket } from "@/lib/arenaStore";
 import { absoluteUrl, serializeJsonLd, SITE_DESCRIPTION } from "@/lib/site";
 
-// Force dynamic rendering to ensure that Vercel server queries the database
-// on every HTTP request, always returning the freshest data.
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
+
+const getHomepageData = unstable_cache(async () => {
+  const products = await fetchCloudProducts();
+  const [pastChampions, bracket] = await Promise.all([
+    fetchCloudPastChampions(products),
+    fetchCloudBracket(products),
+  ]);
+  return { products, pastChampions, bracket };
+// Keep the cache key versioned. The v2 entry may contain the temporary empty
+// fallback produced before the production-safe Supabase views were installed,
+// and Next's data cache persists across deployments.
+}, ["arena-home-v3"], { revalidate: 60, tags: ["arena-public"] });
 
 export const metadata: Metadata = {
   title: { absolute: "Discover New Indie Products | Indie Clash" },
@@ -14,12 +25,11 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  // Fetch products, then use them in memory to get champions and bracket in parallel
-  const initialProducts = await fetchCloudProducts();
-  const [initialPastChampions, initialBracket] = await Promise.all([
-    fetchCloudPastChampions(initialProducts),
-    fetchCloudBracket(initialProducts)
-  ]);
+  const {
+    products: initialProducts,
+    pastChampions: initialPastChampions,
+    bracket: initialBracket,
+  } = await getHomepageData();
 
   const homeJsonLd = {
     "@context": "https://schema.org",

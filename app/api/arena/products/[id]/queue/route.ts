@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { enqueueOwnedProduct } from "@/lib/server/arenaAdmin";
-import { assertJsonRequest, authenticateRequest, HttpError, jsonError } from "@/lib/server/auth";
+import { assertJsonRequest, authenticateRequest, consumeUserRateLimit, HttpError, jsonError } from "@/lib/server/auth";
+import { invalidateArenaPublic } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,10 @@ export async function POST(
     if (!/^[a-z0-9][a-z0-9-]{0,119}$/i.test(id)) {
       throw new HttpError(400, "Invalid product ID.");
     }
-    const { user } = await authenticateRequest(request);
+    const { user, client } = await authenticateRequest(request);
+    await consumeUserRateLimit(client, "queue");
     const bracketStarted = await enqueueOwnedProduct(user, id);
+    invalidateArenaPublic([`/products/${encodeURIComponent(id)}`]);
     return NextResponse.json({ bracketStarted });
   } catch (error) {
     return jsonError(error);

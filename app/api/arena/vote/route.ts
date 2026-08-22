@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { DB_PREFIX } from "@/lib/supabaseClient";
 import { authenticateRequest, HttpError, jsonError, readJsonRequest } from "@/lib/server/auth";
+import { invalidateArenaPublic } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +25,19 @@ export async function POST(request: Request) {
   try {
     const { user, client } = await authenticateRequest(request);
     const body = await readJsonRequest(request, 12_000) as Record<string, unknown>;
+    const matchId = validId(body.matchId, "Match ID");
+    const votedProductId = validId(body.votedProductId, "Product ID");
     const { data, error } = await client.rpc(`${DB_PREFIX}cast_vote`, {
-      p_match_id: validId(body.matchId, "Match ID"),
-      p_voted_product_id: validId(body.votedProductId, "Product ID"),
+      p_match_id: matchId,
+      p_voted_product_id: votedProductId,
       p_feedback_winner: validFeedback(body.winnerFeedback, "Positive feedback"),
       p_feedback_loser: validFeedback(body.loserFeedback, "Constructive feedback"),
     });
 
     if (error) {
+      if (error.message.toLowerCase().includes("rate limit")) {
+        throw new HttpError(429, "Too many votes. Please try again later.");
+      }
       if (error.code === "23505") throw new HttpError(409, "You have already voted on this matchup.");
       if (error.message.includes("already voted")) throw new HttpError(409, "You have already voted on this matchup.");
       if (error.message.includes("closed") || error.message.includes("active")) {
@@ -43,6 +49,7 @@ export async function POST(request: Request) {
 
     const result = Array.isArray(data) ? data[0] : data;
     if (!result) throw new HttpError(500, "Vote result was empty.");
+    invalidateArenaPublic([`/products/${encodeURIComponent(votedProductId)}`]);
     return NextResponse.json({
       votesA: Number(result.votes_a),
       votesB: Number(result.votes_b),

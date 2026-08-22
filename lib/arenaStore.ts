@@ -1,8 +1,22 @@
 import { Product, Match, Bracket } from "./mockData";
-import { supabase, DB_PREFIX } from "./supabaseClient";
+import { supabase, DB_PREFIX, publicArenaTable } from "./supabaseClient";
 
 const PRODUCTS_KEY = "arena_products_v1";
 const BRACKET_KEY = "arena_bracket_v1";
+type DatabaseRow = Record<string, unknown>;
+
+function databaseString(row: DatabaseRow, key: string, fallback = "") {
+  return typeof row[key] === "string" ? row[key] : fallback;
+}
+
+function databaseNumber(row: DatabaseRow, key: string) {
+  const value = row[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function exceptionMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 // ========================================================
 // 1. 本地 LOCAL STORAGE 引擎 (保留原样，作为完美降级机制)
@@ -14,7 +28,7 @@ export function loadProducts(): Product[] {
   if (!data) return [];
   try {
     return JSON.parse(data) || [];
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -23,7 +37,7 @@ export function saveProducts(products: Product[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(PRODUCTS_KEY, JSON.stringify(products));
-  } catch (e) {
+  } catch {
     console.warn("localStorage quota exceeded for products list. Clearing large logo cache to optimize storage.");
     // Fallback: Strip large Base64 logos to fit within quota
     const optimized = products.map(p => {
@@ -47,7 +61,7 @@ export function loadBracket(): Bracket | null {
   try {
     const parsed = JSON.parse(data);
     return parsed || null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -57,11 +71,11 @@ export function saveBracket(bracket: Bracket | null) {
   if (bracket === null) {
     try {
       localStorage.removeItem(BRACKET_KEY);
-    } catch (e) {}
+    } catch {}
   } else {
     try {
       localStorage.setItem(BRACKET_KEY, JSON.stringify(bracket));
-    } catch (e) {
+    } catch {
       console.warn("localStorage quota exceeded for bracket. Clearing large logo cache to optimize storage.");
       
       const optimizeProduct = (p: Product): Product => {
@@ -198,7 +212,13 @@ export function advanceTournamentRound(bracket: Bracket): Bracket {
       } else if (m.votesB > m.votesA) {
         winnerId = m.productB.id;
       } else {
-        winnerId = Math.random() > 0.5 ? m.productA.id : m.productB.id;
+        const submittedA = new Date(m.productA.submittedAt).getTime();
+        const submittedB = new Date(m.productB.submittedAt).getTime();
+        if (Number.isFinite(submittedA) && Number.isFinite(submittedB) && submittedA !== submittedB) {
+          winnerId = submittedA < submittedB ? m.productA.id : m.productB.id;
+        } else {
+          winnerId = m.productA.id.localeCompare(m.productB.id) <= 0 ? m.productA.id : m.productB.id;
+        }
       }
       return { ...m, winnerId };
     });
@@ -336,23 +356,29 @@ export function toDbProduct(p: Product) {
 }
 
 // 映射器 2：DB 产品行 -> 本地 Product
-export function fromDbProduct(row: any): Product {
+export function fromDbProduct(row: DatabaseRow): Product {
+  const timeframe = databaseString(row, `${DB_PREFIX}ship_timeframe`);
+  const queueStatus = databaseString(row, `${DB_PREFIX}queue_status`);
+  const makerAvatar = databaseString(row, `${DB_PREFIX}maker_avatar`);
+  const arenaEnqueued = row[`${DB_PREFIX}arena_enqueued`];
   return {
-    id: row[`${DB_PREFIX}id`],
-    title: row[`${DB_PREFIX}title`],
-    tagline: row[`${DB_PREFIX}tagline`],
-    url: row[`${DB_PREFIX}url`],
-    shipTimeframe: row[`${DB_PREFIX}ship_timeframe`],
-    makerName: row[`${DB_PREFIX}maker_name`],
-    makerTwitter: row[`${DB_PREFIX}maker_twitter`],
-    makerAvatar: row[`${DB_PREFIX}maker_avatar`],
-    logo: row[`${DB_PREFIX}logo`],
-    submittedAt: row[`${DB_PREFIX}submitted_at`],
-    queueStatus: row[`${DB_PREFIX}queue_status`],
-    votesCount: row[`${DB_PREFIX}votes_count`],
-    creator_uid: row[`${DB_PREFIX}creator_uid`] || undefined,
-    creatorUsername: row[`${DB_PREFIX}creator_username`] || undefined,
-    arenaEnqueued: row[`${DB_PREFIX}arena_enqueued`] ?? (!row[`${DB_PREFIX}maker_avatar`] || !row[`${DB_PREFIX}maker_avatar`].includes("pushed=false"))
+    id: databaseString(row, `${DB_PREFIX}id`),
+    title: databaseString(row, `${DB_PREFIX}title`, "Untitled product"),
+    tagline: databaseString(row, `${DB_PREFIX}tagline`),
+    url: databaseString(row, `${DB_PREFIX}url`),
+    shipTimeframe: timeframe === "24h" || timeframe === "7d" ? timeframe : "48h",
+    makerName: databaseString(row, `${DB_PREFIX}maker_name`, "Anonymous maker"),
+    makerTwitter: databaseString(row, `${DB_PREFIX}maker_twitter`),
+    makerAvatar,
+    logo: databaseString(row, `${DB_PREFIX}logo`, "🚀"),
+    submittedAt: databaseString(row, `${DB_PREFIX}submitted_at`, new Date(0).toISOString()),
+    queueStatus: queueStatus === "active" || queueStatus === "completed" ? queueStatus : "waiting",
+    votesCount: databaseNumber(row, `${DB_PREFIX}votes_count`),
+    creator_uid: databaseString(row, `${DB_PREFIX}creator_uid`) || undefined,
+    creatorUsername: databaseString(row, `${DB_PREFIX}creator_username`) || undefined,
+    arenaEnqueued: typeof arenaEnqueued === "boolean"
+      ? arenaEnqueued
+      : (!makerAvatar || !makerAvatar.includes("pushed=false"))
   };
 }
 
@@ -372,16 +398,19 @@ export function toDbMatch(m: Match, bracketId: string) {
 }
 
 // 映射器 4：DB 对局行 -> 本地 Match
-export function fromDbMatch(row: any, productA: Product, productB: Product): Match {
+export function fromDbMatch(row: DatabaseRow, productA: Product, productB: Product): Match {
+  const votedUserIds = row[`${DB_PREFIX}voted_user_ids`];
   return {
-    id: row[`${DB_PREFIX}id`],
-    roundNumber: row[`${DB_PREFIX}round_number`],
+    id: databaseString(row, `${DB_PREFIX}id`),
+    roundNumber: databaseNumber(row, `${DB_PREFIX}round_number`),
     productA,
     productB,
-    votesA: row[`${DB_PREFIX}votes_a`],
-    votesB: row[`${DB_PREFIX}votes_b`],
-    winnerId: row[`${DB_PREFIX}winner_id`] || undefined,
-    votedUserIds: row[`${DB_PREFIX}voted_user_ids`] || []
+    votesA: databaseNumber(row, `${DB_PREFIX}votes_a`),
+    votesB: databaseNumber(row, `${DB_PREFIX}votes_b`),
+    winnerId: databaseString(row, `${DB_PREFIX}winner_id`) || undefined,
+    votedUserIds: Array.isArray(votedUserIds)
+      ? votedUserIds.filter((value): value is string => typeof value === "string")
+      : []
   };
 }
 
@@ -390,7 +419,7 @@ export async function fetchCloudProducts(): Promise<Product[]> {
   if (!supabase) return loadProducts();
   try {
     const { data, error } = await supabase
-      .from(`${DB_PREFIX}products`)
+      .from(publicArenaTable("products"))
       .select("*")
       .order(`${DB_PREFIX}submitted_at`, { ascending: true });
 
@@ -399,8 +428,8 @@ export async function fetchCloudProducts(): Promise<Product[]> {
       return loadProducts();
     }
     return data.map(fromDbProduct);
-  } catch (err: any) {
-    console.warn("⚠️ [INDIE CLASH] Cloud products network exception, using fallback store:", err?.message || err);
+  } catch (err: unknown) {
+    console.warn("⚠️ [INDIE CLASH] Cloud products network exception, using fallback store:", exceptionMessage(err));
     return loadProducts();
   }
 }
@@ -412,7 +441,7 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
   try {
     // A. 先抓取当前活跃（集结中/进行中）的最近一条对局树记录
     const { data: bData, error: bErr } = await supabase
-      .from(`${DB_PREFIX}brackets`)
+      .from(publicArenaTable("brackets"))
       .select("*")
       .in(`${DB_PREFIX}status`, ["preparing", "active"])
       .order(`${DB_PREFIX}created_at`, { ascending: false })
@@ -426,7 +455,7 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
 
     // B. 抓取该对局树下的所有场次
     const { data: mData, error: mErr } = await supabase
-      .from(`${DB_PREFIX}matches`)
+      .from(publicArenaTable("matches"))
       .select("*")
       .eq(`${DB_PREFIX}bracket_id`, bData[`${DB_PREFIX}id`]);
 
@@ -476,8 +505,8 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
       round3,
       round4
     };
-  } catch (err: any) {
-    console.warn("⚠️ [INDIE CLASH] Cloud bracket network exception, using fallback:", err?.message || err);
+  } catch (err: unknown) {
+    console.warn("⚠️ [INDIE CLASH] Cloud bracket network exception, using fallback:", exceptionMessage(err));
     return loadBracket();
   }
 }
@@ -490,7 +519,7 @@ export function loadLocalPastChampions(): Product[] {
   if (!data) return [];
   try {
     return JSON.parse(data);
-  } catch (e) {
+  } catch {
     return [];
   }
 }
@@ -499,7 +528,7 @@ export function saveLocalPastChampions(champs: Product[]) {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(PAST_CHAMPS_KEY, JSON.stringify(champs));
-  } catch (e) {
+  } catch {
     console.warn("localStorage quota exceeded for past champions. Clearing large logo cache to optimize storage.");
     const optimized = champs.map(c => {
       if (c.logo && c.logo.startsWith("data:image") && c.logo.length > 30000) {
@@ -522,12 +551,14 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
   }
   try {
     const { data: bData, error: bErr } = await supabase
-      .from(`${DB_PREFIX}brackets`)
+      .from(publicArenaTable("brackets"))
       .select(`${DB_PREFIX}winner_id`)
       .eq(`${DB_PREFIX}status`, "completed");
     
     if (bErr || !bData) return [];
-    const winnerIds = bData.map((x: any) => x[`${DB_PREFIX}winner_id`]).filter(Boolean);
+    const winnerIds = bData
+      .map(row => String((row as unknown as DatabaseRow)[`${DB_PREFIX}winner_id`] || ""))
+      .filter(Boolean);
     if (winnerIds.length === 0) return [];
     
     if (preFetchedProducts) {
@@ -537,14 +568,14 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
     }
 
     const { data: pData, error: pErr } = await supabase
-      .from(`${DB_PREFIX}products`)
+      .from(publicArenaTable("products"))
       .select("*")
       .in(`${DB_PREFIX}id`, winnerIds);
       
     if (pErr || !pData) return [];
     return pData.map(fromDbProduct);
-  } catch (err: any) {
-    console.warn("⚠️ [INDIE CLASH] Cloud past champions network exception:", err?.message || err);
+  } catch (err: unknown) {
+    console.warn("⚠️ [INDIE CLASH] Cloud past champions network exception:", exceptionMessage(err));
     return loadLocalPastChampions();
   }
 }

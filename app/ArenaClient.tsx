@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import type { User } from "@supabase/supabase-js";
 import { gsap } from "gsap";
 import { Product, Match, Bracket } from "@/lib/mockData";
 import {
@@ -9,28 +10,25 @@ import {
   loadBracket,
   saveBracket,
   buildInitialBracket,
-  injectMockVotes,
   getActiveRound,
   advanceTournamentRound,
-  addDummyMaker,
   fetchCloudProducts,
   fetchCloudBracket,
   fetchCloudPastChampions,
   loadLocalPastChampions,
-  saveLocalPastChampions,
-  fromDbProduct
+  saveLocalPastChampions
 } from "@/lib/arenaStore";
 import {
   castArenaVote,
   enqueueArenaProduct,
   requestArenaSettlement,
   submitArenaProduct,
+  uploadArenaLogo,
 } from "@/lib/arenaApi";
-import { supabase, DB_PREFIX } from "@/lib/supabaseClient";
+import { supabase, DB_PREFIX, publicArenaTable } from "@/lib/supabaseClient";
 import {
   getMillisecondsToNextNYMidnight,
   getRoundRemainingMs,
-  formatDuration,
   formatToHMS
 } from "@/lib/timeHelpers";
 import InteractiveGrid from "@/app/components/InteractiveGrid";
@@ -43,7 +41,12 @@ const playHaptics = (freq = 220, type: OscillatorType = "sine", duration = 0.08,
   try {
     if (typeof window === "undefined") return;
     if (!audioCtx) {
-      audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const audioWindow = window as typeof window & {
+        webkitAudioContext?: typeof AudioContext;
+      };
+      const AudioContextConstructor = window.AudioContext || audioWindow.webkitAudioContext;
+      if (!AudioContextConstructor) return;
+      audioCtx = new AudioContextConstructor();
     }
     if (audioCtx.state === "suspended") {
       audioCtx.resume();
@@ -61,7 +64,7 @@ const playHaptics = (freq = 220, type: OscillatorType = "sine", duration = 0.08,
 
     osc.start();
     osc.stop(audioCtx.currentTime + duration);
-  } catch (e) {
+  } catch {
     // Suppressed gracefully if audio is locked by browser
   }
 };
@@ -77,13 +80,6 @@ const ExternalLinkIcon = ({ className = "w-3 h-3" }: { className?: string }) => 
   </svg>
 );
 
-const SearchIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
-
 const PlusIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <line x1="12" y1="5" x2="12" y2="19" />
@@ -95,14 +91,6 @@ const XIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
-  </svg>
-);
-
-const AlertCircleIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <circle cx="12" cy="12" r="10" />
-    <line x1="12" y1="8" x2="12" y2="12" />
-    <line x1="12" y1="16" x2="12.01" y2="16" />
   </svg>
 );
 
@@ -133,26 +121,45 @@ interface ArenaClientProps {
   initialBracket: Bracket | null;
 }
 
+type DatabaseRecord = Record<string, unknown>;
+
+interface StoredVoteRecord {
+  id?: string;
+  match_id?: string;
+  product_a_id?: string;
+  product_b_id?: string;
+  voted_product_id?: string;
+  voter_username?: string;
+  voter_auth_type?: string;
+  feedback_winner?: string;
+  feedback_loser?: string;
+  created_at?: string;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export default function ArenaClient({
   initialProducts,
   initialPastChampions,
   initialBracket
 }: ArenaClientProps) {
   const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [isMuted, setIsMuted] = useState(false);
+  const isMuted = false;
   const synthClick = (freq = 300, type: OscillatorType = "sine", duration = 0.06, vol = 0.02) => {
     if (!isMuted) {
       playHaptics(freq, type, duration, vol);
     }
   };
   const [toasts, setToasts] = useState<{ id: string; message: string; type?: "success" | "info" }[]>([]);
-  const pushToast = (message: string, type: "success" | "info" = "success") => {
+  const pushToast = useCallback((message: string, type: "success" | "info" = "success") => {
     const id = Math.random().toString(36).substring(4);
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, 4000);
-  };
+  }, []);
   const [activeMatchCritiques, setActiveMatchCritiques] = useState<Array<{
     id: string;
     voter: string;
@@ -161,8 +168,6 @@ export default function ArenaClient({
     text: string;
     date: string;
   }>>([]);
-  const [searchValue, setSearchValue] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("ALL");
   const [bracket, setBracket] = useState<Bracket | null>(initialBracket);
   const [activeMatch, setActiveMatch] = useState<Match | null>(() => {
     if (!initialBracket) return null;
@@ -180,25 +185,8 @@ export default function ArenaClient({
   // Screen shake animation state
   const [isShaking, setIsShaking] = useState(false);
 
-  // Boot up CRT flash state
-  const [isBooted, setIsBooted] = useState(false);
-
   // Visual dynamic clashing swords animation key state
   const [isSwordsClashing, setIsSwordsClashing] = useState(false);
-
-  // Floating background pixel particles state
-  const [particles, setParticles] = useState<Array<{ id: number; left: string; size: string; delay: string; duration: string }>>([]);
-
-  // Live danmaku commentary simulation
-  const [danmakus, setDanmakus] = useState<string[]>([
-    "ZenJournal is so clean! I love the font choice",
-    "LogoCraft needs to support SVG export ASAP",
-    "QuickCron timing works perfectly in testing",
-    "CardioAI camera tracking is amazingly responsive",
-    "TypeFlow pure-keyboard design is an indie dream!",
-    "SiteShot needs to support custom watermarks",
-    "TailwindGlass saved me 3 hours of CSS tweaking"
-  ]);
 
   // Submit Drawer State
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
@@ -208,7 +196,7 @@ export default function ArenaClient({
   const [newTitle, setNewTitle] = useState("");
   const [newTagline, setNewTagline] = useState("");
   const [newUrl, setNewUrl] = useState("");
-  const [newTimeframe, setNewTimeframe] = useState<"24h" | "48h" | "7d">("48h");
+  const newTimeframe = "48h" as const;
   const [newMaker, setNewMaker] = useState("");
   const [newTwitter, setNewTwitter] = useState("");
   const [newLogo, setNewLogo] = useState("🚀");
@@ -229,38 +217,85 @@ export default function ArenaClient({
   const [userEmail, setUserEmail] = useState<string>("");
   const [isAuthOpen, setIsAuthOpen] = useState(false);
 
-  // Real-time Supabase Authentication session listener
+  const handleUserSession = useCallback((authUser: User) => {
+    setUserLoggedIn(true);
+    setUserSupabaseId(authUser.id || "");
+    setUserEmail(authUser.email || "");
+    const provider = authUser.app_metadata?.provider || authUser.identities?.[0]?.provider || "github";
+    setUserAuthType(provider === "google" ? "google" : "github");
+
+    let username = "";
+    if (provider === "github") {
+      const gitUser = authUser.user_metadata?.preferred_username || authUser.user_metadata?.user_name || authUser.email?.split("@")[0] || "github_user";
+      username = gitUser.startsWith("@") ? gitUser : `@${gitUser}`;
+    } else {
+      username = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email || "google_user";
+    }
+    setMockUserTwitter(username);
+
+    localStorage.setItem("ship_duel_sandbox_user", JSON.stringify({
+      userLoggedIn: true,
+      mockUserTwitter: username,
+      userAuthType: provider === "google" ? "google" : "github",
+      userSupabaseId: authUser.id || "",
+      userEmail: authUser.email || ""
+    }));
+
+    if (supabase && authUser.id) {
+      void supabase
+        .from(`${DB_PREFIX}products`)
+        .select("*")
+        .eq(`${DB_PREFIX}creator_uid`, authUser.id)
+        .then(({ data, error }) => {
+          if (error) {
+            console.warn("Unable to load product ownership:", error.message);
+            return;
+          }
+          const ownedIds = new Set((data ?? []).map(row => (
+            String((row as Record<string, unknown>)[`${DB_PREFIX}id`])
+          )));
+          setProducts(current => current.map(product => (
+            ownedIds.has(product.id) ? { ...product, creator_uid: authUser.id } : product
+          )));
+        });
+    }
+  }, []);
+
+  // Supabase Authentication session listener
   useEffect(() => {
-    // 1. Recover mock sandbox session first if present in storage
-    if (typeof window !== "undefined") {
+    const authClient = supabase;
+    if (!authClient) {
       const savedSandbox = localStorage.getItem("ship_duel_sandbox_user");
+      let restoreTimer: number | undefined;
       if (savedSandbox) {
         try {
           const parsed = JSON.parse(savedSandbox);
           if (parsed.userLoggedIn) {
-            setUserLoggedIn(true);
-            setMockUserTwitter(parsed.mockUserTwitter);
-            setUserAuthType(parsed.userAuthType);
-            setUserSupabaseId(parsed.userSupabaseId || "");
-            setUserEmail(parsed.userEmail || "");
+            restoreTimer = window.setTimeout(() => {
+              setUserLoggedIn(true);
+              setMockUserTwitter(String(parsed.mockUserTwitter || ""));
+              setUserAuthType(parsed.userAuthType === "google" ? "google" : "github");
+              setUserSupabaseId(String(parsed.userSupabaseId || ""));
+              setUserEmail(String(parsed.userEmail || ""));
+            }, 0);
           }
         } catch (e) {
           console.warn("Failed to parse sandbox session from localStorage:", e);
         }
       }
+      return () => {
+        if (restoreTimer !== undefined) window.clearTimeout(restoreTimer);
+      };
     }
-
-    if (!supabase) return;
     
-    // 2. Manually parse OAuth fragments & parameters from URL (handles both PKCE code flow & implicit hash flow)
+    // 1. Complete the OAuth PKCE flow in the popup.
     if (typeof window !== "undefined") {
-      // 2a. Check for PKCE flow query parameters (e.g. ?code=... or ?error=...)
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get("code");
       const queryError = urlParams.get("error") || urlParams.get("error_description");
 
       if (code) {
-        supabase.auth.exchangeCodeForSession(code).then(({ data, error: exchangeErr }) => {
+        authClient.auth.exchangeCodeForSession(code).then(({ data, error: exchangeErr }) => {
           if (exchangeErr) {
             console.error("Error exchanging code for session manually:", exchangeErr);
           } else if (data.session?.user) {
@@ -269,9 +304,7 @@ export default function ArenaClient({
             // Check if we are executing inside an OAuth popup window
             if (window.opener) {
               window.opener.postMessage({
-                type: "oauth_success",
-                accessToken: data.session.access_token,
-                refreshToken: data.session.refresh_token
+                type: "oauth_success"
               }, window.location.origin);
               window.close();
             } else {
@@ -293,55 +326,10 @@ export default function ArenaClient({
           window.history.replaceState(null, "", window.location.pathname);
         }
       }
-
-      // 2b. Check for implicit flow hash fragments (e.g. #access_token=... or #error=...)
-      const hash = window.location.hash.substring(1);
-      if (hash) {
-        const hashParams = new URLSearchParams(hash);
-        const accessToken = hashParams.get("access_token");
-        const refreshToken = hashParams.get("refresh_token");
-        const hashError = hashParams.get("error") || hashParams.get("error_description");
-
-        if (accessToken && refreshToken) {
-          supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          }).then(({ data, error: sessionErr }) => {
-            if (sessionErr) {
-              console.error("Error setting session manually:", sessionErr);
-            } else if (data.session?.user) {
-              handleUserSession(data.session.user);
-            }
-            
-            if (window.opener) {
-              window.opener.postMessage({
-                type: "oauth_success",
-                accessToken: accessToken,
-                refreshToken: refreshToken
-              }, window.location.origin);
-              window.close();
-            } else {
-              window.history.replaceState(null, "", window.location.pathname + window.location.search);
-            }
-          }).catch(err => {
-            console.error("Unhandled error setting session manually:", err);
-          });
-        } else if (hashError) {
-          console.log("OAuth error detected in hash fragments:", hashError);
-          if (window.opener) {
-            window.opener.postMessage({
-              type: "oauth_cancel"
-            }, window.location.origin);
-            window.close();
-          } else {
-            window.history.replaceState(null, "", window.location.pathname + window.location.search);
-          }
-        }
-      }
     }
     
-    // 3. Get initial session safely from storage (works even with detectSessionInUrl: false)
-    supabase.auth.getSession()
+    // 2. Recover an existing session from browser storage.
+    authClient.auth.getSession()
       .then(({ data: { session } }) => {
         if (session?.user) {
           handleUserSession(session.user);
@@ -351,32 +339,17 @@ export default function ArenaClient({
         console.warn("Supabase Auth session parsing warning:", err);
       });
 
-    // 4. Listen for postMessages from popups (anti-blackscreen trick)
+    // 3. The popup has completed PKCE; Supabase syncs the session via browser storage.
     const handlePopupMessage = (event: MessageEvent) => {
       if (event.origin !== window.location.origin) return;
       
       const payload = event.data;
       if (payload && typeof payload === "object") {
         if (payload.type === "oauth_success") {
-          console.log("🎯 Parent window: OAuth success message with tokens received!");
-          
-          // Automatically close the identity modal
           setIsAuthOpen(false);
-          
-          if (supabase && payload.accessToken && payload.refreshToken) {
-            supabase.auth.setSession({
-              access_token: payload.accessToken,
-              refresh_token: payload.refreshToken,
-            }).then(({ data, error: sessionErr }) => {
-              if (sessionErr) {
-                console.error("Parent failed to set session manually:", sessionErr);
-              } else if (data.session?.user) {
-                handleUserSession(data.session.user);
-              }
-            }).catch(err => {
-              console.error("Parent unhandled error setting session manually:", err);
-            });
-          }
+          void authClient.auth.getSession().then(({ data }) => {
+            if (data.session?.user) handleUserSession(data.session.user);
+          });
         } else if (payload.type === "oauth_cancel") {
           console.log("🎯 Parent window: OAuth cancellation received!");
           // Automatically close the identity modal on cancel as well
@@ -386,10 +359,10 @@ export default function ArenaClient({
     };
     window.addEventListener("message", handlePopupMessage);
 
-    // 5. Listen for auth changes
+    // 4. Listen for auth changes.
     let subscription: { unsubscribe: () => void } | null = null;
     try {
-      const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      const { data } = authClient.auth.onAuthStateChange((event, session) => {
         if (session?.user) {
           handleUserSession(session.user);
         } else if (event === "SIGNED_OUT") {
@@ -410,36 +383,7 @@ export default function ArenaClient({
       subscription?.unsubscribe();
       window.removeEventListener("message", handlePopupMessage);
     };
-  }, []);
-
-  const handleUserSession = (authUser: any) => {
-    setUserLoggedIn(true);
-    setUserSupabaseId(authUser.id || "");
-    setUserEmail(authUser.email || "");
-    const provider = authUser.app_metadata?.provider || authUser.identities?.[0]?.provider || "github";
-    setUserAuthType(provider === "google" ? "google" : "github");
-    
-    let username = "";
-    if (provider === "github") {
-      const gitUser = authUser.user_metadata?.preferred_username || authUser.user_metadata?.user_name || authUser.email?.split("@")[0] || "github_user";
-      username = gitUser.startsWith("@") ? gitUser : `@${gitUser}`;
-    } else {
-      const googleName = authUser.user_metadata?.full_name || authUser.user_metadata?.name || authUser.email || "google_user";
-      username = googleName;
-    }
-    setMockUserTwitter(username);
-
-    // Save sandbox backup just in case of local offline previews
-    if (typeof window !== "undefined") {
-      localStorage.setItem("ship_duel_sandbox_user", JSON.stringify({
-        userLoggedIn: true,
-        mockUserTwitter: username,
-        userAuthType: provider === "google" ? "google" : "github",
-        userSupabaseId: authUser.id || "",
-        userEmail: authUser.email || ""
-      }));
-    }
-  };
+  }, [handleUserSession]);
 
   const handleSandboxLogin = (provider: "google" | "github") => {
     const mockUser = provider === "google" ? "Google_Hacker_Sandbox" : "@GitHub_Indie_Sandbox";
@@ -485,22 +429,13 @@ export default function ArenaClient({
   const [successModalTitle, setSuccessModalTitle] = useState("");
   const [successModalText, setSuccessModalText] = useState("");
   
-  // Leaderboard active view tab state
-  const [activeTab, setActiveTab] = useState<"duel" | "leaderboard">("duel");
-  
   // New York countdown & 3-2-1-1 active timer states
   const [countdownToMidnightMs, setCountdownToMidnightMs] = useState<number>(0);
   const [activeRoundRemainingMs, setActiveRoundRemainingMs] = useState<number>(0);
   
-  // Past Champions & Victory Modal states
+  // Past champions and current view state
   const [pastChampions, setPastChampions] = useState<Product[]>(initialPastChampions);
-  const [isChampionModalOpen, setIsChampionModalOpen] = useState(false);
-  const [championWinner, setChampionWinner] = useState<Product | null>(null);
   const [currentView, setCurrentView] = useState<'home' | 'console'>('home');
-  
-  // Auth Form Inputs
-  const [authInputVal, setAuthInputVal] = useState("");
-  const [tempAuthType, setTempAuthType] = useState<"google" | "github">("google");
 
   // Keep latestBracketRef synchronized with bracket state to avoid closure staleness
   const latestBracketRef = useRef<Bracket | null>(null);
@@ -520,7 +455,7 @@ export default function ArenaClient({
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-        } catch (e) {}
+        } catch {}
       }
     }
   }, [products]);
@@ -531,7 +466,7 @@ export default function ArenaClient({
     if (typeof window !== "undefined") {
       try {
         localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-      } catch (e) {}
+      } catch {}
     }
   }, [bracket]);
 
@@ -542,24 +477,13 @@ export default function ArenaClient({
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-        } catch (e) {}
+        } catch {}
       }
     }
   }, [pastChampions]);
 
-  const syncDebounceTimeoutRef = useRef<any>(null);
-  const latestRequestTimeRef = useRef<number>(0);
-
-
-
-  // Act refs & trigger states for scroll effects
-  const stepsRef = useRef<HTMLDivElement>(null);
-  const dashboardRef = useRef<HTMLDivElement>(null);
-  const [stepsRevealed, setStepsRevealed] = useState(false);
-  const [dashRevealed, setDashRevealed] = useState(false);
-
   // Sync products and bracket from cloud or local storage with Stale-While-Revalidate
-  const syncCloudData = async () => {
+  const syncCloudData = useCallback(async () => {
     if (isResettingRef.current || isSyncLockedRef.current) {
       console.log("ℹ️ [INDIE CLASH] syncCloudData bypassed because operation lock is active.");
       return;
@@ -569,29 +493,34 @@ export default function ArenaClient({
       try {
         const raw = localStorage.getItem("indieclash_client_cache");
         if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed && parsed.products) {
+          const parsed = JSON.parse(raw) as Partial<typeof memoryCache>;
+          if (parsed && Array.isArray(parsed.products)) {
             // Filter out any mock SEED_PRODUCTS from previous offline cache
-            parsed.products = parsed.products.filter((p: any) => p.id && !p.id.startsWith("p1") && !p.id.startsWith("p2") && !p.id.startsWith("p3") && !p.id.startsWith("p4") && !p.id.startsWith("p5") && !p.id.startsWith("p6") && !p.id.startsWith("p7") && !p.id.startsWith("p8") && !p.id.startsWith("p9") && p.makerName !== "Lucas Kent");
-            memoryCache = parsed;
+            const cachedProducts = parsed.products.filter((product): product is Product => (
+              Boolean(product?.id)
+              && !/^p[1-9]/.test(product.id)
+              && product.makerName !== "Lucas Kent"
+            ));
+            memoryCache = {
+              products: cachedProducts,
+              bracket: parsed.bracket ?? null,
+              champs: Array.isArray(parsed.champs) ? parsed.champs : null,
+              lastFetchTime: typeof parsed.lastFetchTime === "number" ? parsed.lastFetchTime : 0,
+            };
           }
         }
-      } catch (e) {}
+      } catch {}
     }
 
     // 2. Render cached data instantly in 0ms if it exists, ONLY if current state is empty
-    const isProductsEmpty = !products || products.length === 0;
-    const isChampsEmpty = !pastChampions || pastChampions.length === 0;
-    const isBracketEmpty = !bracket;
-
-    if (isProductsEmpty && memoryCache.products && memoryCache.products.length > 0) {
-      setProducts(memoryCache.products);
+    if (memoryCache.products && memoryCache.products.length > 0) {
+      setProducts((current) => current.length > 0 ? current : memoryCache.products!);
     }
-    if (isChampsEmpty && memoryCache.champs && memoryCache.champs.length > 0) {
-      setPastChampions(memoryCache.champs);
+    if (memoryCache.champs && memoryCache.champs.length > 0) {
+      setPastChampions((current) => current.length > 0 ? current : memoryCache.champs!);
     }
-    if (isBracketEmpty && memoryCache.bracket) {
-      setBracket(memoryCache.bracket);
+    if (memoryCache.bracket) {
+      setBracket((current) => current ?? memoryCache.bracket);
       const b = memoryCache.bracket;
       const round = getActiveRound(b);
       let active = null;
@@ -648,14 +577,14 @@ export default function ArenaClient({
       if (typeof window !== "undefined") {
         try {
           localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-        } catch (e) {}
+        } catch {}
       }
     } catch (e) {
       console.error("Error syncing data:", e);
     } finally {
       isInitialSyncDone.current = true;
     }
-  };
+  }, []);
 
   // Initial Load
   useEffect(() => {
@@ -663,193 +592,62 @@ export default function ArenaClient({
     memoryCache.products = initialProducts;
     memoryCache.champs = initialPastChampions;
     memoryCache.bracket = initialBracket;
-    memoryCache.lastFetchTime = Date.now();
+    // An empty server payload can be a transient database/cache fallback. Do
+    // not treat it as a successful fresh fetch or the client will suppress the
+    // immediate Supabase revalidation and incorrectly render zero products.
+    memoryCache.lastFetchTime = initialProducts.length > 0 ? Date.now() : 0;
     isInitialSyncDone.current = true;
 
-    // Check if Supabase keys exist
-    if (supabase) {
-      syncCloudData();
-    } else {
-      setProducts(loadProducts());
-      const saved = loadBracket();
-      setBracket(saved);
-      if (saved) {
-        const round = getActiveRound(saved);
-        let active = null;
-        if (round === 1) active = saved.round1.find(m => !m.winnerId) || saved.round1[0];
-        else if (round === 2) active = saved.round2.find(m => !m.winnerId) || saved.round2[0];
-        else if (round === 3) active = saved.round3.find(m => !m.winnerId) || saved.round3[0];
-        else if (round === 4) active = saved.round4.find(m => !m.winnerId) || saved.round4[0];
-        setActiveMatch(active || null);
+    const animationFrame = window.requestAnimationFrame(() => {
+      if (supabase) {
+        void syncCloudData();
+      } else {
+        setProducts(loadProducts());
+        const saved = loadBracket();
+        setBracket(saved);
+        if (saved) {
+          const round = getActiveRound(saved);
+          let active = null;
+          if (round === 1) active = saved.round1.find(m => !m.winnerId) || saved.round1[0];
+          else if (round === 2) active = saved.round2.find(m => !m.winnerId) || saved.round2[0];
+          else if (round === 3) active = saved.round3.find(m => !m.winnerId) || saved.round3[0];
+          else if (round === 4) active = saved.round4.find(m => !m.winnerId) || saved.round4[0];
+          setActiveMatch(active || null);
+        }
       }
-    }
 
-    // Trigger CRT power-on tube boot up
-    setIsBooted(true);
+    });
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [initialBracket, initialPastChampions, initialProducts, syncCloudData]);
 
-    // Generate random pixel particles for background atmosphere
-    const generated = Array.from({ length: 12 }).map((_, i) => ({
-      id: i,
-      left: `${Math.random() * 100}%`,
-      size: `${Math.floor(Math.random() * 5) + 3}px`,
-      delay: `${Math.random() * 10}s`,
-      duration: `${Math.random() * 6 + 10}s`
-    }));
-    setParticles(generated);
-
-
-  }, []);
-
-  // Supabase Realtime Synchronization Hook
+  // Poll safe public views instead of subscribing to private base-table WAL rows.
   useEffect(() => {
     if (!supabase) return;
-
-    // Listen to changes in the matches table
-    const matchesChannel = supabase
-      .channel("matches-realtime-channel")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: `${DB_PREFIX}matches` },
-        async (payload) => {
-          if (isResettingRef.current || isSyncLockedRef.current) return;
-          console.log("Realtime Match sync trigger received:", payload);
-          
-          // Debounce parallel realtime triggers to prevent WAL replication race conditions and network query spams
-          if (syncDebounceTimeoutRef.current) {
-            clearTimeout(syncDebounceTimeoutRef.current);
-          }
-
-          syncDebounceTimeoutRef.current = setTimeout(async () => {
-            const reqTime = Date.now();
-            latestRequestTimeRef.current = reqTime;
-
-            const b = await fetchCloudBracket();
-            
-            // If a newer query request has already been dispatched, discard this stale response immediately
-            // to completely prevent out-of-order latency rollbacks/pullbacks in GUI!
-            if (reqTime < latestRequestTimeRef.current) {
-              console.warn("⚠️ [INDIE CLASH] Discarded out-of-order stale fetchCloudBracket response.");
-              return;
-            }
-
-            if (b) {
-              // Guard against database replication latency/WAL race conditions during Force Start:
-              // If the local state is already "active" or "completed", but the database fetched state 
-              // is still "preparing", do NOT let the stale database state overwrite our local advanced state.
-              const localStatus = latestBracketRef.current?.status;
-              if (b.status === "preparing" && (localStatus === "active" || localStatus === "completed")) {
-                console.warn("⚠️ [INDIE CLASH] Ignored stale 'preparing' database status to prevent downgrade race condition.");
-              } else {
-                setBracket(b);
-              }
-              // If the updated match is our currently viewed match, sync its states
-              if (activeMatch && payload.new) {
-                const row = payload.new as any;
-                if (activeMatch.id === row[`${DB_PREFIX}id`]) {
-                  // Find products A and B in in-memory state
-                  const prodA = products.find(p => p.id === row[`${DB_PREFIX}product_a_id`]);
-                  const prodB = products.find(p => p.id === row[`${DB_PREFIX}product_b_id`]);
-                  if (prodA && prodB) {
-                    setActiveMatch({
-                      id: row[`${DB_PREFIX}id`],
-                      roundNumber: row[`${DB_PREFIX}round_number`],
-                      productA: prodA,
-                      productB: prodB,
-                      votesA: row[`${DB_PREFIX}votes_a`],
-                      votesB: row[`${DB_PREFIX}votes_b`],
-                      winnerId: row[`${DB_PREFIX}winner_id`] || undefined,
-                      votedUserIds: row[`${DB_PREFIX}voted_user_ids`] || []
-                    });
-                  }
-                }
-              }
-              // Trigger 1v1 Battle Screen Clash Rumble
-              setIsShaking(true);
-              setIsSwordsClashing(true);
-              setTimeout(() => {
-                setIsShaking(false);
-                setIsSwordsClashing(false);
-              }, 450);
-            } else {
-              // Cloud bracket transitioned to null (completed/cleared), run sync to catch state shift
-              syncCloudData();
-            }
-          }, 150);
-        }
-      )
-      .subscribe();
-
-    // Listen to changes in the votes table (to stream positive/negative critiques)
-    const votesChannel = supabase
-      .channel("votes-realtime-channel")
-      .on(
-        "postgres_changes",
-        { event: "INSERT", schema: "public", table: `${DB_PREFIX}votes` },
-        (payload) => {
-          if (isResettingRef.current || isSyncLockedRef.current) return;
-          console.log("Realtime Critique sync trigger received:", payload);
-          const row = payload.new as any;
-          if (row) {
-            const comment = `Critique: ${row[`${DB_PREFIX}feedback_loser`].slice(0, 32)}...`;
-            setDanmakus(prev => [comment, ...prev]);
-          }
-        }
-      )
-      .subscribe();
-
-    // Listen to changes in the products table (ensures new submissions and status changes are reflected in real-time)
-    const productsChannel = supabase
-      .channel("products-realtime-channel")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: `${DB_PREFIX}products` },
-        (payload) => {
-          if (isResettingRef.current || isSyncLockedRef.current) return;
-          console.log("Realtime Product sync trigger received:", payload);
-          
-          if (payload.eventType === "INSERT" && payload.new) {
-            const newProd = fromDbProduct(payload.new);
-            setProducts(prev => {
-              // Avoid duplicates
-              if (prev.some(p => p.id === newProd.id)) return prev;
-              return [...prev, newProd];
-            });
-          } else if (payload.eventType === "UPDATE" && payload.new) {
-            const updatedProd = fromDbProduct(payload.new);
-            setProducts(prev => prev.map(p => p.id === updatedProd.id ? updatedProd : p));
-          } else if (payload.eventType === "DELETE" && payload.old) {
-            const deletedId = (payload.old as any)[`${DB_PREFIX}id`];
-            if (deletedId) {
-              setProducts(prev => prev.filter(p => p.id !== deletedId));
-            }
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      if (supabase) {
-        supabase.removeChannel(matchesChannel);
-        supabase.removeChannel(votesChannel);
-        supabase.removeChannel(productsChannel);
-      }
-      if (syncDebounceTimeoutRef.current) {
-        clearTimeout(syncDebounceTimeoutRef.current);
-      }
+    const refresh = () => {
+      if (document.visibilityState === "visible") void syncCloudData();
     };
-  }, []);
+    const interval = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [syncCloudData]);
 
   // Load critiques for the active match dynamically from Supabase or localStorage
   useEffect(() => {
     if (!activeMatch) {
-      setActiveMatchCritiques([]);
-      return;
+      const clearTimer = window.setTimeout(() => setActiveMatchCritiques([]), 0);
+      return () => window.clearTimeout(clearTimer);
     }
-    
+    let cancelled = false;
+
     const loadCritiques = async () => {
       if (supabase) {
         const { data: votes, error } = await supabase
-          .from(`${DB_PREFIX}votes`)
+          .from(publicArenaTable("votes"))
           .select("*")
           .eq(`${DB_PREFIX}match_id`, activeMatch.id)
           .order(`${DB_PREFIX}created_at`, { ascending: false });
@@ -868,62 +666,60 @@ export default function ArenaClient({
               date: new Date(v[`${DB_PREFIX}created_at`] || Date.now()).toLocaleDateString()
             };
           });
-          setActiveMatchCritiques(mapped);
+          if (!cancelled) setActiveMatchCritiques(mapped);
         }
       } else {
         // Local mode
         const localVotesStr = localStorage.getItem("arena_votes_v1") || "[]";
-        const localVotes = JSON.parse(localVotesStr);
-        const filtered = localVotes.filter((v: any) => v.match_id === activeMatch.id);
-        const mapped = filtered.map((v: any) => {
+        const localVotes = JSON.parse(localVotesStr) as StoredVoteRecord[];
+        const filtered = localVotes.filter(v => v.match_id === activeMatch.id);
+        const mapped = filtered.map(v => {
           const isWinner = activeMatch?.productA && v.voted_product_id === activeMatch.productA.id;
           return {
             id: v.id || `vote-${Math.random()}`,
-            voter: v.voter_username,
-            provider: v.voter_auth_type,
+            voter: v.voter_username || "Community member",
+            provider: v.voter_auth_type || "github",
             role: isWinner ? "Winner (Voted For)" : "Loser (Opponent Voted For)",
-            text: isWinner ? v.feedback_winner : v.feedback_loser,
+            text: (isWinner ? v.feedback_winner : v.feedback_loser) || "No critique was provided.",
             date: new Date(v.created_at || Date.now()).toLocaleDateString()
           };
         });
-        setActiveMatchCritiques(mapped);
+        if (!cancelled) setActiveMatchCritiques(mapped);
       }
     };
 
-    loadCritiques();
-  }, [activeMatch, products]);
+    void loadCritiques();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeMatch]);
 
-  // IntersectionObserver for Act 3 Staggered Steps
-  useEffect(() => {
-    const stepsEl = stepsRef.current;
-    if (!stepsEl) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setStepsRevealed(true);
-        }
-      },
-      { threshold: 0.15 }
+  // Local sandbox rollover. Cloud rollover is serialized by the settlement API.
+  const tryAutoRollover = useCallback((currentProducts: Product[]) => {
+    if (supabase) {
+      isRolloverPendingRef.current = false;
+      return;
+    }
+    const waitingQueue = currentProducts.filter(
+      p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
     );
-    observer.observe(stepsEl);
-    return () => observer.disconnect();
-  }, []);
-
-  // IntersectionObserver for Act 4 Tournament Dashboard
-  useEffect(() => {
-    const dashEl = dashboardRef.current;
-    if (!dashEl) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setDashRevealed(true);
-        }
-      },
-      { threshold: 0.05 }
-    );
-    observer.observe(dashEl);
-    return () => observer.disconnect();
-  }, []);
+    if (waitingQueue.length >= 16) {
+      isRolloverPendingRef.current = true;
+      setTimeout(() => {
+        const { bracket: newB, updatedProducts: newProds } = buildInitialBracket([...currentProducts]);
+        setProducts(newProds);
+        setBracket(newB);
+        setActiveMatch(newB.round1[0]);
+        pushToast("New season started automatically! 16 products matched.", "success");
+        saveProducts(newProds);
+        saveBracket(newB);
+        isSyncLockedRef.current = false;
+        isRolloverPendingRef.current = false;
+      }, 3000);
+    } else {
+      isRolloverPendingRef.current = false;
+    }
+  }, [pushToast]);
 
   // Master Clock & Settle & Simulated Votes Loop
   useEffect(() => {
@@ -1021,7 +817,7 @@ export default function ArenaClient({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [bracket, activeMatch]);
+  }, [bracket, activeMatch, syncCloudData, tryAutoRollover, userLoggedIn]);
 
   // Generate 20 Mock Showcase Products Helper
   const generateMockShowcaseProducts = (count = 20): Product[] => {
@@ -1057,7 +853,7 @@ export default function ArenaClient({
         submittedAt: new Date().toISOString(),
         queueStatus: "waiting",
         votesCount: 0
-      } as any;
+      };
 
       list.push(newProduct);
     }
@@ -1081,7 +877,7 @@ export default function ArenaClient({
       try {
         localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
         localStorage.setItem("arena_products_v1", JSON.stringify(mockShowcase));
-      } catch (e) {}
+      } catch {}
     }
 
     setProducts(mockShowcase);
@@ -1105,20 +901,12 @@ export default function ArenaClient({
     }
   };
 
-  // Smooth scroll down to live duel battle arena
-  const scrollToDuel = () => {
-    const el = document.getElementById("tournament-dashboard");
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth" });
-    }
-  };
-
   // Inject 16 Arena Competitors
   const handleInject16 = () => {
     // Acquire Sync Lock to prevent race condition pullbacks
     isSyncLockedRef.current = true;
     
-    let currentProducts = [...products];
+    const currentProducts = [...products];
     const newAdded: Product[] = [];
     
     for (let i = 0; i < 16; i++) {
@@ -1152,7 +940,7 @@ export default function ArenaClient({
         submittedAt: new Date(Date.now() + i * 1000).toISOString(),
         queueStatus: "waiting",
         votesCount: 0
-      } as any;
+      };
 
       currentProducts.push(newProduct);
       newAdded.push(newProduct);
@@ -1251,6 +1039,7 @@ export default function ArenaClient({
       const makerAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces";
 
       if (supabase) {
+        const uploadedLogo = await uploadArenaLogo(newLogo);
         newProd = await submitArenaProduct({
           title: newTitle,
           tagline: newTagline,
@@ -1259,7 +1048,7 @@ export default function ArenaClient({
           makerName,
           makerTwitter,
           makerAvatar,
-          logo: newLogo,
+          logo: uploadedLogo,
         });
       } else {
         let parsedSlug = newTitle.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
@@ -1376,38 +1165,6 @@ export default function ArenaClient({
       isSyncLockedRef.current = false;
     }
   };
-
-
-  // Auto-Rollover: After a season completes, check if ≥16 products are queued and auto-start the next season
-  const tryAutoRollover = (currentProducts: Product[]) => {
-    // Cloud rollover is serialized by the protected settlement route and its database lock.
-    if (supabase) {
-      isRolloverPendingRef.current = false;
-      return;
-    }
-    const waitingQueue = currentProducts.filter(
-      p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")))
-    );
-    if (waitingQueue.length >= 16) {
-      isRolloverPendingRef.current = true;
-      // Delay slightly so champion modal can show first
-      setTimeout(() => {
-        const latestProducts = [...currentProducts];
-        const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(latestProducts);
-        setProducts(newProds);
-        setBracket(newB);
-        setActiveMatch(newB.round1[0]);
-        pushToast("New season started automatically! 16 products matched.", "success");
-        saveProducts(newProds);
-        saveBracket(newB);
-        isSyncLockedRef.current = false;
-        isRolloverPendingRef.current = false;
-      }, 3000);
-    } else {
-      isRolloverPendingRef.current = false;
-    }
-  };
-
   // Advance Round
   const handleAdvanceRound = () => {
     if (!bracket) return;
@@ -1578,10 +1335,6 @@ export default function ArenaClient({
       }
     }
 
-    // Append to live marquee stream
-    const newComment = `Critique: ${voteLoserFeedback.slice(0, 32)}...`;
-    setDanmakus(prev => [newComment, ...prev]);
-
     setVotingMatch(null);
     setVotingTarget(null);
     setVoteWinnerFeedback("");
@@ -1598,48 +1351,15 @@ export default function ArenaClient({
     return <span className="inline-block shrink-0">{logoStr}</span>;
   };
 
-  const isProductOwner = (p: Product, userTwitter: string, userSubId?: string) => {
-    // 1. Local Browser Claim Check: If this product was submitted from this browser (100% reliable locally)
+  const isProductOwner = (p: Product, _userTwitter: string, userSubId?: string) => {
+    // Local-only submissions are tracked in the browser; cloud ownership always uses auth.uid().
     if (typeof window !== "undefined") {
       try {
         const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
         if (myIds.includes(p.id)) return true;
-      } catch (e) {}
+      } catch {}
     }
-
-    // 2. Primary Secure Check: Parse creator identity bound permanently inside makerAvatar URL query/hash fragment
-    if (p.makerAvatar && p.makerAvatar.includes("#")) {
-      try {
-        const hash = p.makerAvatar.split("#")[1];
-        const params = new URLSearchParams(hash);
-        const creator = params.get("creator");
-        const uid = params.get("uid");
-        
-        if (userSubId && uid && uid === userSubId) return true;
-        if (userTwitter && creator && creator.replace(/^@/, "").toLowerCase() === userTwitter.replace(/^@/, "").toLowerCase()) return true;
-      } catch (e) {}
-    }
-
-    // 3. Secondary Secure Check: Immutable Supabase Auth User ID matching (100% secure)
-    if (userSubId && (p as any).creator_uid && (p as any).creator_uid === userSubId) {
-      return true;
-    }
-
-    if (!userTwitter) return false;
-    
-    // Normalize string: removes all spaces, punctuation, @, and non-alphanumeric characters
-    const normalize = (str: string) => str.replace(/[^a-zA-Z0-9]/g, "").trim().toLowerCase();
-    
-    const cleanTwitter = normalize(userTwitter);
-    const cleanMakerTwitter = p.makerTwitter ? normalize(p.makerTwitter) : "";
-    const cleanMakerName = p.makerName ? normalize(p.makerName) : "";
-    const cleanCreator = (p as any).creatorUsername ? normalize((p as any).creatorUsername) : "";
-    
-    return (
-      (cleanMakerTwitter && cleanMakerTwitter === cleanTwitter) ||
-      (cleanMakerName && cleanMakerName === cleanTwitter) ||
-      (cleanCreator && cleanCreator === cleanTwitter)
-    );
+    return Boolean(userSubId && p.creator_uid === userSubId);
   };
 
   // Export critiques for a product as a CSV file
@@ -1669,35 +1389,36 @@ export default function ArenaClient({
         // 1. Cloud Mode: Fetch from Supabase
         // A. Fetch matches where the product participated
         const { data: matches, error: mErr } = await supabase
-          .from(`${DB_PREFIX}matches`)
-          .select(`${DB_PREFIX}id`)
+          .from(publicArenaTable("matches"))
+          .select("*")
           .or(`${DB_PREFIX}product_a_id.eq.${product.id},${DB_PREFIX}product_b_id.eq.${product.id}`);
 
         if (mErr) throw mErr;
 
         if (matches && matches.length > 0) {
-          const matchIds = matches.map((m: any) => m[`${DB_PREFIX}id`]);
+          const matchIds = matches.map(m => String((m as DatabaseRecord)[`${DB_PREFIX}id`]));
           
           // B. Fetch all votes for these matches
           const { data: votes, error: vErr } = await supabase
-            .from(`${DB_PREFIX}votes`)
+            .from(publicArenaTable("votes"))
             .select("*")
             .in(`${DB_PREFIX}match_id`, matchIds);
 
           if (vErr) throw vErr;
 
           if (votes) {
-            critiques = votes.map((v: any) => {
+            critiques = votes.map(vote => {
+              const v = vote as DatabaseRecord;
               const isWinner = v[`${DB_PREFIX}voted_product_id`] === product.id;
               // Map database-compatible provider 'twitter' back to 'google' if voter has a google/email style signature
               const rawProvider = v[`${DB_PREFIX}voter_auth_type`];
               const provider = rawProvider === "twitter" ? "google" : rawProvider;
               return {
-                voter: v[`${DB_PREFIX}voter_username`],
-                provider: provider,
+                voter: String(v[`${DB_PREFIX}voter_username`] || "Community member"),
+                provider: String(provider || "github"),
                 role: isWinner ? "Winner (Voted For)" : "Loser (Opponent Voted For)",
-                text: isWinner ? v[`${DB_PREFIX}feedback_winner`] : v[`${DB_PREFIX}feedback_loser`],
-                date: new Date(v[`${DB_PREFIX}created_at`] || Date.now()).toLocaleDateString()
+                text: String(isWinner ? v[`${DB_PREFIX}feedback_winner`] : v[`${DB_PREFIX}feedback_loser`]),
+                date: new Date(String(v[`${DB_PREFIX}created_at`] || new Date().toISOString())).toLocaleDateString()
               };
             });
           }
@@ -1705,7 +1426,7 @@ export default function ArenaClient({
       } else {
         // 2. Local/Sandbox Mode: Load from localStorage + generate mock if empty
         const localVotesStr = localStorage.getItem("arena_votes_v1") || "[]";
-        const localVotes = JSON.parse(localVotesStr);
+        const localVotes = JSON.parse(localVotesStr) as StoredVoteRecord[];
         
         // Find matching votes
         const matchIds = new Set<string>();
@@ -1720,20 +1441,20 @@ export default function ArenaClient({
 
         // Robust match filtering: Match either via direct saved product IDs (perfect round survival)
         // or through matching product IDs in current active match slates.
-        const filteredVotes = localVotes.filter((v: any) => 
+        const filteredVotes = localVotes.filter(v =>
           (v.product_a_id && (v.product_a_id === product.id || v.product_b_id === product.id)) ||
           v.voted_product_id === product.id || 
-          matchIds.has(v.match_id)
+          Boolean(v.match_id && matchIds.has(v.match_id))
         );
         
         if (filteredVotes.length > 0) {
-          critiques = filteredVotes.map((v: any) => {
+          critiques = filteredVotes.map(v => {
             const isWinner = v.voted_product_id === product.id;
             return {
-              voter: v.voter_username,
-              provider: v.voter_auth_type,
+              voter: v.voter_username || "Community member",
+              provider: v.voter_auth_type || "github",
               role: isWinner ? "Winner (Voted For)" : "Loser (Opponent Voted For)",
-              text: isWinner ? v.feedback_winner : v.feedback_loser,
+              text: (isWinner ? v.feedback_winner : v.feedback_loser) || "No critique was provided.",
               date: new Date(v.created_at || Date.now()).toLocaleDateString()
             };
           });
@@ -1839,122 +1560,10 @@ export default function ArenaClient({
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("CSV Export failed:", err);
-      alert(`Error exporting critiques: ${err.message || err}`);
+      alert(`Error exporting critiques: ${errorMessage(err)}`);
     }
-  };
-
-  const getPercentages = (match: Match) => {
-    const total = match.votesA + match.votesB;
-    if (total === 0) return { pctA: 50, pctB: 50 };
-    const pctA = Math.round((match.votesA / total) * 100);
-    const pctB = 100 - pctA;
-    return { pctA, pctB };
-  };
-
-  const getProductBracketStatus = (prodId: string) => {
-    if (!bracket) return { status: "WAITLIST", round: 0 };
-    
-    const allMatches = [
-      ...bracket.round1,
-      ...bracket.round2,
-      ...bracket.round3,
-      ...bracket.round4
-    ];
-    
-    // Find the last match the product participated in
-    const matches = allMatches.filter(m => m.productA.id === prodId || m.productB.id === prodId);
-    if (matches.length === 0) {
-      return { status: "QUEUED", round: 0 };
-    }
-    
-    // Sort by round number descending
-    matches.sort((a, b) => b.roundNumber - a.roundNumber);
-    const lastMatch = matches[0];
-    
-    if (!lastMatch.winnerId) {
-      return { status: "FIGHTING", round: lastMatch.roundNumber };
-    }
-    
-    if (lastMatch.winnerId === prodId) {
-      if (lastMatch.roundNumber === 4) {
-        return { status: "CHAMPION", round: 4 };
-      }
-      // Check if there is a match in the next round for this product
-      const nextRoundMatches = allMatches.filter(
-        m => m.roundNumber === lastMatch.roundNumber + 1 && (m.productA.id === prodId || m.productB.id === prodId)
-      );
-      if (nextRoundMatches.length > 0) {
-        const nextMatch = nextRoundMatches[0];
-        if (!nextMatch.winnerId) {
-          return { status: "FIGHTING", round: nextMatch.roundNumber };
-        }
-        if (nextMatch.winnerId === prodId) {
-          return { status: "ADVANCED", round: nextMatch.roundNumber };
-        } else {
-          return { status: "ELIMINATED", round: nextMatch.roundNumber };
-        }
-      }
-      return { status: "ADVANCED", round: lastMatch.roundNumber };
-    } else {
-      return { status: "ELIMINATED", round: lastMatch.roundNumber };
-    }
-  };
-
-  const getLeaderboardData = () => {
-    // If the active bracket is completed, show the completed competitors on the leaderboard so users can see the final standing of the season.
-    // Otherwise, filter to show only the current season's active/waiting competitors to keep it clean.
-    const showCompleted = bracket && bracket.status === "completed";
-
-    return products
-      .filter(p => {
-        if (showCompleted) {
-          // Show only products that participated in the completed bracket
-          if (bracket) {
-            const allMatches = [
-              ...bracket.round1,
-              ...bracket.round2,
-              ...bracket.round3,
-              ...bracket.round4
-            ];
-            return allMatches.some(m => m.productA.id === p.id || m.productB.id === p.id);
-          }
-        }
-        // During preparing/active, show only current season active/waiting products
-        return p.queueStatus === "active" || p.queueStatus === "waiting";
-      })
-      .map(p => {
-        let bracketVotes = 0;
-        let wins = 0;
-        if (bracket) {
-          const allMatches = [
-            ...bracket.round1,
-            ...bracket.round2,
-            ...bracket.round3,
-            ...bracket.round4
-          ];
-          allMatches.forEach(m => {
-            if (m.productA.id === p.id) {
-              bracketVotes += m.votesA;
-              if (m.winnerId === p.id) wins += 1;
-            }
-            if (m.productB.id === p.id) {
-              bracketVotes += m.votesB;
-              if (m.winnerId === p.id) wins += 1;
-            }
-          });
-        }
-        
-        const points = bracketVotes + (wins * 150);
-        
-        return {
-          ...p,
-          wins,
-          bracketVotes,
-          points
-        };
-      }).sort((a, b) => b.points - a.points);
   };
 
   const activeRoundNum = bracket ? getActiveRound(bracket) : 0;
@@ -2067,7 +1676,7 @@ export default function ArenaClient({
         { scale: 1, rotation: 0, opacity: 1, duration: 0.55, ease: "back.out(1.8)" }
       );
     }
-  }, [activeMatch?.id]);
+  }, [activeMatch]);
 
   // 4. GSAP: Rumble impact effect when swords clash (on new vote)
   useEffect(() => {
@@ -2258,7 +1867,7 @@ export default function ArenaClient({
             <div className="text-left space-y-2">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
-                  TODAY'S RELEASES
+                  TODAY&apos;S RELEASES
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full animate-pulse flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
@@ -2296,7 +1905,6 @@ export default function ArenaClient({
               >
                 {/* Double the list to make seamless looping possible */}
                 {[...showcaseProducts, ...showcaseProducts].map((item, index) => {
-                  const originalIndex = index % showcaseProducts.length;
                   return (
                     <div 
                       key={`${item.id}-dup-${index}`} 
@@ -2555,7 +2163,7 @@ export default function ArenaClient({
                         <div className="flex items-center justify-between border-b border-white/[0.04] pb-4 inspector-title">
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-[9px] uppercase tracking-wider font-semibold bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded text-zinc-300">
-                              ROUND {activeRoundNum} // BATTLE INSPECTOR
+                              ROUND {activeRoundNum} {"//"} BATTLE INSPECTOR
                             </span>
                           </div>
                           <div className="flex items-center gap-3">
@@ -2940,7 +2548,7 @@ export default function ArenaClient({
               HOW IT WORKS
             </h2>
             <p className="text-xs text-zinc-500 mt-2 font-sans">
-              Here, victory isn't bought with upvotes. It is earned through authentic, peer-reviewed execution.
+              Here, victory isn&apos;t bought with upvotes. It is earned through authentic, peer-reviewed execution.
             </p>
           </div>
 
@@ -2957,7 +2565,7 @@ export default function ArenaClient({
                   SUBMIT & QUEUE
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
-                  Submit your project for free. Once registered, head over to "My Console" to queue it for the 1v1 Arena matchmaking.
+                  Submit your project for free. Once registered, head over to &quot;My Console&quot; to queue it for the 1v1 Arena matchmaking.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
@@ -3023,18 +2631,26 @@ export default function ArenaClient({
             </a>
           </div>
           <div className="flex items-center gap-6 font-medium">
-            <button 
-              onClick={() => setIsPrivacyOpen(true)} 
+            <a
+              href="/privacy"
+              onClick={(event) => {
+                event.preventDefault();
+                setIsPrivacyOpen(true);
+              }}
               className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
             >
               Privacy Policy
-            </button>
-            <button 
-              onClick={() => setIsTermsOpen(true)} 
+            </a>
+            <a
+              href="/terms"
+              onClick={(event) => {
+                event.preventDefault();
+                setIsTermsOpen(true);
+              }}
               className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
             >
               Terms of Use
-            </button>
+            </a>
             <a 
               href="mailto:support@maber.xyz" 
               className="hover:text-white transition"
@@ -3095,7 +2711,6 @@ export default function ArenaClient({
                   <button
                     type="button"
                     onClick={() => {
-                      setTempAuthType("google");
                       setIsAuthOpen(true);
                     }}
                     className="flex-1 py-1.5 px-3 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
@@ -3105,7 +2720,6 @@ export default function ArenaClient({
                   <button
                     type="button"
                     onClick={() => {
-                      setTempAuthType("github");
                       setIsAuthOpen(true);
                     }}
                     className="flex-1 py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
@@ -3209,7 +2823,7 @@ export default function ArenaClient({
                   <input
                     type="file"
                     id="logo-upload"
-                    accept="image/*"
+                    accept="image/png,image/jpeg,image/webp"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
@@ -3355,7 +2969,6 @@ export default function ArenaClient({
                     <button
                       type="button"
                       onClick={() => {
-                        setTempAuthType("google");
                         setIsAuthOpen(true);
                       }}
                       className="flex-1 py-1.5 px-3 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
@@ -3365,7 +2978,6 @@ export default function ArenaClient({
                     <button
                       type="button"
                       onClick={() => {
-                        setTempAuthType("github");
                         setIsAuthOpen(true);
                       }}
                       className="flex-1 py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-155 cursor-pointer"
@@ -3580,7 +3192,7 @@ export default function ArenaClient({
                     const { data, error } = await supabase.auth.signInWithOAuth({
                       provider: 'google',
                       options: {
-                        redirectTo: window.location.origin,
+                        redirectTo: `${window.location.origin}/auth/callback`,
                         skipBrowserRedirect: true,
                       },
                     });
@@ -3605,7 +3217,7 @@ export default function ArenaClient({
                     const { data, error } = await supabase.auth.signInWithOAuth({
                       provider: 'github',
                       options: {
-                        redirectTo: window.location.origin,
+                        redirectTo: `${window.location.origin}/auth/callback`,
                         skipBrowserRedirect: true,
                       },
                     });
@@ -3680,79 +3292,6 @@ export default function ArenaClient({
                 ENTER THE ARENA ➔
               </button>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
-          Victory Champion Modal
-         ======================================================== */}
-      {isChampionModalOpen && championWinner && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" style={{ zIndex: 110 }}>
-          <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
-            onClick={() => setIsChampionModalOpen(false)}
-          />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-lg relative z-10 text-xs space-y-5 animate-scale-in text-center text-[#E4E4E7]">
-            
-            <button 
-              onClick={() => setIsChampionModalOpen(false)}
-              className="absolute top-4 right-4 text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
-            >
-              <XIcon className="w-3.5 h-3.5" />
-            </button>
-
-            <div className="inline-flex items-center space-x-2 bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-3 py-1 uppercase rounded-md">
-              <span>COLOSSEUM CHAMPION DECLARED</span>
-            </div>
-
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white uppercase flex items-center justify-center gap-2">
-              {renderLogo(championWinner.logo, "w-8 h-8")}
-              <span>{championWinner.title}</span>
-              {renderLogo(championWinner.logo, "w-8 h-8")}
-            </h2>
-            <p className="text-zinc-400 text-xs max-w-md mx-auto leading-relaxed">
-              {championWinner.tagline}
-            </p>
-
-            {/* Maker Spotlight Card */}
-            <div className="p-4 border border-white/[0.06] bg-[#141417] rounded-md text-left flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <img src={championWinner.makerAvatar} alt="Maker" className="w-10 h-10 border border-white/[0.08] rounded-md" />
-                <div>
-                  <span className="text-[9px] font-mono block text-zinc-500">ARENA CONQUEROR</span>
-                  <span className="text-xs font-semibold text-zinc-200">{championWinner.makerName}</span>
-                </div>
-              </div>
-              
-              <a 
-                href={`https://x.com/${championWinner.makerTwitter.replace(/^@/, "")}`}
-                target="_blank" 
-                rel="ugc noopener noreferrer"
-                className="px-3 py-1.5 bg-white/[0.02] border border-white/[0.06] text-zinc-300 font-mono text-[9px] hover:bg-white/[0.04] hover:border-white/[0.1] hover:text-white rounded-md transition duration-150 cursor-pointer"
-              >
-                FOLLOW {championWinner.makerTwitter} ➔
-              </a>
-            </div>
-
-            <div className="flex flex-col sm:flex-row justify-center items-center gap-3 pt-3 border-t border-white/[0.05]">
-              <a 
-                href={championWinner.url}
-                target="_blank"
-                rel="ugc noopener noreferrer"
-                className="bg-white text-black hover:bg-zinc-200 px-5 py-2.5 text-xs rounded-md font-semibold tracking-tight transition duration-150 cursor-pointer w-full sm:w-auto text-center"
-              >
-                EXPLORE DEMO URL ➔
-              </a>
-              
-              <button 
-                onClick={() => setIsChampionModalOpen(false)}
-                className="bg-[#121215] border border-white/[0.1] text-zinc-300 hover:bg-white/[0.04] hover:text-white px-5 py-2.5 text-xs rounded-md font-semibold tracking-tight transition duration-150 cursor-pointer w-full sm:w-auto"
-              >
-                RETURN TO WHITEBOARD
-              </button>
-            </div>
-
           </div>
         </div>
       )}
@@ -3842,7 +3381,7 @@ export default function ArenaClient({
               <div>
                 <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">4. Data Sharing & Retention</h4>
                 <p className="text-zinc-450">
-                  We do not sell, rent, or lease your personal information. Your profile details, submitted critiques, and project links are publicly displayed as part of the core Indie Clash experience. All transaction sessions are handled via encrypted Supabase storage.
+                  We do not sell, rent, or lease your personal information. Your public display name, submitted critiques, and project links may be displayed as part of the core Indie Clash experience. Email addresses and account UUIDs remain in private, access-controlled Supabase tables.
                 </p>
               </div>
 
@@ -3944,7 +3483,7 @@ export default function ArenaClient({
               <div>
                 <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">5. Limitation of Liability</h4>
                 <p className="text-zinc-455">
-                  Indie Clash is provided "as is" and "as available". We do not guarantee uninterrupted service or error-free matchups. We reserve the right to modify, pause, or terminate tournament systems, brackets, or database values at our sole discretion without notice.
+                  Indie Clash is provided &quot;as is&quot; and &quot;as available&quot;. We do not guarantee uninterrupted service or error-free matchups. We reserve the right to modify, pause, or terminate tournament systems, brackets, or database values at our sole discretion without notice.
                 </p>
               </div>
             </div>
@@ -4039,7 +3578,7 @@ export default function ArenaClient({
                   try {
                     const d = new Date(activeCardProduct.submittedAt);
                     return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-                  } catch (e) {
+                  } catch {
                     return "";
                   }
                 })()}
