@@ -39,7 +39,15 @@ function ProductMark({ product }: { product: Product }) {
   if (image) {
     return <img src={image} alt={`${product.title} logo`} className="h-10 w-10 rounded-lg object-contain" />;
   }
-  return <span className="text-3xl" aria-hidden="true">{product.logo || "🚀"}</span>;
+  // Legacy rows may contain an entire base64 image or an arbitrary remote URL.
+  // Never render those untrusted/oversized values as visible fallback text.
+  const compactSymbol = product.logo
+    && product.logo.length <= 8
+    && !product.logo.includes(":")
+    && !product.logo.includes("/")
+    ? product.logo
+    : "🚀";
+  return <span className="text-3xl" aria-hidden="true">{compactSymbol}</span>;
 }
 
 export default async function ProductsPage() {
