@@ -1867,7 +1867,6 @@ export default function ArenaClient({
       {currentView === 'console' ? (
         <MakerConsole 
           isOpen={true}
-          onClose={() => showHomeSection("arena-section")}
           products={products}
           allProducts={products}
           activeBracket={bracket}

@@ -3,7 +3,6 @@ import { Product, Bracket } from "@/lib/mockData";
 
 interface MakerConsoleProps {
   isOpen: boolean;
-  onClose: () => void;
   products: Product[];
   allProducts: Product[];
   activeBracket: Bracket | null;
@@ -17,7 +16,6 @@ interface MakerConsoleProps {
 
 export default function MakerConsole({
   isOpen,
-  onClose,
   products,
   allProducts,
   activeBracket,
@@ -69,8 +67,8 @@ export default function MakerConsole({
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 py-12 animate-fade-in-blur space-y-8 min-h-[70vh] text-[#E4E4E7]">
-      {/* Back button and title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.06] pb-6">
+      {/* Console title */}
+      <div className="border-b border-white/[0.06] pb-6">
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#ffbe18]"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
@@ -80,13 +78,6 @@ export default function MakerConsole({
             Connected account: <span className="text-white font-bold">{userTwitter || "Indie Mode"}</span>
           </p>
         </div>
-        
-        <button 
-          onClick={onClose}
-          className="px-5 py-2.5 bg-zinc-900 border border-white/[0.08] hover:bg-white/[0.04] text-white font-semibold rounded-md transition duration-150 cursor-pointer text-xs flex items-center gap-2 self-start sm:self-auto font-mono uppercase tracking-wider"
-        >
-          ← Return to Colosseum
-        </button>
       </div>
 
       {/* Grid Stats */}
