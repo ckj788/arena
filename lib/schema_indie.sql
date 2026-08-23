@@ -60,11 +60,6 @@ CREATE TABLE IF NOT EXISTS indie_votes (
   indie_created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS indie_one_queued_product_per_creator
-  ON indie_products (indie_creator_uid)
-  WHERE indie_creator_uid IS NOT NULL
-    AND indie_queue_status = 'waiting'
-    AND indie_arena_enqueued = TRUE;
 CREATE UNIQUE INDEX IF NOT EXISTS indie_one_open_bracket
   ON indie_brackets ((TRUE))
   WHERE indie_status IN ('preparing', 'active');

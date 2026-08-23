@@ -21,45 +21,15 @@ WHERE product.shipandbattle_creator_uid IS NULL
     FROM 'uid=([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})'
   )::UUID;
 
--- Keep every ownership link, but normalize season participation. An active
--- entry wins; otherwise the earliest queued waiting entry stays queued. Extra
--- waiting products remain owned and visible in My Console, but are unqueued.
-WITH ranked_season_entries AS (
-  SELECT
-    shipandbattle_id,
-    shipandbattle_queue_status,
-    row_number() OVER (
-      PARTITION BY shipandbattle_creator_uid
-      ORDER BY
-        CASE WHEN shipandbattle_queue_status = 'active' THEN 0 ELSE 1 END,
-        shipandbattle_submitted_at ASC NULLS LAST,
-        shipandbattle_id
-    ) AS season_rank
-  FROM public.shipandbattle_products
-  WHERE shipandbattle_creator_uid IS NOT NULL
-    AND (
-      shipandbattle_queue_status = 'active'
-      OR (
-        shipandbattle_queue_status = 'waiting'
-        AND shipandbattle_arena_enqueued = TRUE
-      )
-    )
-)
-UPDATE public.shipandbattle_products AS product
-SET shipandbattle_arena_enqueued = FALSE
-FROM ranked_season_entries AS ranked
-WHERE product.shipandbattle_id = ranked.shipandbattle_id
-  AND product.shipandbattle_queue_status = 'waiting'
-  AND ranked.season_rank > 1;
-
--- This index closes concurrent double-queue races without limiting how many
--- public products an account may own. Active rows are governed by the locked
--- settlement workflow and the server-side participation check.
-CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_one_queued_product_per_creator
-  ON public.shipandbattle_products (shipandbattle_creator_uid)
-  WHERE shipandbattle_creator_uid IS NOT NULL
-    AND shipandbattle_queue_status = 'waiting'
-    AND shipandbattle_arena_enqueued = TRUE;
+-- Restore legacy queue choices that the previous single-product normalization
+-- changed. The uid marker limits this to pre-migration rows; new showcase-only
+-- submissions are not automatically pushed into the Arena.
+UPDATE public.shipandbattle_products
+SET shipandbattle_arena_enqueued = TRUE
+WHERE shipandbattle_queue_status = 'waiting'
+  AND shipandbattle_arena_enqueued = FALSE
+  AND shipandbattle_maker_avatar ~ 'uid=[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+  AND shipandbattle_maker_avatar NOT LIKE '%pushed=false%';
 
 NOTIFY pgrst, 'reload schema';
 

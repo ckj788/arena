@@ -61,11 +61,6 @@ CREATE TABLE IF NOT EXISTS shipandbattle_votes (
   shipandbattle_created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_one_queued_product_per_creator
-  ON shipandbattle_products (shipandbattle_creator_uid)
-  WHERE shipandbattle_creator_uid IS NOT NULL
-    AND shipandbattle_queue_status = 'waiting'
-    AND shipandbattle_arena_enqueued = TRUE;
 CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_one_open_bracket
   ON shipandbattle_brackets ((TRUE))
   WHERE shipandbattle_status IN ('preparing', 'active');

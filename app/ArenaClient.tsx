@@ -1864,7 +1864,7 @@ export default function ArenaClient({
         </div>
       </header>
 
-      {currentView === 'console' ? (
+      <div className={currentView === "console" ? "block" : "hidden"}>
         <MakerConsole 
           isOpen={true}
           products={products}
@@ -1880,8 +1880,9 @@ export default function ArenaClient({
             setIsSubmitOpen(true);
           }}
         />
-      ) : (
-        <>
+      </div>
+
+      <div className={currentView === "console" ? "hidden" : "block"}>
           {/* Hero Banner */}
           <section className="py-24 border-b border-white/[0.05] relative overflow-hidden bg-gradient-to-b from-white/[0.01] to-transparent">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
@@ -2717,8 +2718,7 @@ export default function ArenaClient({
           </div>
         </div>
       </footer>
-        </>
-      )}
+      </div>
 
       {/* ========================================================
           Tactile Slide-over Drawer for new submissions

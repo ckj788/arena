@@ -116,48 +116,12 @@ ALTER TABLE public.shipandbattle_votes
     AND char_length(trim(shipandbattle_feedback_loser)) BETWEEN 10 AND 1000
   ) NOT VALID;
 
--- Ownership and arena participation are separate: an account may own multiple
--- products, while only one product per account may wait in the arena queue.
--- Preserve every creator_uid. If legacy data queued several products for the
--- same account, keep the earliest queued entry and return the others to that
--- maker's unqueued waiting room. Active tournament rows are never modified.
-WITH ranked_season_entries AS (
-  SELECT
-    shipandbattle_id,
-    row_number() OVER (
-      PARTITION BY shipandbattle_creator_uid
-      ORDER BY
-        CASE WHEN shipandbattle_queue_status = 'active' THEN 0 ELSE 1 END,
-        shipandbattle_submitted_at ASC NULLS LAST,
-        shipandbattle_id
-    ) AS season_rank
-  FROM public.shipandbattle_products
-  WHERE shipandbattle_creator_uid IS NOT NULL
-    AND (
-      shipandbattle_queue_status = 'active'
-      OR (
-        shipandbattle_queue_status = 'waiting'
-        AND shipandbattle_arena_enqueued = TRUE
-      )
-    )
-)
-UPDATE public.shipandbattle_products AS product
-SET shipandbattle_arena_enqueued = FALSE
-FROM ranked_season_entries AS ranked
-WHERE product.shipandbattle_id = ranked.shipandbattle_id
-  AND product.shipandbattle_queue_status = 'waiting'
-  AND ranked.season_rank > 1;
-
 CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_votes_one_per_user_match
   ON public.shipandbattle_votes (shipandbattle_match_id, shipandbattle_voter_uid)
   WHERE shipandbattle_voter_uid IS NOT NULL;
 
 DROP INDEX IF EXISTS public.shipandbattle_one_open_product_per_creator;
-CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_one_queued_product_per_creator
-  ON public.shipandbattle_products (shipandbattle_creator_uid)
-  WHERE shipandbattle_creator_uid IS NOT NULL
-    AND shipandbattle_queue_status = 'waiting'
-    AND shipandbattle_arena_enqueued = TRUE;
+DROP INDEX IF EXISTS public.shipandbattle_one_queued_product_per_creator;
 
 CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_one_open_bracket
   ON public.shipandbattle_brackets ((TRUE))
