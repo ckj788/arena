@@ -437,6 +437,55 @@ export default function ArenaClient({
   // Past champions and current view state
   const [pastChampions, setPastChampions] = useState<Product[]>(initialPastChampions);
   const [currentView, setCurrentView] = useState<'home' | 'console'>('home');
+  const pendingHomeScrollTargetRef = useRef<string | null>(null);
+
+  const scrollToHomeTarget = useCallback((targetId: string) => {
+    if (targetId === "page-top") {
+      window.scrollTo({ top: 0, behavior: "auto" });
+      return;
+    }
+
+    document.getElementById(targetId)?.scrollIntoView({
+      behavior: "auto",
+      block: "start",
+    });
+  }, []);
+
+  const showHomeSection = useCallback((targetId = "page-top") => {
+    if (currentView === "home") {
+      scrollToHomeTarget(targetId);
+      return;
+    }
+
+    pendingHomeScrollTargetRef.current = targetId;
+    setCurrentView("home");
+  }, [currentView, scrollToHomeTarget]);
+
+  // The home sections are unmounted while the maker console is open. Wait for
+  // React to restore them before resolving an in-page navigation target.
+  useEffect(() => {
+    if (currentView !== "home" || !pendingHomeScrollTargetRef.current) return;
+
+    const targetId = pendingHomeScrollTargetRef.current;
+    pendingHomeScrollTargetRef.current = null;
+    const animationFrame = window.requestAnimationFrame(() => {
+      scrollToHomeTarget(targetId);
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [currentView, scrollToHomeTarget]);
+
+  // Opening the shorter console from a deeply scrolled home page can otherwise
+  // preserve an out-of-range scroll position and show only the background.
+  useEffect(() => {
+    if (currentView !== "console") return;
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    });
+
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, [currentView]);
 
   // Keep latestBracketRef synchronized with bracket state to avoid closure staleness
   const latestBracketRef = useRef<Bracket | null>(null);
@@ -1714,7 +1763,7 @@ export default function ArenaClient({
               className="flex items-center gap-3 cursor-pointer"
               onClick={() => {
                 synthClick(300, "sine", 0.05);
-                setCurrentView('home');
+                showHomeSection();
                 pushToast("Welcome back to Indie-Clash!", "success");
               }}
             >
@@ -1727,11 +1776,32 @@ export default function ArenaClient({
             <nav className="hidden md:flex items-center gap-5 text-sm font-medium text-zinc-200 font-sans">
               <Link href="/products" className="hover:text-white transition duration-200">Products</Link>
               <span className="text-zinc-700">/</span>
-              <a href="#arena-section" className="hover:text-white transition duration-200">Arena</a>
+              <a
+                href="#arena-section"
+                onClick={(event) => {
+                  event.preventDefault();
+                  showHomeSection("arena-section");
+                }}
+                className="hover:text-white transition duration-200"
+              >Arena</a>
               <span className="text-zinc-700">/</span>
-              <a href="#champions-section" className="hover:text-white transition duration-200">Champion</a>
+              <a
+                href="#champions-section"
+                onClick={(event) => {
+                  event.preventDefault();
+                  showHomeSection("champions-section");
+                }}
+                className="hover:text-white transition duration-200"
+              >Champion</a>
               <span className="text-zinc-700">/</span>
-              <a href="#how-it-works-section" className="hover:text-white transition duration-200">How it Work</a>
+              <a
+                href="#how-it-works-section"
+                onClick={(event) => {
+                  event.preventDefault();
+                  showHomeSection("how-it-works-section");
+                }}
+                className="hover:text-white transition duration-200"
+              >How it Work</a>
             </nav>
           </div>
 
@@ -1741,7 +1811,11 @@ export default function ArenaClient({
               <button
                 onClick={() => {
                   synthClick(300, "sine", 0.05);
-                  setCurrentView(currentView === 'console' ? 'home' : 'console');
+                  if (currentView === "console") {
+                    showHomeSection("arena-section");
+                  } else {
+                    setCurrentView("console");
+                  }
                 }}
                 className="py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-[10px] font-mono uppercase tracking-wider rounded-md cursor-pointer transition mr-2"
               >
@@ -1793,7 +1867,7 @@ export default function ArenaClient({
       {currentView === 'console' ? (
         <MakerConsole 
           isOpen={true}
-          onClose={() => setCurrentView('home')}
+          onClose={() => showHomeSection("arena-section")}
           products={products}
           allProducts={products}
           activeBracket={bracket}
@@ -1971,7 +2045,7 @@ export default function ArenaClient({
           </div>
         </section>
 
-        <section id="arena-section" className="py-20 md:py-28 relative border-t border-white/[0.05]">
+        <section id="arena-section" className="scroll-mt-20 py-20 md:py-28 relative border-t border-white/[0.05]">
           
           <div className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -2453,7 +2527,7 @@ export default function ArenaClient({
         </section>
 
         {/* THE HALL OF VALOR — HISTORIC CHAMPIONS */}
-        <section id="champions-section" className="py-20 md:py-28 border-t border-white/[0.05]">
+        <section id="champions-section" className="scroll-mt-20 py-20 md:py-28 border-t border-white/[0.05]">
           <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="text-left">
               <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
@@ -2526,7 +2600,7 @@ export default function ArenaClient({
         </section>
 
         {/* HOW IT WORKS SECTION */}
-        <section id="how-it-works-section" className="py-16 border-t border-white/[0.05]">
+        <section id="how-it-works-section" className="scroll-mt-20 py-16 border-t border-white/[0.05]">
           <div className="mb-12">
             <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
               HOW IT WORKS
