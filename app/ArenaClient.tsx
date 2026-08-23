@@ -1013,23 +1013,6 @@ export default function ArenaClient({
       return;
     }
 
-    // Fast client-side feedback; the server independently enforces this limit by auth user ID.
-    const hasExisting = products.some(p => {
-      if (p.queueStatus !== "waiting" && p.queueStatus !== "active") return false;
-      if (userSupabaseId && p.creator_uid === userSupabaseId) return true;
-      if (mockUserTwitter && p.creatorUsername && p.creatorUsername.toLowerCase() === mockUserTwitter.toLowerCase()) return true;
-      const inputTwitter = newTwitter ? newTwitter.replace(/^@/, "").toLowerCase() : "";
-      const existingTwitter = p.makerTwitter ? p.makerTwitter.replace(/^@/, "").toLowerCase() : "";
-      if (inputTwitter && inputTwitter !== "anonymous" && inputTwitter === existingTwitter) return true;
-      return false;
-    });
-
-    if (hasExisting) {
-      synthClick(150, "sawtooth", 0.12);
-      alert("Submission Limit Exceeded!\n\nTo ensure fair play, each maker is allowed only ONE product in the waiting list or active queue per tournament cycle.");
-      return;
-    }
-
     const normalizedUrl = newUrl.startsWith("http") ? newUrl : `https://${newUrl}`;
 
     isSyncLockedRef.current = true;

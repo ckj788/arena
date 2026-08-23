@@ -38,10 +38,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_votes_one_per_user_match
   ON public.shipandbattle_votes (shipandbattle_match_id, shipandbattle_voter_uid)
   WHERE shipandbattle_voter_uid IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_one_open_product_per_creator
+-- Product ownership is not a season-entry limit. Keep all products attached to
+-- their maker, but allow only one queued waiting product per account.
+WITH ranked_queued_products AS (
+  SELECT
+    shipandbattle_id,
+    row_number() OVER (
+      PARTITION BY shipandbattle_creator_uid
+      ORDER BY shipandbattle_submitted_at ASC NULLS LAST, shipandbattle_id
+    ) AS queue_rank
+  FROM public.shipandbattle_products
+  WHERE shipandbattle_creator_uid IS NOT NULL
+    AND shipandbattle_queue_status = 'waiting'
+    AND shipandbattle_arena_enqueued = TRUE
+)
+UPDATE public.shipandbattle_products AS product
+SET shipandbattle_arena_enqueued = FALSE
+FROM ranked_queued_products AS ranked
+WHERE product.shipandbattle_id = ranked.shipandbattle_id
+  AND ranked.queue_rank > 1;
+
+DROP INDEX IF EXISTS public.shipandbattle_one_open_product_per_creator;
+CREATE UNIQUE INDEX IF NOT EXISTS shipandbattle_one_queued_product_per_creator
   ON public.shipandbattle_products (shipandbattle_creator_uid)
   WHERE shipandbattle_creator_uid IS NOT NULL
-    AND shipandbattle_queue_status IN ('waiting', 'active');
+    AND shipandbattle_queue_status = 'waiting'
+    AND shipandbattle_arena_enqueued = TRUE;
 
 ALTER TABLE public.shipandbattle_brackets
   ADD COLUMN IF NOT EXISTS shipandbattle_settlement_lock_token UUID,

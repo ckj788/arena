@@ -71,18 +71,6 @@ export interface NewProductInput {
 
 export async function createProductForUser(user: User, input: NewProductInput): Promise<Product> {
   const client = getAdminClient();
-  const { data: existing, error: existingError } = await client
-    .from(`${DB_PREFIX}products`)
-    .select(`${DB_PREFIX}id`)
-    .eq(`${DB_PREFIX}creator_uid`, user.id)
-    .in(`${DB_PREFIX}queue_status`, ["waiting", "active"])
-    .limit(1);
-
-  if (existingError) databaseError("checking product ownership", existingError);
-  if (existing && existing.length > 0) {
-    throw new HttpError(409, "You already have a waiting or active product in this season.");
-  }
-
   const id = await uniqueProductSlug(client, normalizeSlug(input.url, input.title));
   const username = String(
     user.user_metadata?.preferred_username ||
@@ -118,9 +106,6 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     .insert(toDbProduct(product))
     .select("*")
     .single();
-  if (error?.code === "23505") {
-    throw new HttpError(409, "You already have a waiting or active product in this season.");
-  }
   if (error || !data) databaseError("creating product", error);
   return fromDbProduct(data);
 }
@@ -142,11 +127,36 @@ export async function enqueueOwnedProduct(user: User, productId: string): Promis
     throw new HttpError(409, "Only waiting products can enter the arena queue.");
   }
 
+  // Ownership and season participation are separate concerns: a maker may own
+  // many public products, but only one may be queued or active at a time.
+  const { data: otherProducts, error: ownershipError } = await client
+    .from(`${DB_PREFIX}products`)
+    .select(`${DB_PREFIX}id,${DB_PREFIX}queue_status,${DB_PREFIX}arena_enqueued`)
+    .eq(`${DB_PREFIX}creator_uid`, user.id)
+    .neq(`${DB_PREFIX}id`, productId)
+    .in(`${DB_PREFIX}queue_status`, ["waiting", "active"]);
+  if (ownershipError) databaseError("checking arena participation", ownershipError);
+
+  const competingRows = (otherProducts ?? []) as unknown as DbRow[];
+  const hasOtherSeasonEntry = competingRows.some((row) => (
+    row[`${DB_PREFIX}queue_status`] === "active"
+    || (
+      row[`${DB_PREFIX}queue_status`] === "waiting"
+      && row[`${DB_PREFIX}arena_enqueued`] === true
+    )
+  ));
+  if (hasOtherSeasonEntry) {
+    throw new HttpError(409, "Another one of your products is already queued or active in this season.");
+  }
+
   const { error: updateError } = await client
     .from(`${DB_PREFIX}products`)
     .update({ [`${DB_PREFIX}arena_enqueued`]: true })
     .eq(`${DB_PREFIX}id`, productId)
     .eq(`${DB_PREFIX}creator_uid`, user.id);
+  if (updateError?.code === "23505") {
+    throw new HttpError(409, "Another one of your products is already queued for this season.");
+  }
   if (updateError) databaseError("enqueueing product", updateError);
 
   return tryStartBracket(client);

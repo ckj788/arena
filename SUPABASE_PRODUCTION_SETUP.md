@@ -4,7 +4,8 @@
 
 1. 当前数据库已经有 `shipandbattle_*` 四张基础表：直接在 Supabase SQL Editor 完整执行 [`lib/migrations/20260822_production_ready.sql`](lib/migrations/20260822_production_ready.sql)。
 2. 如果是全新的空数据库：先执行 [`lib/schema.sql`](lib/schema.sql)，再执行上述生产迁移。
-3. SQL 成功提交后再部署应用。不要先部署依赖 `shipandbattle_public_*` 视图的新代码。
+3. 如果曾执行过会把重复开放产品的 `creator_uid` 清空的旧版生产迁移，再执行 [`lib/migrations/20260823_restore_multi_product_ownership.sql`](lib/migrations/20260823_restore_multi_product_ownership.sql) 恢复可确认的产品归属。
+4. SQL 成功提交后再部署应用。不要先部署依赖 `shipandbattle_public_*` 视图的新代码。
 
 该迁移会一次性创建或更新：
 
@@ -13,7 +14,7 @@
 - 原子投票、原子保存赛季、结算锁 RPC；
 - 用户级提交、Logo、入队、投票和结算限流；
 - `product-logos` 公共读取 Bucket（浏览器不能直接写入）；
-- 所有权、唯一投票、唯一开放赛季、数据合法性和查询索引；
+- 多产品所有权、每账户单个 Arena 排队产品、唯一投票、唯一开放赛季、数据合法性和查询索引；
 - 从 Realtime publication 移除私有基础表，避免 WAL 推送泄露隐藏列。
 
 ## Supabase Auth Dashboard
