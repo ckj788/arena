@@ -192,6 +192,8 @@ export default function ArenaClient({
   // Submit Drawer State
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [submitSource, setSubmitSource] = useState<'home' | 'console'>('home');
+  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -202,6 +204,18 @@ export default function ArenaClient({
   const [newTwitter, setNewTwitter] = useState("");
   const [newLogo, setNewLogo] = useState("🚀");
   const [activeCardProduct, setActiveCardProduct] = useState<Product | null>(null);
+
+  const openSubmitModal = (source: 'home' | 'console') => {
+    setSubmitSource(source);
+    setSubmitError(null);
+    setIsSubmitOpen(true);
+  };
+
+  const closeSubmitModal = () => {
+    if (isSubmittingProduct) return;
+    setSubmitError(null);
+    setIsSubmitOpen(false);
+  };
 
   // Vote Modal State with Dual-Input Feedback Loop
   const [votingMatch, setVotingMatch] = useState<Match | null>(null);
@@ -1050,21 +1064,27 @@ export default function ArenaClient({
   // Onboard Submission
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingProduct) return;
+    setSubmitError(null);
+
     if (!userLoggedIn) {
+      const message = "Please link and verify your Google or GitHub identity before submitting.";
       synthClick(150, "sawtooth", 0.12);
-      alert("Verification Required!\n\nPlease link and verify your Google or GitHub identity before submitting your product to the waiting list.");
+      setSubmitError(message);
       setIsAuthOpen(true);
       return;
     }
     if (!newTitle || !newTagline || !newUrl) {
+      const message = "Please fill in the product title, tagline, and demo URL.";
       synthClick(150, "sawtooth", 0.12);
-      alert("Please fill in all required product fields.");
+      setSubmitError(message);
       return;
     }
 
     const normalizedUrl = newUrl.startsWith("http") ? newUrl : `https://${newUrl}`;
 
     isSyncLockedRef.current = true;
+    setIsSubmittingProduct(true);
     try {
       let newProd: Product;
       const makerName = newMaker || "Anonymous Maker";
@@ -1131,6 +1151,7 @@ export default function ArenaClient({
       setNewUrl("");
       setNewMaker("");
       setNewTwitter("");
+      setSubmitError(null);
       setIsSubmitOpen(false);
       if (submitSource === "home") {
         setSuccessModalTitle("PROJECT SUBMITTED 🛡️");
@@ -1142,8 +1163,10 @@ export default function ArenaClient({
       if (supabase) await syncCloudData();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit this product.";
+      setSubmitError(message);
       pushToast(message, "info");
     } finally {
+      setIsSubmittingProduct(false);
       isSyncLockedRef.current = false;
     }
   };
@@ -1740,7 +1763,7 @@ export default function ArenaClient({
       <InteractiveGrid />
 
       {/* FIXED TOAST NOTIFICATION CONTAINER */}
-      <div className="fixed top-6 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none">
+      <div className="fixed top-6 right-6 z-[200] flex flex-col gap-2 max-w-sm pointer-events-none">
         {toasts.map(t => (
           <div
             key={t.id}
@@ -1848,10 +1871,10 @@ export default function ArenaClient({
             {/* Top Right Main Conversion button */}
             {currentView !== 'console' && (
               <button
+                type="button"
                 onClick={() => {
                   synthClick(420, "sine", 0.08, 0.04);
-                  setSubmitSource('home');
-                  setIsSubmitOpen(true);
+                  openSubmitModal('home');
                 }}
                 className="bg-white hover:bg-zinc-200 text-black py-2 px-4 rounded-md text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
               >
@@ -1876,8 +1899,7 @@ export default function ArenaClient({
           renderLogo={renderLogo}
           onExportCsv={handleExportCritiquesCsv}
           onSubmitProductClick={() => {
-            setSubmitSource('console');
-            setIsSubmitOpen(true);
+            openSubmitModal('console');
           }}
         />
       </div>
@@ -2724,10 +2746,10 @@ export default function ArenaClient({
           Tactile Slide-over Drawer for new submissions
          ======================================================== */}
       {isSubmitOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div 
             className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
-            onClick={() => setIsSubmitOpen(false)}
+            onClick={closeSubmitModal}
           />
           <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
             <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
@@ -2735,8 +2757,11 @@ export default function ArenaClient({
                 <PlusIcon className="w-4 h-4 text-[#A78BFA]" /> SUBMIT PROJECT
               </h3>
               <button 
-                onClick={() => setIsSubmitOpen(false)}
-                className="text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
+                type="button"
+                onClick={closeSubmitModal}
+                disabled={isSubmittingProduct}
+                className="text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Close product submission"
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -2795,7 +2820,22 @@ export default function ArenaClient({
               )}
             </div>
 
-            <form onSubmit={handleSubmitProduct} noValidate className="space-y-4 text-left">
+            {submitError && (
+              <div
+                role="alert"
+                aria-live="polite"
+                className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[11px] leading-relaxed text-red-300"
+              >
+                {submitError}
+              </div>
+            )}
+
+            <form
+              onSubmit={handleSubmitProduct}
+              noValidate
+              aria-busy={isSubmittingProduct}
+              className="space-y-4 text-left"
+            >
               <div className="flex flex-col gap-1">
                 <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
                 <input
@@ -2943,16 +2983,18 @@ export default function ArenaClient({
               <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
                 <button
                   type="button"
-                  onClick={() => setIsSubmitOpen(false)}
-                  className="px-4 py-2 border border-white/[0.08] hover:bg-white/[0.02] text-zinc-400 rounded-md text-xs transition duration-150 cursor-pointer"
+                  onClick={closeSubmitModal}
+                  disabled={isSubmittingProduct}
+                  className="px-4 py-2 border border-white/[0.08] hover:bg-white/[0.02] text-zinc-400 rounded-md text-xs transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer"
+                  disabled={isSubmittingProduct}
+                  className="min-w-28 px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer disabled:cursor-wait disabled:bg-zinc-400 disabled:text-zinc-700"
                 >
-                  Submit Project
+                  {isSubmittingProduct ? "Submitting…" : "Submit Project"}
                 </button>
               </div>
             </form>

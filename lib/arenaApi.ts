@@ -5,6 +5,26 @@ interface ApiErrorPayload {
   error?: string;
 }
 
+async function fetchWithTimeout(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+  timeoutMs = 20_000,
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error("The request timed out. Please check your connection and try again.");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function authenticatedJson<T>(path: string, body?: unknown): Promise<T> {
   if (!supabase) {
     throw new Error("Cloud mode is not configured.");
@@ -15,7 +35,7 @@ async function authenticatedJson<T>(path: string, body?: unknown): Promise<T> {
     throw new Error("Your session has expired. Please link your identity again.");
   }
 
-  const response = await fetch(path, {
+  const response = await fetchWithTimeout(path, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${data.session.access_token}`,
@@ -56,7 +76,7 @@ export async function uploadArenaLogo(logo: string): Promise<string> {
   const blob = await response.blob();
   if (blob.size > 1_000_000) throw new Error("Logo must be smaller than 1 MB after resizing.");
 
-  const uploadResponse = await fetch("/api/arena/logo", {
+  const uploadResponse = await fetchWithTimeout("/api/arena/logo", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${data.session.access_token}`,
