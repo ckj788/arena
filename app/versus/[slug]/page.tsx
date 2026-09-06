@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getVersusSeoData } from "@/lib/server/publicSeoData";
-import { absoluteUrl, isPublicImageUrl, publicHttpUrl, serializeJsonLd } from "@/lib/site";
+import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
+import CopyLink from "@/app/components/CopyLink";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -19,17 +20,20 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await getVersusSeoData(slug);
   if (!data) notFound();
 
-  const { productA, productB, canonicalSlug } = data;
+  const { productA, productB, match, canonicalSlug } = data;
   const canonicalPath = `/versus/${canonicalSlug}`;
   const description = descriptionFor(productA.title, productB.title);
   const image = `/api/og/versus?slug=${encodeURIComponent(canonicalSlug)}`;
+  const winner = match.winnerId === productA.id ? productA : match.winnerId === productB.id ? productB : null;
+  const loser = winner?.id === productA.id ? productB : winner ? productA : null;
+  const socialTitle = winner && loser ? `${winner.title} won vs ${loser.title}` : `${productA.title} vs ${productB.title}`;
 
   return {
-    title: `${productA.title} vs ${productB.title}`,
+    title: socialTitle,
     description,
     alternates: { canonical: canonicalPath },
     openGraph: {
-      title: `${productA.title} vs ${productB.title} — Arena Matchup`,
+      title: `${socialTitle} — Arena Matchup`,
       description,
       url: canonicalPath,
       siteName: "Indie Clash",
@@ -38,7 +42,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     },
     twitter: {
       card: "summary_large_image",
-      title: `${productA.title} vs ${productB.title} — Arena Matchup`,
+      title: `${socialTitle} — Arena Matchup`,
       description,
       images: [image],
     },
@@ -46,11 +50,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 function ProductLogo({ logo, title }: { logo: string; title: string }) {
-  if (!logo) return <span className="text-4xl" aria-hidden="true">🚀</span>;
-  if (logo.startsWith("data:image") || logo.startsWith("http") || logo.startsWith("/")) {
-    return <img src={logo} alt={`${title} logo`} className="h-12 w-12 rounded-lg object-contain" />;
-  }
-  return <span className="text-5xl" aria-hidden="true">{logo}</span>;
+  const image = trustedProductImageUrl(logo);
+  if (image) return <img src={image} alt={`${title} logo`} className="h-12 w-12 rounded-lg object-contain" />;
+  const compactSymbol = logo && logo.length <= 8 && !logo.includes(":") && !logo.includes("/") ? logo : "🚀";
+  return <span className="text-5xl" aria-hidden="true">{compactSymbol}</span>;
 }
 
 export default async function VersusPage({ params }: Props) {
@@ -68,6 +71,14 @@ export default async function VersusPage({ params }: Props) {
   const productBUrl = absoluteUrl(`/products/${encodeURIComponent(productB.id)}`);
   const productAWebsite = publicHttpUrl(productA.url);
   const productBWebsite = publicHttpUrl(productB.url);
+  const winner = match.winnerId === productA.id ? productA : match.winnerId === productB.id ? productB : null;
+  const loser = winner?.id === productA.id ? productB : winner ? productA : null;
+  const shareText = winner && loser
+    ? `⚔️ ${winner.title} just won an Indie Clash 1v1 against ${loser.title}. Read the real builder critiques: ${canonicalUrl}`
+    : "";
+  const shareUrl = shareText ? `https://x.com/intent/post?text=${encodeURIComponent(shareText)}` : "";
+  const productAImage = trustedProductImageUrl(productA.logo);
+  const productBImage = trustedProductImageUrl(productB.logo);
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
@@ -77,9 +88,7 @@ export default async function VersusPage({ params }: Props) {
         name: productA.title,
         description: productA.tagline,
         url: productAUrl,
-        image: isPublicImageUrl(productA.logo)
-          ? (productA.logo.startsWith("/") ? absoluteUrl(productA.logo) : productA.logo)
-          : undefined,
+        image: productAImage ? (productAImage.startsWith("/") ? absoluteUrl(productAImage) : productAImage) : undefined,
         sameAs: productAWebsite,
       },
       {
@@ -88,9 +97,7 @@ export default async function VersusPage({ params }: Props) {
         name: productB.title,
         description: productB.tagline,
         url: productBUrl,
-        image: isPublicImageUrl(productB.logo)
-          ? (productB.logo.startsWith("/") ? absoluteUrl(productB.logo) : productB.logo)
-          : undefined,
+        image: productBImage ? (productBImage.startsWith("/") ? absoluteUrl(productBImage) : productBImage) : undefined,
         sameAs: productBWebsite,
       },
       {
@@ -184,6 +191,19 @@ export default async function VersusPage({ params }: Props) {
           ) : (
             <p className="mt-4 text-center text-sm text-zinc-500">This matchup is still open.</p>
           )}
+          {winner && loser ? (
+            <div className="mt-6 grid gap-3 border-t border-white/[0.06] pt-5 sm:grid-cols-[1fr_auto] sm:items-center">
+              <CopyLink value={shareText} />
+              <a
+                href={shareUrl}
+                target="_blank"
+                rel="noopener"
+                className="rounded-md bg-white px-4 py-3 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-black transition hover:bg-zinc-200"
+              >
+                Share result on X ↗
+              </a>
+            </div>
+          ) : null}
         </section>
 
         <section aria-labelledby="comparison-heading">
@@ -254,7 +274,7 @@ export default async function VersusPage({ params }: Props) {
             <h2 className="text-2xl font-semibold">Put your product in the arena</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Publish a real product profile, face other builders, and collect actionable feedback.</p>
           </div>
-          <Link href="/" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-black">Submit a product</Link>
+          <Link href="/?submit=1" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-black">Submit a product</Link>
         </section>
       </main>
 

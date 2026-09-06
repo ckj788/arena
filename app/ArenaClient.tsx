@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import type { User } from "@supabase/supabase-js";
-import Link from "next/link";
+import Link from "@/app/components/NavigationLink";
+import useModalAccessibility from "@/app/components/useModalAccessibility";
+import useHomeMotion from "@/app/components/useHomeMotion";
+import useArenaNavigation from "@/app/components/useArenaNavigation";
+import AuthProviderButton from "@/app/components/AuthProviderButton";
 import { gsap } from "gsap";
 import { Product, Match, Bracket } from "@/lib/mockData";
 import {
@@ -12,6 +16,11 @@ import {
   saveBracket,
   buildInitialBracket,
   getActiveRound,
+  getArenaFormatName,
+  getBracketSize,
+  getInitialRoundMatches,
+  getInitialRoundNumber,
+  getRoundMatches,
   advanceTournamentRound,
   fetchCloudProducts,
   fetchCloudBracket,
@@ -22,19 +31,36 @@ import {
 import {
   castArenaVote,
   enqueueArenaProduct,
+  fetchOwnedArenaProducts,
   requestArenaSettlement,
   submitArenaProduct,
+  updateArenaProduct,
   uploadArenaLogo,
 } from "@/lib/arenaApi";
 import { supabase, DB_PREFIX, publicArenaTable } from "@/lib/supabaseClient";
 import {
   getMillisecondsToNextNYMidnight,
+  getRoundEndAtIso,
   getRoundRemainingMs,
   formatToHMS
 } from "@/lib/timeHelpers";
 import InteractiveGrid from "@/app/components/InteractiveGrid";
 import ClashLogo from "@/app/components/ClashLogo";
 import MakerConsole from "@/app/components/MakerConsole";
+import FairDiscoverySection from "@/app/components/FairDiscoverySection";
+import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
+import { PRICING_MODELS, type PricingModel } from "@/lib/productTaxonomy";
+import { compareArenaQueue } from "@/lib/discoveryRanking";
+import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
+import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, safeOAuthReturnPath } from "@/lib/browserOAuth";
+
+function firstOpenBracketMatch(bracket: Bracket): Match | null {
+  const round = bracket.status === "active"
+    ? getActiveRound(bracket)
+    : getInitialRoundNumber(getBracketSize(bracket));
+  const matches = getRoundMatches(bracket, round);
+  return matches.find((match) => !match.winnerId) || matches[0] || null;
+}
 
 // --- GLOBAL AUDIO UTILITY FOR GEEK HAPTIC SOUNDS ---
 let audioCtx: AudioContext | null = null;
@@ -116,6 +142,8 @@ let memoryCache: {
   lastFetchTime: 0
 };
 
+const OAUTH_SUBMIT_DRAFT_KEY = "indieclash_oauth_submit_draft_v1";
+
 interface ArenaClientProps {
   initialProducts: Product[];
   initialPastChampions: Product[];
@@ -146,7 +174,16 @@ export default function ArenaClient({
   initialPastChampions,
   initialBracket
 }: ArenaClientProps) {
+  const arenaRootRef = useRef<HTMLDivElement | null>(null);
+  const submitDialogRef = useRef<HTMLDivElement | null>(null);
+  const authDialogRef = useRef<HTMLDivElement | null>(null);
+  const voteDialogRef = useRef<HTMLDivElement | null>(null);
+  const successDialogRef = useRef<HTMLDivElement | null>(null);
+  const authStartingRef = useRef(false);
+  const [signingInProvider, setSigningInProvider] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [pastChampions, setPastChampions] = useState<Product[]>(initialPastChampions);
+  const { currentView, setCurrentView, showHomeSection } = useArenaNavigation();
   const isMuted = false;
   const synthClick = (freq = 300, type: OscillatorType = "sine", duration = 0.06, vol = 0.02) => {
     if (!isMuted) {
@@ -172,12 +209,7 @@ export default function ArenaClient({
   const [bracket, setBracket] = useState<Bracket | null>(initialBracket);
   const [activeMatch, setActiveMatch] = useState<Match | null>(() => {
     if (!initialBracket) return null;
-    const round = getActiveRound(initialBracket);
-    if (round === 1) return initialBracket.round1.find(m => !m.winnerId) || initialBracket.round1[0];
-    else if (round === 2) return initialBracket.round2.find(m => !m.winnerId) || initialBracket.round2[0];
-    else if (round === 3) return initialBracket.round3.find(m => !m.winnerId) || initialBracket.round3[0];
-    else if (round === 4) return initialBracket.round4.find(m => !m.winnerId) || initialBracket.round4[0];
-    return null;
+    return firstOpenBracketMatch(initialBracket);
   });
   const isInitialSyncDone = useRef(false);
 
@@ -193,19 +225,101 @@ export default function ArenaClient({
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [submitSource, setSubmitSource] = useState<'home' | 'console'>('home');
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [newTagline, setNewTagline] = useState("");
   const [newUrl, setNewUrl] = useState("");
+  const [newDescription, setNewDescription] = useState("");
+  const [newPricingModel, setNewPricingModel] = useState<PricingModel>("unspecified");
+  const [newPlatforms, setNewPlatforms] = useState("");
+  const [newTargetAudience, setNewTargetAudience] = useState("");
+  const [newMakerStory, setNewMakerStory] = useState("");
+  const [newFeedbackRequest, setNewFeedbackRequest] = useState("");
   const newTimeframe = "48h" as const;
   const [newMaker, setNewMaker] = useState("");
   const [newTwitter, setNewTwitter] = useState("");
   const [newLogo, setNewLogo] = useState("🚀");
   const [activeCardProduct, setActiveCardProduct] = useState<Product | null>(null);
 
+  useEffect(() => {
+    let restoreTimer: number | undefined;
+    const restoreUi = () => {
+    const params = new URLSearchParams(window.location.search);
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const isOAuthCallback = params.has("code") || params.has("error") || params.has("error_description") || fragment.has("error");
+    // Wait for the code exchange before consuming the draft/return context.
+    if (isOAuthCallback) return;
+    const shouldOpenFromQuery = params.get("submit") === "1";
+    const shouldRestoreConsole = params.get("view") === "console";
+    let savedDraft: string | null = null;
+    try { savedDraft = sessionStorage.getItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Storage may be restricted. */ }
+    let restoredDraft: Record<string, unknown> | null = null;
+
+    if (savedDraft) {
+      try {
+        restoredDraft = JSON.parse(savedDraft) as Record<string, unknown>;
+      } catch {
+        // A malformed browser draft should never prevent the page from loading.
+      }
+    }
+
+    if (!shouldOpenFromQuery && !savedDraft && !shouldRestoreConsole) return;
+
+    restoreTimer = window.setTimeout(() => {
+      if (restoredDraft) {
+        const draft = restoredDraft;
+        setNewTitle(typeof draft.title === "string" ? draft.title : "");
+        setNewTagline(typeof draft.tagline === "string" ? draft.tagline : "");
+        setNewUrl(typeof draft.url === "string" ? draft.url : "");
+        setNewDescription(typeof draft.description === "string" ? draft.description : "");
+        setNewPricingModel(PRICING_MODELS.some((item) => item.value === draft.pricingModel) ? draft.pricingModel as PricingModel : "unspecified");
+        setNewPlatforms(typeof draft.platforms === "string" ? draft.platforms : "");
+        setNewTargetAudience(typeof draft.targetAudience === "string" ? draft.targetAudience : "");
+        setNewMakerStory(typeof draft.makerStory === "string" ? draft.makerStory : "");
+        setNewFeedbackRequest(typeof draft.feedbackRequest === "string" ? draft.feedbackRequest : "");
+        setNewMaker(typeof draft.maker === "string" ? draft.maker : "");
+        setNewTwitter(typeof draft.twitter === "string" ? draft.twitter : "");
+        setNewLogo(typeof draft.logo === "string" ? draft.logo : "🚀");
+        setSubmitSource(draft.source === "console" ? "console" : "home");
+      }
+      if (shouldOpenFromQuery || savedDraft) setIsSubmitOpen(true);
+      try { sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Optional draft storage. */ }
+    if (shouldOpenFromQuery) params.delete("submit");
+
+    const remainingQuery = params.toString();
+    const cleanUrl = `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ""}${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", cleanUrl);
+    }, 0);
+    };
+    restoreUi();
+    window.addEventListener(OAUTH_RESTORE_EVENT, restoreUi);
+    return () => {
+      if (restoreTimer !== undefined) window.clearTimeout(restoreTimer);
+      window.removeEventListener(OAUTH_RESTORE_EVENT, restoreUi);
+    };
+  }, []);
+
+  const resetProductForm = () => {
+    setNewTitle("");
+    setNewTagline("");
+    setNewUrl("");
+    setNewDescription("");
+    setNewPricingModel("unspecified");
+    setNewPlatforms("");
+    setNewTargetAudience("");
+    setNewMakerStory("");
+    setNewFeedbackRequest("");
+    setNewMaker("");
+    setNewTwitter("");
+    setNewLogo("🚀");
+  };
+
   const openSubmitModal = (source: 'home' | 'console') => {
+    setEditingProduct(null);
+    resetProductForm();
     setSubmitSource(source);
     setSubmitError(null);
     setIsSubmitOpen(true);
@@ -215,6 +329,28 @@ export default function ArenaClient({
     if (isSubmittingProduct) return;
     setSubmitError(null);
     setIsSubmitOpen(false);
+    setEditingProduct(null);
+  };
+
+  useModalAccessibility(isSubmitOpen, submitDialogRef, closeSubmitModal);
+
+  const openEditProduct = (product: Product) => {
+    setEditingProduct(product);
+    setSubmitSource("console");
+    setSubmitError(null);
+    setNewTitle(product.title);
+    setNewTagline(product.tagline);
+    setNewUrl(product.url);
+    setNewDescription(product.description || "");
+    setNewPricingModel(product.pricingModel || "unspecified");
+    setNewPlatforms(product.platforms?.join(", ") || "");
+    setNewTargetAudience(product.targetAudience || "");
+    setNewMakerStory(product.makerStory || "");
+    setNewFeedbackRequest(product.feedbackRequest || "");
+    setNewMaker(product.makerName);
+    setNewTwitter(product.makerTwitter);
+    setNewLogo(product.logo || "🚀");
+    setIsSubmitOpen(true);
   };
 
   // Vote Modal State with Dual-Input Feedback Loop
@@ -231,6 +367,46 @@ export default function ArenaClient({
   const [userSupabaseId, setUserSupabaseId] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [ownership, setOwnership] = useState<{ userId: string; status: "loading" | "ready" | "error"; ids: string[]; products: Product[] }>({ userId: "", status: "loading", ids: [], products: [] });
+  const [ownershipRevision, setOwnershipRevision] = useState(0);
+  const retryOwnership = useCallback(() => setOwnershipRevision((value) => value + 1), []);
+  useEffect(() => {
+    if (!supabase || !userSupabaseId || !userLoggedIn) return;
+    let active = true;
+    void Promise.resolve().then(async () => {
+      if (!active) return;
+      setOwnership((previous) => ({ userId: userSupabaseId, status: "loading", ids: previous.userId === userSupabaseId ? previous.ids : [], products: previous.userId === userSupabaseId ? previous.products : [] }));
+      try {
+        const result = await fetchOwnedArenaProducts();
+        if (active) setOwnership({ userId: userSupabaseId, status: "ready", ids: result.productIds, products: result.products });
+      } catch {
+        if (active) setOwnership((previous) => ({ ...previous, status: "error" }));
+      }
+    });
+    return () => { active = false; };
+  }, [userSupabaseId, userLoggedIn, ownershipRevision]);
+
+  const consoleProducts = useMemo(() => {
+    if (!supabase) return products;
+    if (ownership.userId !== userSupabaseId || !userLoggedIn) return [];
+    const catalog = new Map(products.map((product) => [product.id, product]));
+    const privateRows = new Map(ownership.products.map((product) => [product.id, product]));
+    return ownership.ids.flatMap((id) => {
+      const product = privateRows.get(id) || catalog.get(id);
+      return product ? [{ ...product, ...catalog.get(id), creator_uid: userSupabaseId }] : [];
+    });
+  }, [ownership, products, userSupabaseId, userLoggedIn]);
+
+  useEffect(() => {
+    const resumeFromProvider = () => {
+      authStartingRef.current = false;
+      setSigningInProvider(null);
+    };
+    window.addEventListener("pageshow", resumeFromProvider);
+    return () => window.removeEventListener("pageshow", resumeFromProvider);
+  }, []);
 
   const handleUserSession = useCallback((authUser: User) => {
     setUserLoggedIn(true);
@@ -256,24 +432,6 @@ export default function ArenaClient({
       userEmail: authUser.email || ""
     }));
 
-    if (supabase && authUser.id) {
-      void supabase
-        .from(`${DB_PREFIX}products`)
-        .select("*")
-        .eq(`${DB_PREFIX}creator_uid`, authUser.id)
-        .then(({ data, error }) => {
-          if (error) {
-            console.warn("Unable to load product ownership:", error.message);
-            return;
-          }
-          const ownedIds = new Set((data ?? []).map(row => (
-            String((row as Record<string, unknown>)[`${DB_PREFIX}id`])
-          )));
-          setProducts(current => current.map(product => (
-            ownedIds.has(product.id) ? { ...product, creator_uid: authUser.id } : product
-          )));
-        });
-    }
   }, []);
 
   // Supabase Authentication session listener
@@ -298,83 +456,58 @@ export default function ArenaClient({
           console.warn("Failed to parse sandbox session from localStorage:", e);
         }
       }
+      const readyTimer = window.setTimeout(() => setAuthReady(true), 0);
       return () => {
+        window.clearTimeout(readyTimer);
         if (restoreTimer !== undefined) window.clearTimeout(restoreTimer);
       };
     }
-    
-    // 1. Complete the OAuth PKCE flow in the popup.
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get("code");
-      const queryError = urlParams.get("error") || urlParams.get("error_description");
+    let active = true;
+    const url = new URL(window.location.href);
+    const fragment = new URLSearchParams(url.hash.slice(1));
+    const code = url.searchParams.get("code");
+    const callbackError = url.searchParams.get("error") || fragment.get("error");
+    const isCallback = Boolean(code || callbackError || url.searchParams.has("error_description"));
 
-      if (code) {
-        authClient.auth.exchangeCodeForSession(code).then(({ data, error: exchangeErr }) => {
-          if (exchangeErr) {
-            console.error("Error exchanging code for session manually:", exchangeErr);
-          } else if (data.session?.user) {
-            handleUserSession(data.session.user);
-            
-            // Check if we are executing inside an OAuth popup window
-            if (window.opener) {
-              window.opener.postMessage({
-                type: "oauth_success"
-              }, window.location.origin);
-              window.close();
-            } else {
-              // Clean query parameters from URL cleanly
-              window.history.replaceState(null, "", window.location.pathname);
-            }
-          }
-        }).catch(err => {
-          console.error("Unhandled error exchanging code:", err);
-        });
-      } else if (queryError) {
-        console.log("OAuth error detected in query parameters:", queryError);
-        if (window.opener) {
-          window.opener.postMessage({
-            type: "oauth_cancel"
-          }, window.location.origin);
-          window.close();
-        } else {
-          window.history.replaceState(null, "", window.location.pathname);
-        }
-      }
-    }
-    
-    // 2. Recover an existing session from browser storage.
-    authClient.auth.getSession()
-      .then(({ data: { session } }) => {
-        if (session?.user) {
-          handleUserSession(session.user);
-        }
-      })
-      .catch(err => {
-        console.warn("Supabase Auth session parsing warning:", err);
-      });
+    const restoreAfterOAuth = () => {
+      let requestedReturn: string | null = null;
+      try {
+        requestedReturn = sessionStorage.getItem(OAUTH_RETURN_TO_KEY);
+        sessionStorage.removeItem(OAUTH_RETURN_TO_KEY);
+      } catch { /* A missing saved context must not hide the sign-in result. */ }
+      const destination = safeOAuthReturnPath(requestedReturn || `${url.pathname}${url.search}${url.hash}`, url.origin);
+      // Stay in this mounted page: update the session and restore the form or
+      // console directly, instead of reloading the complete website again.
+      window.history.replaceState(window.history.state, "", destination);
+      window.dispatchEvent(new Event(OAUTH_RESTORE_EVENT));
+    };
 
-    // 3. The popup has completed PKCE; Supabase syncs the session via browser storage.
-    const handlePopupMessage = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-      
-      const payload = event.data;
-      if (payload && typeof payload === "object") {
-        if (payload.type === "oauth_success") {
+    const recoverSession = async () => {
+      try {
+        if (callbackError) throw { code: callbackError };
+        if (isCallback && !code) throw new Error("Missing sign-in code");
+        const result = code ? await exchangeOAuthCodeOnce(authClient, code) : await authClient.auth.getSession();
+        if (result.error) throw result.error;
+        if (code && !result.data.session) throw new Error("Missing sign-in session");
+        if (!active) return;
+        if (result.data.session?.user) handleUserSession(result.data.session.user);
+        if (isCallback) {
           setIsAuthOpen(false);
-          void authClient.auth.getSession().then(({ data }) => {
-            if (data.session?.user) handleUserSession(data.session.user);
-          });
-        } else if (payload.type === "oauth_cancel") {
-          console.log("🎯 Parent window: OAuth cancellation received!");
-          // Automatically close the identity modal on cancel as well
-          setIsAuthOpen(false);
+          setAuthError(null);
+          pushToast("Signed in successfully.");
+        }
+      } catch (error) {
+        if (active) setAuthError(oauthFailureMessage(error));
+      } finally {
+        if (active) {
+          if (isCallback) restoreAfterOAuth();
+          setAuthReady(true);
         }
       }
     };
-    window.addEventListener("message", handlePopupMessage);
+    void recoverSession();
 
-    // 4. Listen for auth changes.
+    // 3. Listen for auth changes.
     let subscription: { unsubscribe: () => void } | null = null;
     try {
       const { data } = authClient.auth.onAuthStateChange((event, session) => {
@@ -382,6 +515,7 @@ export default function ArenaClient({
           handleUserSession(session.user);
         } else if (event === "SIGNED_OUT") {
           setUserLoggedIn(false);
+          setUserSupabaseId("");
           setMockUserTwitter("");
           setUserAuthType(null);
           if (typeof window !== "undefined") {
@@ -395,10 +529,10 @@ export default function ArenaClient({
     }
 
     return () => {
+      active = false;
       subscription?.unsubscribe();
-      window.removeEventListener("message", handlePopupMessage);
     };
-  }, [handleUserSession]);
+  }, [handleUserSession, pushToast]);
 
   const handleSandboxLogin = (provider: "google" | "github") => {
     const mockUser = provider === "google" ? "Google_Hacker_Sandbox" : "@GitHub_Indie_Sandbox";
@@ -419,6 +553,86 @@ export default function ArenaClient({
     }
   };
 
+  const beginOAuthSignIn = async (provider: "google" | "github") => {
+    if (authStartingRef.current || !authReady) return;
+    authStartingRef.current = true;
+    setSigningInProvider(provider);
+    setAuthError(null);
+    let leavingForProvider = false;
+    try {
+    if (!supabase) {
+      handleSandboxLogin(provider);
+      return;
+    }
+
+    if (isSubmitOpen) {
+      try {
+        sessionStorage.setItem(OAUTH_SUBMIT_DRAFT_KEY, JSON.stringify({
+          title: newTitle,
+          tagline: newTagline,
+          url: newUrl,
+          description: newDescription,
+          pricingModel: newPricingModel,
+          platforms: newPlatforms,
+          targetAudience: newTargetAudience,
+          makerStory: newMakerStory,
+          feedbackRequest: newFeedbackRequest,
+          maker: newMaker,
+          twitter: newTwitter,
+          logo: newLogo,
+          source: submitSource,
+        }));
+      } catch {
+        // Continue authentication even when browser storage is unavailable.
+      }
+    }
+
+    const returnUrl = new URL(window.location.href);
+    returnUrl.searchParams.delete("code");
+    returnUrl.searchParams.delete("error");
+    returnUrl.searchParams.delete("error_description");
+    if (isSubmitOpen) returnUrl.searchParams.set("submit", "1");
+    if (currentView === "console" || (isSubmitOpen && submitSource === "console")) {
+      returnUrl.searchParams.set("view", "console");
+    }
+    const returnTo = `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`;
+    sessionStorage.setItem(OAUTH_RETURN_TO_KEY, returnTo);
+    const callbackUrl = new URL("/auth/callback", window.location.origin);
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: callbackUrl.toString(),
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error || !data?.url) {
+      sessionStorage.removeItem(OAUTH_RETURN_TO_KEY);
+      sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY);
+      const message = error?.message || `Unable to start ${provider} verification.`;
+      if (isSubmitOpen) setSubmitError(message);
+      pushToast(message, "info");
+      return;
+    }
+
+    // Use the current tab so the PKCE verifier remains in the same browser
+    // context. The callback restores this exact route, hash, and submit draft.
+    window.location.assign(data.url);
+    leavingForProvider = true;
+    } catch {
+      const message = "Unable to open sign-in. Please check your connection and try again.";
+      if (isSubmitOpen) setSubmitError(message);
+      pushToast(message, "info");
+    } finally {
+      // Keep the control locked while the browser is leaving for the provider.
+      // A normal error/no-provider path can be retried immediately.
+      if (!leavingForProvider) {
+        authStartingRef.current = false;
+        setSigningInProvider(null);
+      }
+    }
+  };
+
   const handleLogout = async () => {
     if (supabase) {
       try {
@@ -434,6 +648,7 @@ export default function ArenaClient({
     setUserAuthType(null);
     setUserSupabaseId("");
     setUserEmail("");
+    setCurrentView("home", { replace: true });
     if (typeof window !== "undefined") {
       localStorage.removeItem("ship_duel_sandbox_user");
     }
@@ -448,58 +663,6 @@ export default function ArenaClient({
   const [countdownToMidnightMs, setCountdownToMidnightMs] = useState<number>(0);
   const [activeRoundRemainingMs, setActiveRoundRemainingMs] = useState<number>(0);
   
-  // Past champions and current view state
-  const [pastChampions, setPastChampions] = useState<Product[]>(initialPastChampions);
-  const [currentView, setCurrentView] = useState<'home' | 'console'>('home');
-  const pendingHomeScrollTargetRef = useRef<string | null>(null);
-
-  const scrollToHomeTarget = useCallback((targetId: string) => {
-    if (targetId === "page-top") {
-      window.scrollTo({ top: 0, behavior: "auto" });
-      return;
-    }
-
-    document.getElementById(targetId)?.scrollIntoView({
-      behavior: "auto",
-      block: "start",
-    });
-  }, []);
-
-  const showHomeSection = useCallback((targetId = "page-top") => {
-    if (currentView === "home") {
-      scrollToHomeTarget(targetId);
-      return;
-    }
-
-    pendingHomeScrollTargetRef.current = targetId;
-    setCurrentView("home");
-  }, [currentView, scrollToHomeTarget]);
-
-  // The home sections are unmounted while the maker console is open. Wait for
-  // React to restore them before resolving an in-page navigation target.
-  useEffect(() => {
-    if (currentView !== "home" || !pendingHomeScrollTargetRef.current) return;
-
-    const targetId = pendingHomeScrollTargetRef.current;
-    pendingHomeScrollTargetRef.current = null;
-    const animationFrame = window.requestAnimationFrame(() => {
-      scrollToHomeTarget(targetId);
-    });
-
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [currentView, scrollToHomeTarget]);
-
-  // Opening the shorter console from a deeply scrolled home page can otherwise
-  // preserve an out-of-range scroll position and show only the background.
-  useEffect(() => {
-    if (currentView !== "console") return;
-
-    const animationFrame = window.requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, behavior: "auto" });
-    });
-
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [currentView]);
 
   // Keep latestBracketRef synchronized with bracket state to avoid closure staleness
   const latestBracketRef = useRef<Bracket | null>(null);
@@ -586,13 +749,7 @@ export default function ArenaClient({
     if (memoryCache.bracket) {
       setBracket((current) => current ?? memoryCache.bracket);
       const b = memoryCache.bracket;
-      const round = getActiveRound(b);
-      let active = null;
-      if (round === 1) active = b.round1.find(m => !m.winnerId) || b.round1[0];
-      else if (round === 2) active = b.round2.find(m => !m.winnerId) || b.round2[0];
-      else if (round === 3) active = b.round3.find(m => !m.winnerId) || b.round3[0];
-      else if (round === 4) active = b.round4.find(m => !m.winnerId) || b.round4[0];
-      setActiveMatch(active || null);
+      setActiveMatch(firstOpenBracketMatch(b));
     }
 
     // 3. Skip background fetch if we did one in the last 1 second (reduced from 3s to prevent stale data)
@@ -625,13 +782,7 @@ export default function ArenaClient({
       if (b) {
         setBracket(b);
         memoryCache.bracket = b;
-        const round = getActiveRound(b);
-        let active = null;
-        if (round === 1) active = b.round1.find(m => !m.winnerId) || b.round1[0];
-        else if (round === 2) active = b.round2.find(m => !m.winnerId) || b.round2[0];
-        else if (round === 3) active = b.round3.find(m => !m.winnerId) || b.round3[0];
-        else if (round === 4) active = b.round4.find(m => !m.winnerId) || b.round4[0];
-        setActiveMatch(active || null);
+        setActiveMatch(firstOpenBracketMatch(b));
       } else {
         setBracket(null);
         memoryCache.bracket = null;
@@ -648,7 +799,7 @@ export default function ArenaClient({
     } finally {
       isInitialSyncDone.current = true;
     }
-  }, []);
+  }, [setPastChampions]);
 
   // Initial Load
   useEffect(() => {
@@ -659,7 +810,10 @@ export default function ArenaClient({
     // An empty server payload can be a transient database/cache fallback. Do
     // not treat it as a successful fresh fetch or the client will suppress the
     // immediate Supabase revalidation and incorrectly render zero products.
-    memoryCache.lastFetchTime = initialProducts.length > 0 ? Date.now() : 0;
+    // Always perform one anonymous client revalidation. Public product logos
+    // must not depend on a later authentication event to replace stale SSR or
+    // browser-cached product data.
+    memoryCache.lastFetchTime = 0;
     isInitialSyncDone.current = true;
 
     const animationFrame = window.requestAnimationFrame(() => {
@@ -670,13 +824,7 @@ export default function ArenaClient({
         const saved = loadBracket();
         setBracket(saved);
         if (saved) {
-          const round = getActiveRound(saved);
-          let active = null;
-          if (round === 1) active = saved.round1.find(m => !m.winnerId) || saved.round1[0];
-          else if (round === 2) active = saved.round2.find(m => !m.winnerId) || saved.round2[0];
-          else if (round === 3) active = saved.round3.find(m => !m.winnerId) || saved.round3[0];
-          else if (round === 4) active = saved.round4.find(m => !m.winnerId) || saved.round4[0];
-          setActiveMatch(active || null);
+          setActiveMatch(firstOpenBracketMatch(saved));
         }
       }
 
@@ -773,7 +921,7 @@ export default function ArenaClient({
         const { bracket: newB, updatedProducts: newProds } = buildInitialBracket([...currentProducts]);
         setProducts(newProds);
         setBracket(newB);
-        setActiveMatch(newB.round1[0]);
+        setActiveMatch(firstOpenBracketMatch(newB));
         pushToast("New season started automatically! 16 products matched.", "success");
         saveProducts(newProds);
         saveBracket(newB);
@@ -790,7 +938,8 @@ export default function ArenaClient({
     const timer = setInterval(() => {
       // A. Active bracket countdown and automatic round settlement
       if (bracket && bracket.status === "preparing") {
-        const ms = getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
+        const explicitStart = bracket.roundEndsAt ? new Date(bracket.roundEndsAt).getTime() - Date.now() : Number.NaN;
+        const ms = Number.isFinite(explicitStart) ? Math.max(0, explicitStart) : getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
         setCountdownToMidnightMs(ms);
         
         if (ms <= 0) {
@@ -798,10 +947,11 @@ export default function ArenaClient({
             const activeBracket = {
               ...bracket,
               status: "active" as const,
-              roundStartedAt: new Date().toISOString()
+              roundStartedAt: new Date().toISOString(),
+              roundEndsAt: getRoundEndAtIso(getInitialRoundNumber(getBracketSize(bracket))),
             };
             setBracket(activeBracket);
-            setActiveMatch(activeBracket.round1[0]);
+            setActiveMatch(firstOpenBracketMatch(activeBracket));
             saveBracket(activeBracket);
           } else {
             // Trigger JIT start for preparing bracket
@@ -824,7 +974,7 @@ export default function ArenaClient({
       
       if (bracket && bracket.status === "active") {
         const roundNum = getActiveRound(bracket);
-        const ms = getRoundRemainingMs(roundNum, bracket.roundStartedAt || new Date().toISOString());
+        const ms = getRoundRemainingMs(roundNum, bracket.roundStartedAt || new Date().toISOString(), bracket.roundEndsAt);
         setActiveRoundRemainingMs(ms);
         
         if (ms <= 0) {
@@ -833,14 +983,16 @@ export default function ArenaClient({
             
             if (advanced.status === "completed" && advanced.winner) {
               const champ = advanced.winner;
-              setPastChampions(prev => {
-                if (prev.some(x => x.id === champ.id)) return prev;
-                return [...prev, champ];
-              });
-              const localChamps = loadLocalPastChampions();
-              if (!localChamps.some(c => c.id === champ.id)) {
-                localChamps.push(champ);
-                saveLocalPastChampions(localChamps);
+              if (getBracketSize(advanced) === 16) {
+                setPastChampions(prev => {
+                  if (prev.some(x => x.id === champ.id)) return prev;
+                  return [...prev, champ];
+                });
+                const localChamps = loadLocalPastChampions();
+                if (!localChamps.some(c => c.id === champ.id)) {
+                  localChamps.push(champ);
+                  saveLocalPastChampions(localChamps);
+                }
               }
               setBracket(null);
               setActiveMatch(null);
@@ -850,14 +1002,7 @@ export default function ArenaClient({
               tryAutoRollover(latestProds);
             } else {
               setBracket(advanced);
-              const nextRound = getActiveRound(advanced);
-              let nextActive = null;
-              if (nextRound === 1) nextActive = advanced.round1.find(m => !m.winnerId) || advanced.round1[0];
-              else if (nextRound === 2) nextActive = advanced.round2.find(m => !m.winnerId) || advanced.round2[0];
-              else if (nextRound === 3) nextActive = advanced.round3.find(m => !m.winnerId) || advanced.round3[0];
-              else if (nextRound === 4) nextActive = advanced.round4.find(m => !m.winnerId) || advanced.round4[0];
-              
-              setActiveMatch(nextActive || null);
+              setActiveMatch(firstOpenBracketMatch(advanced));
               saveBracket(advanced);
             }
           } else {
@@ -1017,7 +1162,7 @@ export default function ArenaClient({
       const { bracket: newB, updatedProducts: newProds } = buildInitialBracket(currentProducts);
       setProducts(newProds);
       setBracket(newB);
-      setActiveMatch(newB.round1[0]);
+      setActiveMatch(firstOpenBracketMatch(newB));
       if (supabase) {
         isSyncLockedRef.current = false;
         pushToast("Cloud fixture injection is disabled for safety.", "info");
@@ -1074,10 +1219,14 @@ export default function ArenaClient({
       setIsAuthOpen(true);
       return;
     }
-    if (!newTitle || !newTagline || !newUrl) {
-      const message = "Please fill in the product title, tagline, and demo URL.";
+    if (!newTitle || !newTagline || !newUrl || !newDescription) {
+      const message = "Please fill in the title, tagline, URL, and description.";
       synthClick(150, "sawtooth", 0.12);
       setSubmitError(message);
+      return;
+    }
+    if (newDescription.trim().length < 80) {
+      setSubmitError("Please describe the product in at least 80 characters so visitors can understand what makes it useful.");
       return;
     }
 
@@ -1093,16 +1242,26 @@ export default function ArenaClient({
 
       if (supabase) {
         const uploadedLogo = await uploadArenaLogo(newLogo);
-        newProd = await submitArenaProduct({
+        const input = {
           title: newTitle,
           tagline: newTagline,
           url: normalizedUrl,
-          shipTimeframe: newTimeframe,
+          shipTimeframe: editingProduct?.shipTimeframe || newTimeframe,
           makerName,
           makerTwitter,
           makerAvatar,
           logo: uploadedLogo,
-        });
+          description: newDescription,
+          category: editingProduct?.category,
+          pricingModel: newPricingModel,
+          platforms: newPlatforms.split(",").map((item) => item.trim()).filter(Boolean),
+          targetAudience: newTargetAudience,
+          makerStory: newMakerStory,
+          feedbackRequest: newFeedbackRequest,
+        };
+        newProd = editingProduct
+          ? await updateArenaProduct(editingProduct.id, input)
+          : await submitArenaProduct(input);
       } else {
         let parsedSlug = newTitle.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
         try {
@@ -1115,30 +1274,45 @@ export default function ArenaClient({
           uniqueSlug = `${parsedSlug}-${Math.random().toString(36).slice(2, 8)}`;
         }
         newProd = {
-          id: uniqueSlug,
+          ...(editingProduct || {}),
+          id: editingProduct?.id || uniqueSlug,
           title: newTitle,
           tagline: newTagline,
           url: normalizedUrl,
-          shipTimeframe: newTimeframe,
+          shipTimeframe: editingProduct?.shipTimeframe || newTimeframe,
           makerName,
           makerTwitter,
           makerAvatar: `${makerAvatar}#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}&pushed=false`,
           logo: newLogo,
-          submittedAt: new Date().toISOString(),
-          queueStatus: "waiting",
-          votesCount: 0,
+          submittedAt: editingProduct?.submittedAt || new Date().toISOString(),
+          queueStatus: editingProduct?.queueStatus || "waiting",
+          votesCount: editingProduct?.votesCount || 0,
           creatorUsername: mockUserTwitter,
           creator_uid: userSupabaseId,
-          arenaEnqueued: false,
+          arenaEnqueued: editingProduct?.arenaEnqueued || false,
+          description: newDescription,
+          category: editingProduct?.category,
+          pricingModel: newPricingModel,
+          platforms: newPlatforms.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
+          targetAudience: newTargetAudience || undefined,
+          makerStory: newMakerStory || undefined,
+          feedbackRequest: newFeedbackRequest || undefined,
+          publishedAt: editingProduct?.publishedAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          qualifiedImpressions: editingProduct?.qualifiedImpressions || 0,
+          exposureStatus: editingProduct?.exposureStatus || "new",
         };
       }
 
-      const updated = [...products, newProd];
+      const updated = editingProduct
+        ? products.map((product) => product.id === editingProduct.id ? newProd : product)
+        : [...products, newProd];
       synthClick(600, "sine", 0.15, 0.06);
       setProducts(updated);
       saveProducts(updated);
+      if (supabase) retryOwnership();
 
-      if (typeof window !== "undefined") {
+      if (!supabase && typeof window !== "undefined") {
         try {
           const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
           if (!myIds.includes(newProd.id)) myIds.push(newProd.id);
@@ -1146,14 +1320,14 @@ export default function ArenaClient({
         } catch {}
       }
 
-      setNewTitle("");
-      setNewTagline("");
-      setNewUrl("");
-      setNewMaker("");
-      setNewTwitter("");
+      const wasEditing = Boolean(editingProduct);
+      resetProductForm();
       setSubmitError(null);
       setIsSubmitOpen(false);
-      if (submitSource === "home") {
+      setEditingProduct(null);
+      if (wasEditing) {
+        pushToast("Product profile updated!", "success");
+      } else if (submitSource === "home") {
         setSuccessModalTitle("PROJECT SUBMITTED 🛡️");
         setSuccessModalText("Your product has been successfully submitted and is now live on the Releases list!\n\nTo enter the 1v1 Arena matchmaking queue, click 'ENTER THE CONSOLE' below and click 'Push to Arena'.");
         setIsSuccessOpen(true);
@@ -1180,10 +1354,11 @@ export default function ArenaClient({
         const { bracketStarted } = await enqueueArenaProduct(productId);
         pushToast("Product successfully enqueued in matchmaking waitlist!", "success");
         if (bracketStarted) {
-          setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
-          setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
+          setSuccessModalTitle("CHAMPIONSHIP ROSTER LOCKED ⚔️");
+          setSuccessModalText("Sixteen products are now locked into the Championship roster. Voting opens at the next New York midnight, giving every maker the same published start. Sharing is welcome, but bringing an existing audience is never required to be seen here.");
           setIsSuccessOpen(true);
         }
+        isSyncLockedRef.current = false;
         await syncCloudData();
         return;
       }
@@ -1193,6 +1368,7 @@ export default function ArenaClient({
         return {
           ...p,
           arenaEnqueued: true,
+          arenaEnqueuedAt: p.arenaEnqueuedAt || new Date().toISOString(),
           makerAvatar: p.makerAvatar?.replace("pushed=false", "pushed=true") || p.makerAvatar,
         };
       });
@@ -1209,14 +1385,15 @@ export default function ArenaClient({
         saveProducts(updatedProducts);
         setBracket(newBracket);
         saveBracket(newBracket);
-        setActiveMatch(newBracket.round1[0]);
-        setSuccessModalTitle("ARENA BRACKET ACTIVE ⚔️");
-        setSuccessModalText("Your project has been successfully queued in the 16-competitor roster, and the head-to-head tournament bracket has been automatically generated!\n\nIMPORTANT NOTICE: This platform does NOT provide any organic promotion, marketing, or advertising. To win your live 1v1 duels, you must actively campaign, promote, and rally votes yourself across Twitter/X, GitHub, and other social media channels!");
+        setActiveMatch(firstOpenBracketMatch(newBracket));
+        setSuccessModalTitle("CHAMPIONSHIP ROSTER LOCKED ⚔️");
+        setSuccessModalText("Sixteen products are now locked into the Championship roster. Voting opens at the next New York midnight, giving every maker the same published start. Sharing is welcome, but bringing an existing audience is never required for visibility.");
         setIsSuccessOpen(true);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to enqueue this product.";
       pushToast(message, "info");
+      throw error;
     } finally {
       isSyncLockedRef.current = false;
     }
@@ -1235,7 +1412,8 @@ export default function ArenaClient({
       updated = {
         ...bracket,
         status: "active" as const,
-        roundStartedAt: new Date().toISOString()
+        roundStartedAt: new Date().toISOString(),
+        roundEndsAt: getRoundEndAtIso(getInitialRoundNumber(getBracketSize(bracket))),
       };
     } else {
       updated = advanceTournamentRound(bracket);
@@ -1246,14 +1424,16 @@ export default function ArenaClient({
 
     if (updated.status === "completed" && updated.winner) {
       const champ = updated.winner;
-      setPastChampions(prev => {
-        if (prev.some(x => x.id === champ.id)) return prev;
-        return [...prev, champ];
-      });
-      const localChamps = loadLocalPastChampions();
-      if (!localChamps.some(c => c.id === champ.id)) {
-        localChamps.push(champ);
-        saveLocalPastChampions(localChamps);
+      if (getBracketSize(updated) === 16) {
+        setPastChampions(prev => {
+          if (prev.some(x => x.id === champ.id)) return prev;
+          return [...prev, champ];
+        });
+        const localChamps = loadLocalPastChampions();
+        if (!localChamps.some(c => c.id === champ.id)) {
+          localChamps.push(champ);
+          saveLocalPastChampions(localChamps);
+        }
       }
       setBracket(null);
       setActiveMatch(null);
@@ -1264,14 +1444,7 @@ export default function ArenaClient({
     } else {
       setBracket(updated);
       
-      const round = getActiveRound(updated);
-      let nextActive = null;
-      if (round === 1) nextActive = updated.round1.find(m => !m.winnerId) || updated.round1[0];
-      else if (round === 2) nextActive = updated.round2.find(m => !m.winnerId) || updated.round2[0];
-      else if (round === 3) nextActive = updated.round3.find(m => !m.winnerId) || updated.round3[0];
-      else if (round === 4) nextActive = updated.round4.find(m => !m.winnerId) || updated.round4[0];
-      
-      setActiveMatch(nextActive || null);
+      setActiveMatch(firstOpenBracketMatch(updated));
 
       saveBracket(updated);
       isSyncLockedRef.current = false;
@@ -1391,6 +1564,23 @@ export default function ArenaClient({
       }
     }
 
+    let locallyOwnedIds = new Set<string>();
+    if (!supabase && typeof window !== "undefined") {
+      try {
+        locallyOwnedIds = new Set(JSON.parse(localStorage.getItem("my_arena_products") || "[]"));
+      } catch {}
+    }
+    const discoveryBoostUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
+    setProducts((current) => {
+      const next = current.map((product) => (
+        (userSupabaseId && (product.creator_uid === userSupabaseId || (ownership.userId === userSupabaseId && ownership.ids.includes(product.id)))) || locallyOwnedIds.has(product.id)
+          ? { ...product, discoveryBoostUntil }
+          : product
+      ));
+      if (!supabase) saveProducts(next);
+      return next;
+    });
+
     setVotingMatch(null);
     setVotingTarget(null);
     setVoteWinnerFeedback("");
@@ -1398,16 +1588,34 @@ export default function ArenaClient({
     setVoteError("");
   };
 
-  const renderLogo = (logoStr: string, className = "w-6 h-6 object-contain") => {
-    if (!logoStr) return null;
-    const isImg = logoStr.startsWith("data:image") || logoStr.startsWith("http") || logoStr.startsWith("/");
-    if (isImg) {
-      return <img src={logoStr} alt="Logo" className={`${className} inline-block shrink-0 rounded-md object-contain`} />;
+  const handleDiscoveryAdvance = useCallback(() => playHaptics(320, "sine", 0.04, 0.02), []);
+  const renderLogo = useCallback((logoStr: string, className = "w-6 h-6 object-contain") => {
+    const trustedImage = trustedProductImageUrl(logoStr);
+    const localPreview = !supabase && logoStr?.startsWith("data:image") ? logoStr : undefined;
+    if (trustedImage || localPreview) {
+      return (
+        <span className={`${className} relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md`}>
+          <span aria-hidden="true" className="text-base leading-none">🚀</span>
+          <img
+            src={trustedImage || localPreview}
+            alt="Logo"
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 h-full w-full bg-[#0b0b0d] object-contain"
+            onError={(event) => {
+              event.currentTarget.remove();
+            }}
+          />
+        </span>
+      );
     }
-    return <span className="inline-block shrink-0">{logoStr}</span>;
-  };
+    const compactSymbol = logoStr && logoStr.length <= 8 && !logoStr.includes(":") && !logoStr.includes("/") ? logoStr : "🚀";
+    return <span className="inline-block shrink-0">{compactSymbol}</span>;
+  }, []);
 
   const isProductOwner = (p: Product, _userTwitter: string, userSubId?: string) => {
+    if (supabase) return Boolean(userLoggedIn && userSubId && ownership.userId === userSubId && ownership.ids.includes(p.id));
     // Local-only submissions are tracked in the browser; cloud ownership always uses auth.uid().
     if (typeof window !== "undefined") {
       try {
@@ -1626,144 +1834,103 @@ export default function ArenaClient({
   const queuedProducts = useMemo(() => {
     return products
       .filter(p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))))
-      .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
+      .sort(compareArenaQueue);
   }, [products]);
+  const activeBracketSize = bracket ? getBracketSize(bracket) : 16;
+  const fallbackBracketSize = queuedProducts.length >= 16
+    ? null
+    : queuedProducts.length >= 8
+      ? 8
+      : queuedProducts.length >= 4
+        ? 4
+        : queuedProducts.length >= 2
+          ? 2
+          : null;
+  const rosterTarget = bracket
+    ? activeBracketSize
+    : queuedProducts.length >= 16
+      ? 16
+      : fallbackBracketSize || 16;
   const lineupProducts = useMemo(() => {
-    if (bracket && bracket.round1 && bracket.round1.length > 0) {
+    if (bracket) {
       const list: Product[] = [];
-      bracket.round1.forEach(m => {
+      getInitialRoundMatches(bracket).forEach(m => {
         if (m.productA) list.push(m.productA);
         if (m.productB) list.push(m.productB);
       });
-      return list;
+      if (list.length) return list;
     }
-    return queuedProducts;
-  }, [bracket, queuedProducts]);
+    return queuedProducts.slice(0, rosterTarget);
+  }, [bracket, queuedProducts, rosterTarget]);
   const showcaseProducts = useMemo(() => {
-    // Show ALL products in the showcase list, regardless of queue status
+    // Preserve the newest-first rolling feed while keeping it bounded to the
+    // latest 50 permanent product profiles.
     const sorted = [...products].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-    return sorted;
+    return sorted.slice(0, 50);
   }, [products]);
   const currentSeasonNum = pastChampions.length + 1;
   const currentSeasonStr = String(currentSeasonNum).padStart(2, "0");
 
   const currentRoundMatches = useMemo(() => {
     if (!bracket) return [];
-    const round = getActiveRound(bracket);
-    if (round === 1) return bracket.round1;
-    if (round === 2) return bracket.round2;
-    if (round === 3) return bracket.round3;
-    if (round === 4) return bracket.round4;
-    return [];
+    return getRoundMatches(bracket, getActiveRound(bracket));
   }, [bracket]);
 
-  // 1. GSAP: Animate Hero and page intro on boot
-  useEffect(() => {
-    // Animate Hero Monospace Badge
-    gsap.fromTo(
-      ".hero-badge",
-      { opacity: 0, scale: 0.3, y: -20 },
-      { opacity: 1, scale: 1, y: 0, duration: 0.6, ease: "back.out(1.7)" }
-    );
-    // Animate Hero main title
-    gsap.fromTo(
-      ".hero-title",
-      { opacity: 0, y: 40 },
-      { opacity: 1, y: 0, duration: 0.8, delay: 0.15, ease: "power3.out" }
-    );
-    // Animate Hero tagline/description
-    gsap.fromTo(
-      ".hero-desc",
-      { opacity: 0, y: 25 },
-      { opacity: 1, y: 0, duration: 0.8, delay: 0.3, ease: "power3.out" }
-    );
-    // Animate Hero stats badge
-    gsap.fromTo(
-      ".hero-stats",
-      { opacity: 0, scale: 0.8, y: 15 },
-      { opacity: 1, scale: 1, y: 0, duration: 0.5, delay: 0.45, ease: "back.out(1.2)" }
-    );
-    // Animate Today's Releases section
-    gsap.fromTo(
-      "#launches-section",
-      { opacity: 0, y: 30 },
-      { opacity: 1, y: 0, duration: 1, delay: 0.6, ease: "power2.out" }
-    );
+  const closeAuthDialog = useCallback(() => {
+    if (!authDialogRef.current || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setIsAuthOpen(false);
+      return;
+    }
+    gsap.to(authDialogRef.current, { y: 8, opacity: 0, scale: 0.985, duration: 0.16, ease: "power2.in", overwrite: true, onComplete: () => setIsAuthOpen(false) });
   }, []);
+  useModalAccessibility(isAuthOpen, authDialogRef, closeAuthDialog);
+  useModalAccessibility(Boolean(votingMatch && votingTarget), voteDialogRef, () => {
+    setVotingMatch(null); setVotingTarget(null); setVoteError("");
+  });
+  useModalAccessibility(isSuccessOpen, successDialogRef, () => setIsSuccessOpen(false));
 
-  // 2. GSAP: Animate match slate list items on mount/round change
-  useEffect(() => {
-    if (currentRoundMatches && currentRoundMatches.length > 0) {
-      gsap.fromTo(
-        ".match-card-item",
-        { opacity: 0, x: -25 },
-        { opacity: 1, x: 0, duration: 0.45, stagger: 0.06, ease: "power2.out", overwrite: "auto" }
-      );
-    }
-  }, [activeRoundNum, currentRoundMatches]);
+  useHomeMotion(currentView === "home", arenaRootRef);
 
-  // 3. GSAP: Animate Battle Inspector contents when activeMatch changes
   useEffect(() => {
-    if (activeMatch) {
-      // Intro animations for cards and center VS block
-      gsap.fromTo(
-        ".inspector-panel",
-        { borderAlpha: 0.08, backgroundColor: "rgba(10, 10, 12, 0.4)" },
-        { duration: 0.4, ease: "power1.out" }
-      );
-      gsap.fromTo(
-        ".inspector-title",
-        { opacity: 0, y: -10 },
-        { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }
-      );
-      gsap.fromTo(
-        ".inspector-card-a",
-        { opacity: 0, x: -40, scale: 0.96 },
-        { opacity: 1, x: 0, scale: 1, duration: 0.45, ease: "power3.out" }
-      );
-      gsap.fromTo(
-        ".inspector-card-b",
-        { opacity: 0, x: 40, scale: 0.96 },
-        { opacity: 1, x: 0, scale: 1, duration: 0.45, ease: "power3.out" }
-      );
-      gsap.fromTo(
-        ".inspector-vs",
-        { scale: 0.3, rotation: -90, opacity: 0 },
-        { scale: 1, rotation: 0, opacity: 1, duration: 0.55, ease: "back.out(1.8)" }
-      );
-    }
-  }, [activeMatch]);
+    if (currentView !== "home" || !currentRoundMatches.length) return;
+    const media = gsap.matchMedia(arenaRootRef);
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo(".match-card-item", { opacity: 0, x: -10 },
+        { opacity: 1, x: 0, duration: 0.25, stagger: 0.025, ease: "power2.out", clearProps: "opacity,transform" });
+    });
+    return () => media.revert();
+  }, [currentView, activeRoundNum, currentRoundMatches]);
 
-  // 4. GSAP: Rumble impact effect when swords clash (on new vote)
   useEffect(() => {
-    if (isSwordsClashing) {
-      // Scale pop and bounce the central VS block
+    if (currentView !== "home" || !activeMatch) return;
+    const media = gsap.matchMedia(arenaRootRef);
+    media.add("(prefers-reduced-motion: no-preference)", () => {
+      gsap.fromTo(".inspector-title, .inspector-card-a, .inspector-card-b, .inspector-vs",
+        { opacity: 0, y: 10 },
+        { opacity: 1, y: 0, duration: 0.25, stagger: 0.02, ease: "power2.out", clearProps: "opacity,transform" });
+    });
+    return () => media.revert();
+  }, [currentView, activeMatch]);
+
+  useEffect(() => {
+    if (!isSwordsClashing) return;
+    const media = gsap.matchMedia(arenaRootRef);
+    media.add("(prefers-reduced-motion: no-preference)", () => {
       gsap.timeline()
-        .to(".inspector-vs", { scale: 1.35, duration: 0.08, ease: "power1.out" })
-        .to(".inspector-vs", { scale: 1, duration: 0.25, ease: "bounce.out" });
-
-      // Stiff side-shake for product cards to emulate shockwave
-      gsap.fromTo(
-        ".inspector-card-a",
-        { x: -12 },
-        { x: 0, duration: 0.25, ease: "elastic.out(1, 0.35)", overwrite: "auto" }
-      );
-      gsap.fromTo(
-        ".inspector-card-b",
-        { x: 12 },
-        { x: 0, duration: 0.25, ease: "elastic.out(1, 0.35)", overwrite: "auto" }
-      );
-    }
+        .to(".inspector-vs", { scale: 1.08, duration: 0.1, ease: "power2.out" })
+        .to(".inspector-vs", { scale: 1, duration: 0.2, ease: "power2.out", clearProps: "transform" });
+    });
+    return () => media.revert();
   }, [isSwordsClashing]);
 
   return (
-    <div className={`min-h-screen bg-[#030303] text-[#E4E4E7] font-sans selection:bg-[#E4E4E7] selection:text-black antialiased relative pb-24 overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
+    <div ref={arenaRootRef} className={`arena-app min-h-screen bg-[#030303] text-[#E4E4E7] font-sans selection:bg-[#E4E4E7] selection:text-black antialiased relative pb-24 overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
       
       {/* HIGH PERFORMANCE DYNAMIC CANVAS BACKGROUND */}
       <InteractiveGrid />
 
       {/* FIXED TOAST NOTIFICATION CONTAINER */}
-      <div className="fixed top-6 right-6 z-[200] flex flex-col gap-2 max-w-sm pointer-events-none">
+      <div role="status" aria-live="polite" className="fixed top-6 right-6 z-[200] flex flex-col gap-2 max-w-sm pointer-events-none">
         {toasts.map(t => (
           <div
             key={t.id}
@@ -1778,12 +1945,12 @@ export default function ArenaClient({
       </div>
 
       {/* Sticky Header Navbar */}
-      <header className="sticky top-0 z-50 w-full bg-[#030303]/95 border-b border-white/[0.06]" style={{ willChange: "transform" }}>
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="site-glass-nav sticky top-0 z-50 w-full border-b border-white/[0.06]">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 flex items-center justify-between gap-2">
           
-          <div className="flex items-center gap-8">
-            <div 
-              className="flex items-center gap-3 cursor-pointer"
+          <div className="flex min-w-0 items-center gap-6">
+            <button type="button" aria-label="Indie Clash home"
+              className="flex min-h-11 items-center gap-2 cursor-pointer"
               onClick={() => {
                 synthClick(300, "sine", 0.05);
                 showHomeSection();
@@ -1791,44 +1958,47 @@ export default function ArenaClient({
               }}
             >
               <ClashLogo size="md" />
-              <span className="font-bold text-white tracking-tight text-xl font-sans">
+              <span className="font-bold text-white tracking-tight text-base sm:text-xl font-sans">
                 Indie-Clash
               </span>
-            </div>
+            </button>
 
-            <nav className="hidden md:flex items-center gap-5 text-sm font-medium text-zinc-200 font-sans">
-              <Link href="/products" className="hover:text-white transition duration-200">Products</Link>
+            <nav className="hidden lg:flex items-center gap-5 text-sm font-medium text-zinc-200 font-sans">
+              <Link href="/products" prefetch className="hover:text-white transition duration-200">Products</Link>
               <span className="text-zinc-700">/</span>
-              <a
-                href="#arena-section"
+              <Link
+                href="/#arena-section"
                 onClick={(event) => {
+                  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
                   showHomeSection("arena-section");
                 }}
                 className="hover:text-white transition duration-200"
-              >Arena</a>
+              >Arena</Link>
               <span className="text-zinc-700">/</span>
-              <a
-                href="#champions-section"
+              <Link
+                href="/#champions-section"
                 onClick={(event) => {
+                  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
                   showHomeSection("champions-section");
                 }}
                 className="hover:text-white transition duration-200"
-              >Champion</a>
+              >Champion</Link>
               <span className="text-zinc-700">/</span>
-              <a
-                href="#how-it-works-section"
+              <Link
+                href="/#how-it-works-section"
                 onClick={(event) => {
+                  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
                   event.preventDefault();
                   showHomeSection("how-it-works-section");
                 }}
                 className="hover:text-white transition duration-200"
-              >How it Work</a>
+              >How It Works</Link>
             </nav>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-3">
 
             {userLoggedIn && (
               <button
@@ -1840,31 +2010,33 @@ export default function ArenaClient({
                     setCurrentView("console");
                   }
                 }}
-                className="py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-[10px] font-mono uppercase tracking-wider rounded-md cursor-pointer transition mr-2"
+                className="hidden sm:block py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-[10px] font-mono uppercase tracking-wider rounded-md cursor-pointer transition mr-2"
               >
                 {currentView === 'console' ? "Return to Arena ➔" : "My Console"}
               </button>
             )}
 
             {userLoggedIn ? (
-              <div className="flex items-center gap-3 text-xs bg-[#121215] px-3.5 py-1.5 border border-white/[0.06] text-white">
+              <div className="hidden lg:flex items-center gap-3 text-xs px-3 py-1.5 text-white">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
-                <span className="text-zinc-400 text-[10px] font-mono">
+                <span className="hidden xl:inline text-zinc-400 text-[10px] font-mono">
                   CONNECTED: <span className="text-white font-sans font-bold">{mockUserTwitter}</span>
                 </span>
                 <button 
                   onClick={handleLogout}
-                  className="px-2 py-0.5 text-[10px] font-mono uppercase bg-red-950/40 text-red-400 hover:bg-red-900/60 hover:text-white border border-red-900/50 transition-all cursor-pointer font-bold"
+                  className="px-2 py-0.5 text-xs text-zinc-400 hover:text-white transition-colors"
                 >
-                  Exit
+                  Sign out
                 </button>
               </div>
             ) : (
               <button 
+                disabled={!authReady}
+                aria-busy={!authReady}
                 onClick={() => setIsAuthOpen(true)}
                 className="bg-[#121215] text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold px-3 py-2 rounded-md transition-all cursor-pointer"
               >
-                Link Identity
+                {authReady ? "Sign in" : "Checking sign-in…"}
               </button>
             )}
 
@@ -1876,7 +2048,7 @@ export default function ArenaClient({
                   synthClick(420, "sine", 0.08, 0.04);
                   openSubmitModal('home');
                 }}
-                className="bg-white hover:bg-zinc-200 text-black py-2 px-4 rounded-md text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
+                className="bg-white hover:bg-zinc-200 text-black py-2 px-3 rounded-md text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
               >
                 Submit Product
               </button>
@@ -1885,12 +2057,25 @@ export default function ArenaClient({
           </div>
 
         </div>
+        <nav aria-label="Mobile navigation" className="flex items-center gap-1 overflow-x-auto border-t border-white/[0.06] px-3 lg:hidden">
+          <Link href="/products" prefetch className="flex min-h-11 items-center px-3 text-sm text-zinc-300">Products</Link>
+          <button type="button" onClick={() => showHomeSection("arena-section")} className="min-h-11 px-3 text-sm text-zinc-300">Arena</button>
+          <button type="button" onClick={() => showHomeSection("new-and-unseen-section")} className="min-h-11 whitespace-nowrap px-3 text-sm text-zinc-300">Discover</button>
+          {userLoggedIn && <button type="button" onClick={() => currentView === "console" ? showHomeSection("arena-section") : setCurrentView("console")} className="min-h-11 whitespace-nowrap px-3 text-sm text-[#A78BFA]">{currentView === "console" ? "Back to Arena" : "My Console"}</button>}
+          {userLoggedIn && <button type="button" onClick={handleLogout} className="min-h-11 whitespace-nowrap px-3 text-sm text-zinc-400 xl:hidden">Sign out</button>}
+        </nav>
       </header>
 
-      <div className={currentView === "console" ? "block" : "hidden"}>
+      {authError && !isSubmitOpen && !isAuthOpen && !votingMatch && <div role="alert" data-auth-error className="mx-auto mt-4 max-w-4xl rounded-md border border-red-400/25 bg-red-950/30 px-5 py-4 text-sm leading-6 text-red-200">
+        {authError}
+      </div>}
+
+      {currentView === "console" ? (
         <MakerConsole 
           isOpen={true}
-          products={products}
+          products={consoleProducts}
+          ownershipStatus={!supabase ? "ready" : ownership.userId === userSupabaseId ? ownership.status : "loading"}
+          onRetryOwnership={retryOwnership}
           allProducts={products}
           activeBracket={bracket}
           userTwitter={mockUserTwitter}
@@ -1901,31 +2086,30 @@ export default function ArenaClient({
           onSubmitProductClick={() => {
             openSubmitModal('console');
           }}
+          onEditProduct={openEditProduct}
         />
-      </div>
-
-      <div className={currentView === "console" ? "hidden" : "block"}>
+      ) : (
+      <div>
           {/* Hero Banner */}
-          <section className="py-24 border-b border-white/[0.05] relative overflow-hidden bg-gradient-to-b from-white/[0.01] to-transparent">
+          <section className="py-14 sm:py-16 border-b border-white/[0.05] relative overflow-hidden bg-gradient-to-b from-white/[0.01] to-transparent">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
               
               {/* Micro monospace badge on top */}
-              <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.15] px-3 py-1 rounded-md mb-8 hero-badge">
-                FREE INDIE LAUNCH PLATFORM
+              <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.15] px-3 py-1 rounded-md mb-5 hero-badge">
+                FREE PRODUCT DISCOVERY &amp; LAUNCH PLATFORM
               </div>
 
               {/* Extreme large title font bold tracking tight */}
               <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-white uppercase mb-6 leading-none hero-title">
                 Every Indie Product<br />
-                <span className="text-zinc-500 font-mono font-medium">DESERVES TO BE SEEN</span>
+                <span className="text-zinc-300 font-mono font-medium">DESERVES TO BE SEEN</span>
               </h1>
 
               {/* Centered brief description, restricted width */}
-              <p className="max-w-[780px] mx-auto text-sm sm:text-base md:text-md text-zinc-400 leading-relaxed font-sans tracking-wide hero-desc">
-                Submit for free, publish a public product profile, and meet builders who care about what you shipped. Then prove it in the 1v1 Arena through honest peer critiques, not vanity upvotes.
+              <p className="max-w-[780px] mx-auto text-sm sm:text-base text-zinc-300 leading-relaxed font-sans tracking-wide hero-desc">
+                Launch for free. Discover overlooked indie products. Join optional Arena battles for honest feedback.
               </p>
-
-              <div className="mt-8 flex flex-wrap justify-center gap-4 text-[10px] font-mono text-zinc-500 hero-stats">
+              <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-zinc-400 hero-stats">
                 <span className="bg-[#0b0b0c] border border-white/[0.05] px-2.5 py-1 rounded-md uppercase tracking-wider">
                   Products Submitted: <span className="text-white font-semibold">{products.length}</span>
                 </span>
@@ -1940,29 +2124,32 @@ export default function ArenaClient({
 
 
         {/* LIVE ARENA CLASHES (1v1 Live Showdowns) */}
-        {/* TODAY'S RELEASES (System Audit Logs Terminal Style Grid Layout) */}
-        <section id="launches-section" className="py-20 md:py-28">
+        {/* LATEST RELEASES (System Audit Logs Terminal Style Grid Layout) */}
+        <section id="launches-section" className="py-12 md:py-16">
           
-          <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div data-home-reveal="launches-heading" className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="text-left space-y-2">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
-                  TODAY&apos;S RELEASES
+                  LATEST LAUNCHES
                 </h2>
                 <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full animate-pulse flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
                   <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                  Live Feed: 24h Rolling
+                  Newest 50: Rolling
                 </span>
               </div>
               <p className="text-sm text-zinc-400 mt-2">
-                Upcoming products queued for matchmaking. Seamless 24h rolling waitlist stream.
+                Freshly launched by indie makers.
               </p>
             </div>
           </div>
-
-          {/* Audit logs stream table format only, strictly no cards */}
+          {/* Motion stops on hover or keyboard focus without an extra control. */}
           <div 
-            className="border border-white/[0.05] bg-[#070709]/40 rounded-md overflow-hidden h-[960px] relative"
+            data-home-reveal="launches-feed"
+            tabIndex={0}
+            aria-label="Latest products. Focus to pause scrolling."
+            onPointerDown={(event) => event.currentTarget.focus({ preventScroll: true })}
+            className="release-feed border border-white/[0.05] bg-[#070709]/40 rounded-md overflow-hidden h-[440px] sm:h-[520px] relative"
             style={{
               maskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
               WebkitMaskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
@@ -1985,10 +2172,14 @@ export default function ArenaClient({
               >
                 {/* Double the list to make seamless looping possible */}
                 {[...showcaseProducts, ...showcaseProducts].map((item, index) => {
+                  const website = publicHttpUrl(item.url);
                   return (
                     <div 
                       key={`${item.id}-dup-${index}`} 
-                      className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#0c0c0e]/80 transition duration-150 border-b border-white/[0.03] h-auto sm:h-[64px] box-border"
+                      data-feed-duplicate={index >= showcaseProducts.length || undefined}
+                      aria-hidden={index >= showcaseProducts.length || undefined}
+                      inert={index >= showcaseProducts.length || undefined}
+                      className="px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#0c0c0e]/80 transition duration-150 border-b border-white/[0.03] h-auto sm:min-h-[80px] box-border"
                     >
                       {/* Left segment */}
                       <div className="flex items-center gap-3 shrink-0">
@@ -2009,12 +2200,12 @@ export default function ArenaClient({
                       {/* Main Product Tagline truncate flex list */}
                       <div className="flex-1 min-w-0 text-left">
                         <div className="flex flex-wrap items-center gap-2">
-                          <a 
-                            href={`/products/${item.id}`}
+                          <Link
+                            href={`/products/${encodeURIComponent(item.id)}`}
                             className="font-bold text-white text-sm hover:underline hover:text-[#ffbe18] transition relative z-10 cursor-pointer"
                           >
                             {item.title}
-                          </a>
+                          </Link>
                           <span className="text-[10px] font-mono text-zinc-550">
                             by{" "}
                             <a 
@@ -2037,14 +2228,16 @@ export default function ArenaClient({
 
                       {/* Sandbox code base external sandbox link */}
                       <div className="shrink-0 flex items-center gap-6">
-                        <a 
-                          href={item.url}
-                          target="_blank" 
-                          rel="noopener"
-                          className="text-[10px] font-mono text-zinc-500 hover:text-white inline-flex items-center gap-1"
-                        >
-                          Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-650" />
-                        </a>
+                        {website ? (
+                          <a
+                            href={website}
+                            target="_blank"
+                            rel="noopener"
+                            className="text-[10px] font-mono text-zinc-500 hover:text-white inline-flex items-center gap-1"
+                          >
+                            Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-650" />
+                          </a>
+                        ) : null}
 
 
                       </div>
@@ -2057,25 +2250,31 @@ export default function ArenaClient({
           </div>
 
           <div className="mt-6 text-center">
-            <a 
-              href="#champions-section"
+            <Link
+              href="/products"
               className="inline-flex items-center gap-2 text-xs font-mono text-zinc-500 hover:text-white transition"
               onClick={() => synthClick(280, "sine", 0.05)}
             >
-              View past champions and hall of valor →
-            </a>
+              Browse all products →
+            </Link>
           </div>
         </section>
 
+        <FairDiscoverySection
+          products={products}
+          renderLogo={renderLogo}
+          onAdvance={handleDiscoveryAdvance}
+        />
+
         <section id="arena-section" className="scroll-mt-20 py-20 md:py-28 relative border-t border-white/[0.05]">
           
-          <div className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div data-home-reveal="arena-heading" className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
-                LIVE ARENA MATCHUPS
+                ARENA · PRODUCT BATTLES
               </h2>
               <p className="text-xs text-zinc-500 mt-2">
-                Skins in the game. Inspect core trade-offs, voice your technical feedback, and vote to declare champions.
+                Two products. Honest feedback. Your vote.
               </p>
             </div>
             {bracket && bracket.status === "active" && (
@@ -2089,11 +2288,17 @@ export default function ArenaClient({
           </div>
 
           {/* Arena Queue Status Bar */}
-          <div className="mb-8 bg-[#0b0b0d] border border-white/[0.06] rounded-md px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div data-home-reveal="arena-status" className="mb-8 bg-[#0b0b0d] border border-white/[0.06] rounded-md px-5 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4">
               <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                Season <span className="text-white font-bold">{currentSeasonStr}</span>
+                {bracket && activeBracketSize < 16 ? "Adaptive Run" : <>Season <span className="text-white font-bold">{currentSeasonStr}</span></>}
               </span>
+              {bracket ? (
+                <>
+                  <span className="text-white/10">|</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#A78BFA]">{getArenaFormatName(activeBracketSize)}</span>
+                </>
+              ) : null}
               <span className="text-white/10">|</span>
               {bracket && (bracket.status === "active" || bracket.status === "preparing") ? (
                 <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -2109,11 +2314,20 @@ export default function ArenaClient({
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                Next Season: <span className="text-white font-bold">{Math.min(queuedProducts.length, 16)}</span>/16
-                {queuedProducts.length > 16 && (
+                Queue: <span className="text-white font-bold">{queuedProducts.length}</span>
+                {!bracket && queuedProducts.length >= 16 ? (
+                  <> <span className="text-zinc-700">|</span> <span className="font-bold text-emerald-400">Locking championship</span></>
+                ) : !bracket && fallbackBracketSize ? (
+                  <> <span className="text-zinc-700">|</span> Daily auto-run: <span className="font-bold text-[#A78BFA]">{fallbackBracketSize} players</span> in <span className="font-bold text-zinc-300"><DailyArenaRunCountdown /></span></>
+                ) : !bracket ? (
+                  <> <span className="text-zinc-700">|</span> Daily minimum: <span className="font-bold text-zinc-300">2 players</span></>
+                ) : (
+                  <> <span className="text-zinc-700">|</span> Next full run starts at <span className="font-bold text-zinc-300">16</span></>
+                )}
+                {!bracket && queuedProducts.length > rosterTarget && (
                   <>
                     {" "}<span className="text-zinc-600">|</span>{" "}
-                    Waitlist: <span className="text-[#ffbe18] font-bold">+{queuedProducts.length - 16}</span> in line ({Math.floor(queuedProducts.length / 16)} season{Math.floor(queuedProducts.length / 16) > 1 ? 's' : ''} queued)
+                    FIFO carryover: <span className="text-[#ffbe18] font-bold">+{queuedProducts.length - rosterTarget}</span> first in the next run
                   </>
                 )}
               </span>
@@ -2121,8 +2335,8 @@ export default function ArenaClient({
                 <div 
                   className="h-full rounded-full transition-all duration-500 ease-out"
                   style={{ 
-                    width: `${Math.min((queuedProducts.length / 16) * 100, 100)}%`,
-                    backgroundColor: queuedProducts.length >= 16 ? '#34d399' : '#a78bfa'
+                    width: `${Math.min((queuedProducts.length / (bracket ? 16 : rosterTarget)) * 100, 100)}%`,
+                    backgroundColor: queuedProducts.length >= (bracket ? 16 : rosterTarget) ? '#34d399' : '#a78bfa'
                   }}
                 />
               </div>
@@ -2150,7 +2364,8 @@ export default function ArenaClient({
 
                 <div className="space-y-3 max-h-[70vh] lg:max-h-[85vh] overflow-y-auto pr-2 custom-scrollbar">
                   {currentRoundMatches.map((duel) => {
-                    const isDuelActive = !duel.winnerId;
+                    const isDuelActive = !duel.winnerId && activeRoundRemainingMs > 0;
+                    const awaitingSettlement = !duel.winnerId && activeRoundRemainingMs <= 0;
                     const isSelected = activeMatch?.id === duel.id;
                     const sumVotes = duel.votesA + duel.votesB;
                     const ratioA = sumVotes > 0 ? Math.round((duel.votesA / sumVotes) * 100) : 50;
@@ -2177,7 +2392,7 @@ export default function ArenaClient({
                             </span>
                           ) : (
                             <span className="text-zinc-500 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.2 rounded uppercase tracking-wider">
-                              Concluded
+                              {awaitingSettlement ? "Awaiting settlement" : "Concluded"}
                             </span>
                           )}
                         </div>
@@ -2230,7 +2445,8 @@ export default function ArenaClient({
                 {activeMatch ? (
                   (() => {
                     const duel = activeMatch;
-                    const isDuelActive = !duel.winnerId;
+                    const isDuelActive = !duel.winnerId && activeRoundRemainingMs > 0;
+                    const awaitingSettlement = !duel.winnerId && activeRoundRemainingMs <= 0;
                     const sumVotes = duel.votesA + duel.votesB;
                     const ratioA = sumVotes > 0 ? Math.round((duel.votesA / sumVotes) * 100) : 50;
                     const ratioB = sumVotes > 0 ? 100 - ratioA : 50;
@@ -2262,7 +2478,7 @@ export default function ArenaClient({
                               </span>
                             ) : (
                               <span className="text-[9px] font-mono text-zinc-500 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded uppercase tracking-wider">
-                                CONCLUDED
+                                {awaitingSettlement ? "AWAITING SETTLEMENT" : "CONCLUDED"}
                               </span>
                             )}
                           </div>
@@ -2284,9 +2500,9 @@ export default function ArenaClient({
                               <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productA?.tagline}</p>
                             </div>
                             <div className="mt-4 space-y-2">
-                              {duel.productA?.url && (
+                              {publicHttpUrl(duel.productA?.url) && (
                                 <a
-                                  href={duel.productA.url}
+                                  href={publicHttpUrl(duel.productA?.url)}
                                   target="_blank"
                                   rel="noopener"
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
@@ -2314,7 +2530,7 @@ export default function ArenaClient({
                                     : "bg-white text-black hover:bg-zinc-200"
                                 }`}
                               >
-                                {duel.winnerId === duel.productA?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR A" : "DEFEATED"}
+                                {duel.winnerId === duel.productA?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR A" : awaitingSettlement ? "VOTING CLOSED" : "DEFEATED"}
                               </button>
                             </div>
                           </div>
@@ -2342,9 +2558,9 @@ export default function ArenaClient({
                               <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productB?.tagline}</p>
                             </div>
                             <div className="mt-4 space-y-2">
-                              {duel.productB?.url && (
+                              {publicHttpUrl(duel.productB?.url) && (
                                 <a
-                                  href={duel.productB.url}
+                                  href={publicHttpUrl(duel.productB?.url)}
                                   target="_blank"
                                   rel="noopener"
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
@@ -2372,7 +2588,7 @@ export default function ArenaClient({
                                     : "bg-white text-black hover:bg-zinc-200"
                                 }`}
                               >
-                                {duel.winnerId === duel.productB?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR B" : "DEFEATED"}
+                                {duel.winnerId === duel.productB?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR B" : awaitingSettlement ? "VOTING CLOSED" : "DEFEATED"}
                               </button>
                             </div>
                           </div>
@@ -2484,37 +2700,42 @@ export default function ArenaClient({
                     strokeWidth="6" 
                     fill="transparent" 
                     strokeDasharray={390}
-                    strokeDashoffset={390 - (390 * Math.min(lineupProducts.length, 16)) / 16}
+                    strokeDashoffset={390 - (390 * Math.min(lineupProducts.length, rosterTarget)) / rosterTarget}
                     className="transition-all duration-1000 ease-out"
                   />
                 </svg>
                 <div className="absolute inset-0 flex flex-col justify-center items-center">
-                  {lineupProducts.length >= 16 ? (
+                  {bracket?.status === "preparing" ? (
                     <>
                       <span className="text-xl font-bold text-white font-mono tracking-tight">{formatToHMS(countdownToMidnightMs)}</span>
                       <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Starts In</span>
                     </>
                   ) : (
                     <>
-                      <span className="text-2xl font-semibold text-white">{lineupProducts.length} / 16</span>
+                      <span className="text-2xl font-semibold text-white">{Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget}</span>
                       <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Ready</span>
                     </>
                   )}
                 </div>
               </div>
 
-              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-white">Assembling Next Season</h2>
+              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-white">
+                {bracket?.status === "preparing" ? `${getArenaFormatName(activeBracketSize)} Ready` : "Assembling Next Arena"}
+              </h2>
               <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
-                Once 16 products are queued, the bracket generates automatically. When a season ends, the next one starts instantly if enough entries are waiting.
+                Sixteen products lock a Championship roster immediately, with voting opening at the next New York midnight. The daily cutoff also starts the largest ready 8, 4, or 2-product run automatically.
+              </p>
+              <p className="mt-3 text-[9px] font-mono uppercase tracking-wider text-zinc-600">
+                Tie rule: the higher verified vote total wins, and every vote contains two critiques. A tied count advances the earlier submission; exact timestamp ties use a stable product-ID decision. Zero-vote matches still advance.
               </p>
 
               {/* Roster Slots Grid (Street Fighter style character select) */}
               <div className="mt-8 pt-6 border-t border-white/[0.05] max-w-md mx-auto">
                 <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-4">
-                  Roster Lineup ({lineupProducts.length} / 16)
+                  Roster Lineup ({Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget})
                 </span>
-                <div className="grid grid-cols-8 gap-2.5 justify-center">
-                  {Array.from({ length: 16 }).map((_, idx) => {
+                <div className="grid gap-2.5 justify-center" style={{ gridTemplateColumns: `repeat(${Math.min(rosterTarget, 8)}, 2.75rem)` }}>
+                  {Array.from({ length: rosterTarget }).map((_, idx) => {
                     const prod = lineupProducts[idx];
                     if (prod) {
                       return (
@@ -2550,7 +2771,7 @@ export default function ArenaClient({
 
         {/* THE HALL OF VALOR — HISTORIC CHAMPIONS */}
         <section id="champions-section" className="scroll-mt-20 py-20 md:py-28 border-t border-white/[0.05]">
-          <div className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div data-home-reveal="champions-heading" className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="text-left">
               <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
                 THE HALL OF VALOR
@@ -2598,14 +2819,16 @@ export default function ArenaClient({
                         {c.makerTwitter}
                       </a>
                     </div>
-                    <a 
-                      href={c.url}
-                      target="_blank"
-                      rel="noopener"
-                      className="text-[10px] uppercase font-mono underline text-white hover:text-zinc-300 transition-colors"
-                    >
-                      DEMO
-                    </a>
+                    {publicHttpUrl(c.url) ? (
+                      <a
+                        href={publicHttpUrl(c.url)}
+                        target="_blank"
+                        rel="noopener"
+                        className="text-[10px] uppercase font-mono underline text-white hover:text-zinc-300 transition-colors"
+                      >
+                        DEMO
+                      </a>
+                    ) : null}
                   </div>
                 </div>
               ))}
@@ -2623,7 +2846,7 @@ export default function ArenaClient({
 
         {/* HOW IT WORKS SECTION */}
         <section id="how-it-works-section" className="scroll-mt-20 py-16 border-t border-white/[0.05]">
-          <div className="mb-12">
+          <div data-home-reveal="how-heading" className="mb-12">
             <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
               HOW IT WORKS
             </h2>
@@ -2632,7 +2855,7 @@ export default function ArenaClient({
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div data-home-reveal="how-steps" className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
             {/* Step 1 */}
             <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-all duration-200">
@@ -2645,7 +2868,7 @@ export default function ArenaClient({
                   SUBMIT & QUEUE
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
-                  Submit your project for free. Once registered, head over to &quot;My Console&quot; to queue it for the 1v1 Arena matchmaking.
+                  Submit for free, then opt into matchmaking from My Console. Sixteen entries lock a Championship roster automatically; otherwise the daily cutoff opens the largest ready 8, 4, or 2-product FIFO run.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
@@ -2711,26 +2934,18 @@ export default function ArenaClient({
             </a>
           </div>
           <div className="flex items-center gap-6 font-medium">
-            <a
+            <Link
               href="/privacy"
-              onClick={(event) => {
-                event.preventDefault();
-                setIsPrivacyOpen(true);
-              }}
               className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
             >
               Privacy Policy
-            </a>
-            <a
+            </Link>
+            <Link
               href="/terms"
-              onClick={(event) => {
-                event.preventDefault();
-                setIsTermsOpen(true);
-              }}
               className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
             >
               Terms of Use
-            </a>
+            </Link>
             <a 
               href="mailto:support@maber.xyz" 
               className="hover:text-white transition"
@@ -2741,6 +2956,7 @@ export default function ArenaClient({
         </div>
       </footer>
       </div>
+      )}
 
       {/* ========================================================
           Tactile Slide-over Drawer for new submissions
@@ -2748,66 +2964,53 @@ export default function ArenaClient({
       {isSubmitOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={closeSubmitModal}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
+          <div ref={submitDialogRef} role="dialog" aria-modal="true" aria-labelledby="product-form-title" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-md border border-white/[0.12] bg-[#0b0b0d] p-4 sm:p-6 text-sm text-[#E4E4E7] relative z-10 space-y-4">
             <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
-              <h3 className="text-sm font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
-                <PlusIcon className="w-4 h-4 text-[#A78BFA]" /> SUBMIT PROJECT
+              <h3 id="product-form-title" className="text-base font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
+                <PlusIcon className="w-4 h-4 text-[#A78BFA]" /> {editingProduct ? "EDIT PRODUCT PROFILE" : "SUBMIT PROJECT"}
               </h3>
               <button 
                 type="button"
                 onClick={closeSubmitModal}
                 disabled={isSubmittingProduct}
                 className="text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label="Close product submission"
+                aria-label={editingProduct ? "Close product editor" : "Close product submission"}
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
             </div>
 
             <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
-              Enlist your product launch. Once verified and 16 entries are queued, matches generate automatically.
+              {editingProduct
+                ? "Complete this permanent profile without changing its URL, submission date, votes, or Arena history."
+                : "Publish a permanent product profile first. Arena participation is optional and can be enabled from your console after submission."}
             </p>
 
             {/* Auth Status Segment */}
+            {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
             <div className="p-4 bg-[#141417] border border-white/[0.06] rounded-md flex flex-col gap-3 text-left">
               <div className="flex items-center space-x-3">
                 <span className="w-8 h-8 bg-[#0b0b0d] border border-white/[0.06] flex items-center justify-center text-sm rounded-md">
                   {userAuthType === "github" ? "🐙" : "🔑"}
                 </span>
                 <div>
-                  <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block">IDENTITY VERIFICATION</span>
+                  <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block">ACCOUNT</span>
                   {userLoggedIn ? (
                     <span className="text-xs font-semibold text-white">
                       {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                     </span>
                   ) : (
-                    <span className="text-xs text-red-500 font-bold uppercase">Unverified</span>
+                    <span className="text-xs text-zinc-300 font-bold uppercase">{authReady ? "Sign in to publish" : "Checking sign-in…"}</span>
                   )}
                 </div>
               </div>
               {!userLoggedIn ? (
                 <div className="flex gap-2 w-full">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAuthOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-3 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
-                  >
-                    Link Google
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsAuthOpen(true);
-                    }}
-                    className="flex-1 py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
-                  >
-                    Link GitHub
-                  </button>
+<AuthProviderButton provider="google" busy={signingInProvider === "google"} disabled={!authReady || Boolean(signingInProvider)} onClick={() => void beginOAuthSignIn("google")} />
+<AuthProviderButton provider="github" busy={signingInProvider === "github"} disabled={!authReady || Boolean(signingInProvider)} onClick={() => void beginOAuthSignIn("github")} />
                 </div>
               ) : (
                 <button
@@ -2837,11 +3040,12 @@ export default function ArenaClient({
               className="space-y-4 text-left"
             >
               <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
+                <label htmlFor="product-title" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. SiteShot 📸"
+                  id="product-title"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
@@ -2849,11 +3053,12 @@ export default function ArenaClient({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">One-Sentence Tagline *</label>
+                <label htmlFor="product-tagline" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">One-Sentence Tagline *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. High-def screenshot API with full-page scrolling..."
+                  id="product-tagline"
                   value={newTagline}
                   onChange={(e) => setNewTagline(e.target.value)}
                   className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
@@ -2861,34 +3066,125 @@ export default function ArenaClient({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Demo URL *</label>
+                <label htmlFor="product-url" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Demo URL *</label>
                 <input
-                  type="text"
+                  type="url"
+                  inputMode="url"
+                  autoCapitalize="none"
                   required
                   placeholder="https://siteshot.net"
+                  id="product-url"
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
                   className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
                 />
               </div>
 
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="product-description" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Description *</label>
+                  <span className="font-mono text-[9px] text-zinc-600">{newDescription.length}/2000</span>
+                </div>
+                <textarea
+                  required
+                  minLength={80}
+                  maxLength={2000}
+                  rows={5}
+                  placeholder="Explain what the product does, who it helps, and what makes it different. This becomes the main content of your permanent profile."
+                  id="product-description"
+                  value={newDescription}
+                  onChange={(e) => setNewDescription(e.target.value)}
+                  className="w-full resize-y rounded-md border border-white/[0.08] bg-black p-2.5 text-xs leading-5 text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-white/[0.2]"
+                />
+                <p className="text-[10px] leading-4 text-zinc-600">Minimum 80 characters. Write for humans—no keyword stuffing.</p>
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing</label>
+                <select
+                  id="product-pricing"
+                  value={newPricingModel}
+                  onChange={(e) => setNewPricingModel(e.target.value as PricingModel)}
+                  className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none focus:border-white/[0.2]"
+                >
+                  {PRICING_MODELS.map((pricing) => <option key={pricing.value} value={pricing.value}>{pricing.label}</option>)}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="product-audience" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Target Audience</label>
+                  <input
+                    type="text"
+                    maxLength={300}
+                    placeholder="e.g. Solo SaaS founders"
+                    id="product-audience"
+                  value={newTargetAudience}
+                    onChange={(e) => setNewTargetAudience(e.target.value)}
+                    className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-800 focus:border-white/[0.2]"
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label htmlFor="product-platforms" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Platforms</label>
+                  <input
+                    type="text"
+                    maxLength={320}
+                    placeholder="Web, iOS, Windows"
+                    id="product-platforms"
+                  value={newPlatforms}
+                    onChange={(e) => setNewPlatforms(e.target.value)}
+                    className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-800 focus:border-white/[0.2]"
+                  />
+                </div>
+              </div>
+
+              <details className="rounded-md border border-white/[0.07] bg-white/[0.02] p-3">
+                <summary className="cursor-pointer select-none text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Tell the maker story (optional)</summary>
+                <div className="mt-3 space-y-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest" htmlFor="product-story">Why did you build it?</label>
+                    <textarea
+                      maxLength={1000}
+                      rows={3}
+                      placeholder="The problem, moment, or personal experience behind the product."
+                      id="product-story" value={newMakerStory}
+                      onChange={(e) => setNewMakerStory(e.target.value)}
+                      className="w-full resize-y rounded-md border border-white/[0.08] bg-black p-2.5 text-xs leading-5 text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-white/[0.2]"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest" htmlFor="product-feedback">What feedback would help most?</label>
+                    <textarea
+                      maxLength={500}
+                      rows={2}
+                      placeholder="e.g. Is the onboarding clear? Would this workflow save you time?"
+                      id="product-feedback" value={newFeedbackRequest}
+                      onChange={(e) => setNewFeedbackRequest(e.target.value)}
+                      className="w-full resize-y rounded-md border border-white/[0.08] bg-black p-2.5 text-xs leading-5 text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-white/[0.2]"
+                    />
+                  </div>
+                </div>
+              </details>
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Maker Name</label>
+                  <label htmlFor="product-maker" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Maker Name</label>
                   <input
                     type="text"
                     placeholder="Sarah"
-                    value={newMaker}
+                    id="product-maker"
+                  value={newMaker}
                     onChange={(e) => setNewMaker(e.target.value)}
                     className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
-                  <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Twitter (X)</label>
+                  <label htmlFor="product-twitter" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Twitter (X)</label>
                   <input
                     type="text"
                     placeholder="@sarah_dev"
-                    value={newTwitter}
+                    id="product-twitter"
+                  value={newTwitter}
                     onChange={(e) => setNewTwitter(e.target.value)}
                     className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
                   />
@@ -2896,7 +3192,7 @@ export default function ArenaClient({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Logo * (Max 2MB)</label>
+                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Logo (Max 2MB)</label>
                 <div className="flex items-center space-x-4">
                   <label 
                     htmlFor="logo-upload" 
@@ -2974,13 +3270,13 @@ export default function ArenaClient({
                   <div className="text-left flex-1">
                     <span className="text-[9px] font-mono text-zinc-500 uppercase block mb-0.5">Image Specs</span>
                     <p className="text-[10px] text-zinc-500 leading-normal">
-                      PNG, JPG, or SVG image. If skipped, default 🚀 rocket booster is used.
+                      PNG, JPG, or WebP image. If skipped, default 🚀 rocket booster is used.
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
+              <div className="sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-white/[0.1] bg-[#0b0b0d] py-4">
                 <button
                   type="button"
                   onClick={closeSubmitModal}
@@ -2994,7 +3290,7 @@ export default function ArenaClient({
                   disabled={isSubmittingProduct}
                   className="min-w-28 px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer disabled:cursor-wait disabled:bg-zinc-400 disabled:text-zinc-700"
                 >
-                  {isSubmittingProduct ? "Submitting…" : "Submit Project"}
+                  {isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : (editingProduct ? "Save Changes" : "Submit Project")}
                 </button>
               </div>
             </form>
@@ -3008,7 +3304,7 @@ export default function ArenaClient({
       {votingMatch && votingTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => {
               setVotingMatch(null);
               setVotingTarget(null);
@@ -3017,13 +3313,13 @@ export default function ArenaClient({
               setVoteError("");
             }}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
+          <div ref={voteDialogRef} role="dialog" aria-modal="true" aria-label="Vote and give feedback" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-sm space-y-4 text-[#E4E4E7]">
             <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
               <h3 className="text-sm font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
                 <GitCommitIcon className="w-4 h-4 text-cyan-400" /> DUELING VOTE BOX
               </h3>
               <button 
-                onClick={() => {
+                aria-label="Close voting" onClick={() => {
                   setVotingMatch(null);
                   setVotingTarget(null);
                   setVoteWinnerFeedback("");
@@ -3042,10 +3338,11 @@ export default function ArenaClient({
             </div>
 
             <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
-              We enforce a **Dual Feedback Loop**. To register your vote, you must bind your account and write positive critique for the winner AND constructive advice for the loser.
+              Tell one maker what works well and give the other a useful suggestion. Sign in to submit your vote with both pieces of feedback.
             </p>
 
             <form onSubmit={handleVoteSubmit} noValidate className="space-y-4 text-left">
+              {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
               {/* Auth Verification Card */}
               <div className="p-4 bg-[#141417] border border-white/[0.06] rounded-md flex flex-col gap-3">
                 <div className="flex items-center space-x-3">
@@ -3059,30 +3356,14 @@ export default function ArenaClient({
                         {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                       </span>
                     ) : (
-                      <span className="text-xs text-red-500 font-bold uppercase">Unauthenticated</span>
+                      <span className="text-xs text-zinc-300 font-bold uppercase">{authReady ? "Sign in to vote" : "Checking sign-in…"}</span>
                     )}
                   </div>
                 </div>
                 {!userLoggedIn ? (
                   <div className="flex gap-2 w-full">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAuthOpen(true);
-                      }}
-                      className="flex-1 py-1.5 px-3 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
-                    >
-                      Link Google
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAuthOpen(true);
-                      }}
-                      className="flex-1 py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-155 cursor-pointer"
-                    >
-                      Link GitHub
-                    </button>
+<AuthProviderButton provider="google" busy={signingInProvider === "google"} disabled={!authReady || Boolean(signingInProvider)} onClick={() => void beginOAuthSignIn("google")} />
+<AuthProviderButton provider="github" busy={signingInProvider === "github"} disabled={!authReady || Boolean(signingInProvider)} onClick={() => void beginOAuthSignIn("github")} />
                   </div>
                 ) : (
                   <button
@@ -3259,80 +3540,29 @@ export default function ArenaClient({
       {isAuthOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ zIndex: 100 }}>
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
-            onClick={() => {
-              setIsAuthOpen(false);
-            }}
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
+            onClick={closeAuthDialog}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-sm relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
-            <div className="flex justify-between items-center border-b border-white/[0.05] pb-3">
-              <h3 className="text-sm font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
-                <span>🔑 Link Identity</span>
+          <div ref={authDialogRef} role="dialog" aria-modal="true" aria-label="Sign in" tabIndex={-1} className="product-form-dialog auth-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto p-8 w-full max-w-sm relative z-10 text-sm text-[#E4E4E7]">
+            <div className="flex flex-col items-center text-center">
+              <ClashLogo size="md" />
+              <h3 className="mt-5 text-2xl font-semibold text-white tracking-tight">
+                <span>Welcome back.</span>
               </h3>
               <button 
-                onClick={() => {
-                  setIsAuthOpen(false);
-                }}
-                className="text-zinc-550 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
+                aria-label="Close sign in" onClick={closeAuthDialog}
+                className="auth-close absolute right-3 top-3 flex w-11 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.06] hover:text-white"
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
-              Connect your verified developer profile to authorize dual-critique voting in the combat arena. Real identity makes feedback globally verifiable and high-trust.
-            </p>
+            {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
 
-            <div className="space-y-3 pt-2">
-              <button
-                type="button"
-                onClick={async () => {
-                  if (supabase) {
-                    const { data, error } = await supabase.auth.signInWithOAuth({
-                      provider: 'google',
-                      options: {
-                        redirectTo: `${window.location.origin}/auth/callback`,
-                        skipBrowserRedirect: true,
-                      },
-                    });
-                    if (data?.url) {
-                      window.open(data.url, "_blank");
-                    }
-                    if (error) console.error("Google OAuth error:", error);
-                  } else {
-                    handleSandboxLogin("google");
-                    alert("Mock: Google authorization linked successfully!");
-                  }
-                }}
-                className="w-full py-2.5 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>🔑 CONNECT WITH GOOGLE</span>
-              </button>
+            <div className="space-y-3 mt-7">
+<AuthProviderButton provider="google" busy={signingInProvider === "google"} disabled={!authReady || Boolean(signingInProvider)} onClick={() => void beginOAuthSignIn("google")} />
  
-              <button
-                type="button"
-                onClick={async () => {
-                  if (supabase) {
-                    const { data, error } = await supabase.auth.signInWithOAuth({
-                      provider: 'github',
-                      options: {
-                        redirectTo: `${window.location.origin}/auth/callback`,
-                        skipBrowserRedirect: true,
-                      },
-                    });
-                    if (data?.url) {
-                      window.open(data.url, "_blank");
-                    }
-                    if (error) console.error("GitHub OAuth error:", error);
-                  } else {
-                    handleSandboxLogin("github");
-                    alert("Mock: GitHub authorization linked successfully!");
-                  }
-                }}
-                className="w-full py-2.5 bg-[#121215] text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold rounded-md transition duration-150 cursor-pointer flex items-center justify-center gap-2"
-              >
-                <span>🐙 CONNECT WITH GITHUB</span>
-              </button>
+<AuthProviderButton provider="github" busy={signingInProvider === "github"} disabled={!authReady || Boolean(signingInProvider)} onClick={() => void beginOAuthSignIn("github")} />
             </div>
           </div>
         </div>
@@ -3344,10 +3574,10 @@ export default function ArenaClient({
       {isSuccessOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ zIndex: 100 }}>
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => setIsSuccessOpen(false)}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-xs space-y-4 animate-scale-in text-center text-[#E4E4E7]">
+          <div ref={successDialogRef} role="dialog" aria-modal="true" aria-label="Confirmation" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-sm space-y-4 text-center text-[#E4E4E7]">
             
             <div className="w-10 h-10 bg-white/[0.02] border border-white/[0.06] rounded-md mx-auto flex items-center justify-center text-xl font-mono">
               🛡️
@@ -3403,10 +3633,10 @@ export default function ArenaClient({
       {isPrivacyOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ zIndex: 150 }}>
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => setIsPrivacyOpen(false)}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 text-[#E4E4E7]">
             <button 
               onClick={() => setIsPrivacyOpen(false)}
               className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
@@ -3512,10 +3742,10 @@ export default function ArenaClient({
       {isTermsOpen && (
         <div className="fixed inset-0 z-[150] flex items-center justify-center p-4" style={{ zIndex: 150 }}>
           <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in" 
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => setIsTermsOpen(false)}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 animate-scale-in text-[#E4E4E7]">
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 text-[#E4E4E7]">
             <button 
               onClick={() => setIsTermsOpen(false)}
               className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
@@ -3609,7 +3839,7 @@ export default function ArenaClient({
             className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-fade-in" 
             onClick={() => setActiveCardProduct(null)}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-xl p-5 w-full max-w-sm relative z-10 text-xs space-y-4 animate-scale-in text-left text-[#E4E4E7] shadow-2xl shadow-black/80">
+          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-xl p-5 w-full max-w-sm relative z-10 text-xs space-y-4 text-left text-[#E4E4E7] shadow-2xl shadow-black/80">
             {/* Top close button */}
             <button 
               onClick={() => setActiveCardProduct(null)}
@@ -3636,7 +3866,7 @@ export default function ArenaClient({
             </p>
 
             {/* URL Link Section */}
-            <div className="bg-white/[0.02] border border-white/[0.05] p-3 rounded-lg flex items-center justify-between">
+            {publicHttpUrl(activeCardProduct.url) ? <div className="bg-white/[0.02] border border-white/[0.05] p-3 rounded-lg flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
                   <circle cx="12" cy="12" r="10"></circle>
@@ -3646,7 +3876,7 @@ export default function ArenaClient({
                 <span className="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">LIVE DEMO URL</span>
               </div>
               <a 
-                href={activeCardProduct.url} 
+                href={publicHttpUrl(activeCardProduct.url)}
                 target="_blank" 
                 rel="noopener"
                 onClick={() => synthClick(400, "sine", 0.08)}
@@ -3654,7 +3884,7 @@ export default function ArenaClient({
               >
                 VIEW DEMO <span className="group-hover:translate-x-0.5 transition-transform">➔</span>
               </a>
-            </div>
+            </div> : null}
 
             {/* Maker details footer */}
             <div className="pt-3 border-t border-dashed border-white/[0.08] flex items-center justify-between text-[10px] text-zinc-500 font-mono">

@@ -1,5 +1,7 @@
 import { Product, Match, Bracket } from "./mockData";
 import { supabase, DB_PREFIX, publicArenaTable } from "./supabaseClient";
+import { getNextNewYorkMidnightIso, getRoundEndAtIso } from "./timeHelpers";
+import { compareArenaQueue } from "./discoveryRanking";
 
 const PRODUCTS_KEY = "arena_products_v1";
 const BRACKET_KEY = "arena_bracket_v1";
@@ -111,20 +113,61 @@ export function saveBracket(bracket: Bracket | null) {
   }
 }
 
-export function buildInitialBracket(products: Product[]): { bracket: Bracket; updatedProducts: Product[] } {
+export type BracketSize = 2 | 4 | 8 | 16;
+
+export function getInitialRoundNumber(bracketSize: BracketSize): 1 | 2 | 3 | 4 {
+  if (bracketSize === 16) return 1;
+  if (bracketSize === 8) return 2;
+  if (bracketSize === 4) return 3;
+  return 4;
+}
+
+export function getBracketSize(bracket: Bracket): BracketSize {
+  if ([2, 4, 8, 16].includes(bracket.bracketSize || 0)) return bracket.bracketSize as BracketSize;
+  if (bracket.round1.length) return 16;
+  if (bracket.round2.length) return 8;
+  if (bracket.round3.length) return 4;
+  return 2;
+}
+
+export function getRoundMatches(bracket: Bracket, round: number): Match[] {
+  if (round === 1) return bracket.round1;
+  if (round === 2) return bracket.round2;
+  if (round === 3) return bracket.round3;
+  if (round === 4) return bracket.round4;
+  return [];
+}
+
+export function getInitialRoundMatches(bracket: Bracket): Match[] {
+  return getRoundMatches(bracket, getInitialRoundNumber(getBracketSize(bracket)));
+}
+
+export function getArenaFormatName(bracketSize: BracketSize): string {
+  if (bracketSize === 16) return "Championship Season";
+  if (bracketSize === 8) return "Arena Cup";
+  if (bracketSize === 4) return "Mini Clash";
+  return "Arena Duel";
+}
+
+export function buildInitialBracket(
+  products: Product[],
+  bracketSize: BracketSize = 16,
+  startImmediately = false,
+): { bracket: Bracket; updatedProducts: Product[] } {
   const waitingProducts = products
     .filter(p => p.queueStatus === "waiting" && (p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))))
-    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime());
-  const activeProducts = waitingProducts.slice(0, 16);
-  if (activeProducts.length < 16) {
-    throw new Error("At least 16 enqueued products are required to start a bracket.");
+    .sort(compareArenaQueue);
+  const activeProducts = waitingProducts.slice(0, bracketSize);
+  if (activeProducts.length < bracketSize) {
+    throw new Error(`At least ${bracketSize} enqueued products are required to start this bracket.`);
   }
   const bracketId = `b_${crypto.randomUUID().replaceAll("-", "")}`;
-  const round1: Match[] = [];
-  for (let i = 0; i < 8; i++) {
-    round1.push({
-      id: `${bracketId}_r1_m${i + 1}`,
-      roundNumber: 1,
+  const initialRound = getInitialRoundNumber(bracketSize);
+  const initialMatches: Match[] = [];
+  for (let i = 0; i < bracketSize / 2; i++) {
+    initialMatches.push({
+      id: `${bracketId}_r${initialRound}_m${i + 1}`,
+      roundNumber: initialRound,
       productA: activeProducts[i * 2],
       productB: activeProducts[i * 2 + 1],
       votesA: 0,
@@ -135,12 +178,17 @@ export function buildInitialBracket(products: Product[]): { bracket: Bracket; up
 
   const bracket: Bracket = {
     id: bracketId,
-    round1,
-    round2: [],
-    round3: [],
-    round4: [],
-    status: "preparing",
-    roundStartedAt: new Date().toISOString()
+    round1: initialRound === 1 ? initialMatches : [],
+    round2: initialRound === 2 ? initialMatches : [],
+    round3: initialRound === 3 ? initialMatches : [],
+    round4: initialRound === 4 ? initialMatches : [],
+    status: startImmediately ? "active" : "preparing",
+    roundStartedAt: new Date().toISOString(),
+    roundEndsAt: startImmediately
+      ? getRoundEndAtIso(initialRound)
+      : getNextNewYorkMidnightIso(),
+    bracketSize,
+    arenaScope: "global",
   };
 
   const activeIds = new Set(activeProducts.map(p => p.id));
@@ -188,19 +236,16 @@ export function injectMockVotes(bracket: Bracket): Bracket {
 // 获取当前比赛进行到第几轮
 export function getActiveRound(bracket: Bracket): number {
   if (bracket.status !== "active") return 0;
-  if (bracket.round4.length > 0 && bracket.round4[0].winnerId) return 4;
   if (bracket.round4.length > 0) return 4;
-  if (bracket.round3.length > 0 && bracket.round3[0].winnerId && bracket.round3[1].winnerId) return 4;
   if (bracket.round3.length > 0) return 3;
-  if (bracket.round2.length > 0 && bracket.round2[0].winnerId && bracket.round2[1].winnerId && bracket.round2[2].winnerId && bracket.round2[3].winnerId) return 3;
   if (bracket.round2.length > 0) return 2;
-  if (bracket.round1.every(m => m.winnerId)) return 2;
-  return 1;
+  return bracket.round1.length > 0 ? 1 : 0;
 }
 
 // 推进比赛轮次
 export function advanceTournamentRound(bracket: Bracket): Bracket {
   const currentRound = getActiveRound(bracket);
+  if (currentRound < 1 || currentRound > 4) return bracket;
   bracket.roundStartedAt = new Date().toISOString();
 
   const settleMatches = (matches: Match[]): Match[] => {
@@ -224,56 +269,13 @@ export function advanceTournamentRound(bracket: Bracket): Bracket {
     });
   };
 
-  if (currentRound === 1) {
-    bracket.round1 = settleMatches(bracket.round1);
-    const winners = bracket.round1.map(m => m.winnerId === m.productA.id ? m.productA : m.productB);
-    const round2: Match[] = [];
-    for (let i = 0; i < 4; i++) {
-      round2.push({
-        id: `${bracket.id}_r2_m${i + 1}`,
-        roundNumber: 2,
-        productA: winners[i * 2],
-        productB: winners[i * 2 + 1],
-        votesA: 0,
-        votesB: 0,
-        votedUserIds: []
-      });
-    }
-    bracket.round2 = round2;
-  } 
-  else if (currentRound === 2) {
-    bracket.round2 = settleMatches(bracket.round2);
-    const winners = bracket.round2.map(m => m.winnerId === m.productA.id ? m.productA : m.productB);
-    const round3: Match[] = [];
-    for (let i = 0; i < 2; i++) {
-      round3.push({
-        id: `${bracket.id}_r3_m${i + 1}`,
-        roundNumber: 3,
-        productA: winners[i * 2],
-        productB: winners[i * 2 + 1],
-        votesA: 0,
-        votesB: 0,
-        votedUserIds: []
-      });
-    }
-    bracket.round3 = round3;
-  }
-  else if (currentRound === 3) {
-    bracket.round3 = settleMatches(bracket.round3);
-    const winners = bracket.round3.map(m => m.winnerId === m.productA.id ? m.productA : m.productB);
-    const round4: Match[] = [{
-      id: `${bracket.id}_r4_m1`,
-      roundNumber: 4,
-      productA: winners[0],
-      productB: winners[1],
-      votesA: 0,
-      votesB: 0,
-      votedUserIds: []
-    }];
-    bracket.round4 = round4;
-  }
-  else if (currentRound === 4) {
-    bracket.round4 = settleMatches(bracket.round4);
+  const settledMatches = settleMatches(getRoundMatches(bracket, currentRound));
+  if (currentRound === 1) bracket.round1 = settledMatches;
+  else if (currentRound === 2) bracket.round2 = settledMatches;
+  else if (currentRound === 3) bracket.round3 = settledMatches;
+  else bracket.round4 = settledMatches;
+
+  if (currentRound === 4) {
     const finalWinner = bracket.round4[0].winnerId === bracket.round4[0].productA.id 
       ? bracket.round4[0].productA 
       : bracket.round4[0].productB;
@@ -282,13 +284,33 @@ export function advanceTournamentRound(bracket: Bracket): Bracket {
     bracket.winner = finalWinner;
 
     const products = loadProducts();
+    const participantIds = new Set(getInitialRoundMatches(bracket).flatMap((match) => [match.productA.id, match.productB.id]));
     const updated = products.map(p => {
-      if (bracket.round1.some(m => m.productA.id === p.id || m.productB.id === p.id)) {
+      if (participantIds.has(p.id)) {
         return { ...p, queueStatus: "completed" as const };
       }
       return p;
     });
     saveProducts(updated);
+  } else {
+    const winners = settledMatches.map((match) => match.winnerId === match.productA.id ? match.productA : match.productB);
+    const nextRound = currentRound + 1;
+    const nextMatches: Match[] = [];
+    for (let index = 0; index < winners.length / 2; index += 1) {
+      nextMatches.push({
+        id: `${bracket.id}_r${nextRound}_m${index + 1}`,
+        roundNumber: nextRound,
+        productA: winners[index * 2],
+        productB: winners[index * 2 + 1],
+        votesA: 0,
+        votesB: 0,
+        votedUserIds: [],
+      });
+    }
+    if (nextRound === 2) bracket.round2 = nextMatches;
+    else if (nextRound === 3) bracket.round3 = nextMatches;
+    else bracket.round4 = nextMatches;
+    bracket.roundEndsAt = getRoundEndAtIso(nextRound);
   }
 
   saveBracket(bracket);
@@ -351,7 +373,21 @@ export function toDbProduct(p: Product) {
     [`${DB_PREFIX}votes_count`]: p.votesCount,
     [`${DB_PREFIX}creator_uid`]: p.creator_uid || null,
     [`${DB_PREFIX}creator_username`]: p.creatorUsername || null,
-    [`${DB_PREFIX}arena_enqueued`]: p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false"))
+    [`${DB_PREFIX}arena_enqueued`]: p.arenaEnqueued ?? (!p.makerAvatar || !p.makerAvatar.includes("pushed=false")),
+    [`${DB_PREFIX}arena_enqueued_at`]: p.arenaEnqueuedAt || null,
+    [`${DB_PREFIX}description`]: p.description || null,
+    [`${DB_PREFIX}category`]: p.category || null,
+    [`${DB_PREFIX}pricing_model`]: p.pricingModel || "unspecified",
+    [`${DB_PREFIX}platforms`]: p.platforms || [],
+    [`${DB_PREFIX}target_audience`]: p.targetAudience || null,
+    [`${DB_PREFIX}maker_story`]: p.makerStory || null,
+    [`${DB_PREFIX}feedback_request`]: p.feedbackRequest || null,
+    [`${DB_PREFIX}published_at`]: p.publishedAt || p.submittedAt,
+    [`${DB_PREFIX}updated_at`]: p.updatedAt || p.submittedAt,
+    [`${DB_PREFIX}qualified_impressions`]: p.qualifiedImpressions || 0,
+    [`${DB_PREFIX}last_exposed_at`]: p.lastExposedAt || null,
+    [`${DB_PREFIX}exposure_status`]: p.exposureStatus || "new",
+    [`${DB_PREFIX}discovery_boost_until`]: p.discoveryBoostUntil || null
   };
 }
 
@@ -361,6 +397,10 @@ export function fromDbProduct(row: DatabaseRow): Product {
   const queueStatus = databaseString(row, `${DB_PREFIX}queue_status`);
   const makerAvatar = databaseString(row, `${DB_PREFIX}maker_avatar`);
   const arenaEnqueued = row[`${DB_PREFIX}arena_enqueued`];
+  const category = databaseString(row, `${DB_PREFIX}category`);
+  const pricingModel = databaseString(row, `${DB_PREFIX}pricing_model`);
+  const platforms = row[`${DB_PREFIX}platforms`];
+  const exposureStatus = databaseString(row, `${DB_PREFIX}exposure_status`);
   return {
     id: databaseString(row, `${DB_PREFIX}id`),
     title: databaseString(row, `${DB_PREFIX}title`, "Untitled product"),
@@ -378,7 +418,27 @@ export function fromDbProduct(row: DatabaseRow): Product {
     creatorUsername: databaseString(row, `${DB_PREFIX}creator_username`) || undefined,
     arenaEnqueued: typeof arenaEnqueued === "boolean"
       ? arenaEnqueued
-      : (!makerAvatar || !makerAvatar.includes("pushed=false"))
+      : (!makerAvatar || !makerAvatar.includes("pushed=false")),
+    arenaEnqueuedAt: databaseString(row, `${DB_PREFIX}arena_enqueued_at`) || undefined,
+    description: databaseString(row, `${DB_PREFIX}description`) || undefined,
+    category: ["ai-tools", "developer-tools", "productivity", "marketing", "design-tools", "video-tools", "founder-tools", "saas"].includes(category)
+      ? category as Product["category"]
+      : undefined,
+    pricingModel: ["unspecified", "free", "freemium", "paid", "open-source", "contact"].includes(pricingModel)
+      ? pricingModel as Product["pricingModel"]
+      : "unspecified",
+    platforms: Array.isArray(platforms) ? platforms.filter((item): item is string => typeof item === "string") : [],
+    targetAudience: databaseString(row, `${DB_PREFIX}target_audience`) || undefined,
+    makerStory: databaseString(row, `${DB_PREFIX}maker_story`) || undefined,
+    feedbackRequest: databaseString(row, `${DB_PREFIX}feedback_request`) || undefined,
+    publishedAt: databaseString(row, `${DB_PREFIX}published_at`) || undefined,
+    updatedAt: databaseString(row, `${DB_PREFIX}updated_at`) || undefined,
+    qualifiedImpressions: typeof row[`${DB_PREFIX}qualified_impressions`] === "number"
+      ? databaseNumber(row, `${DB_PREFIX}qualified_impressions`)
+      : undefined,
+    lastExposedAt: databaseString(row, `${DB_PREFIX}last_exposed_at`) || undefined,
+    exposureStatus: exposureStatus === "legacy_catchup" || exposureStatus === "needs_more_eyes" || exposureStatus === "evergreen" ? exposureStatus : "new",
+    discoveryBoostUntil: databaseString(row, `${DB_PREFIX}discovery_boost_until`) || undefined
   };
 }
 
@@ -500,6 +560,12 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
       status: bData[`${DB_PREFIX}status`],
       winner: finalWinner,
       roundStartedAt: bData[`${DB_PREFIX}round_started_at`],
+      roundEndsAt: bData[`${DB_PREFIX}round_ends_at`] || undefined,
+      bracketSize: [2, 4, 8, 16].includes(Number(bData[`${DB_PREFIX}bracket_size`]))
+        ? Number(bData[`${DB_PREFIX}bracket_size`]) as BracketSize
+        : undefined,
+      arenaScope: bData[`${DB_PREFIX}arena_scope`] === "category" ? "category" : "global",
+      categorySlug: bData[`${DB_PREFIX}category_slug`] || undefined,
       round1,
       round2,
       round3,
@@ -552,11 +618,15 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
   try {
     const { data: bData, error: bErr } = await supabase
       .from(publicArenaTable("brackets"))
-      .select(`${DB_PREFIX}winner_id`)
+      .select("*")
       .eq(`${DB_PREFIX}status`, "completed");
     
     if (bErr || !bData) return [];
     const winnerIds = bData
+      .filter(row => {
+        const size = Number((row as unknown as DatabaseRow)[`${DB_PREFIX}bracket_size`] || 16);
+        return size === 16;
+      })
       .map(row => String((row as unknown as DatabaseRow)[`${DB_PREFIX}winner_id`] || ""))
       .filter(Boolean);
     if (winnerIds.length === 0) return [];

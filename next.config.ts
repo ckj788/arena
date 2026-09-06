@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  allowedDevOrigins: ["127.0.0.1", "localhost"],
   async redirects() {
     return [
       {
@@ -21,15 +22,17 @@ const nextConfig: NextConfig = {
             value: [
               "default-src 'self'",
               "base-uri 'self'",
-              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com",
+              "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://vitals.vercel-insights.com https://va.vercel-scripts.com",
               "font-src 'self' data:",
               "form-action 'self'",
               "frame-ancestors 'none'",
               "img-src 'self' data: blob: https:",
               "object-src 'none'",
-              "script-src 'self' 'unsafe-inline'",
+              process.env.NODE_ENV === "production"
+                ? "script-src 'self' 'unsafe-inline' https://va.vercel-scripts.com"
+                : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://va.vercel-scripts.com",
               "style-src 'self' 'unsafe-inline'",
-              "upgrade-insecure-requests",
+              ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : []),
             ].join("; "),
           },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), browsing-topics=()" },

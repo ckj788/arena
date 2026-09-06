@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/app/components/NavigationLink";
 import type { Product } from "@/lib/mockData";
-import { fetchCloudProducts } from "@/lib/arenaStore";
+import { getPublicProducts } from "@/lib/server/publicSeoData";
 import {
   absoluteUrl,
   publicHttpUrl,
   serializeJsonLd,
   trustedProductImageUrl,
 } from "@/lib/site";
+import { categoryLabel } from "@/lib/productTaxonomy";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 const directoryDescription =
   "Discover newly launched indie products, visit their official websites, explore maker profiles, and follow real 1v1 arena results and builder feedback.";
@@ -51,7 +52,7 @@ function ProductMark({ product }: { product: Product }) {
 }
 
 export default async function ProductsPage() {
-  const products = (await fetchCloudProducts())
+  const products = (await getPublicProducts())
     .slice()
     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   const canonicalUrl = absoluteUrl("/products");
@@ -90,8 +91,9 @@ export default async function ProductsPage() {
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
           <Link href="/" className="text-xl font-semibold tracking-tight">INDIE CLASH</Link>
           <div className="flex items-center gap-3">
+            <Link href="/underrated" className="hidden text-xs text-zinc-400 transition hover:text-white sm:inline">Underrated</Link>
             <Link href="/#arena-section" className="hidden text-xs text-zinc-400 transition hover:text-white sm:inline">Live arena</Link>
-            <Link href="/" className="rounded-lg bg-[#ffbe18] px-4 py-2 text-xs font-semibold text-black">Submit a product</Link>
+            <Link href="/?submit=1" className="rounded-lg bg-[#ffbe18] px-4 py-2 text-xs font-semibold text-black">Submit a product</Link>
           </div>
         </div>
       </header>
@@ -129,27 +131,28 @@ export default async function ProductsPage() {
                 const submittedAt = new Date(product.submittedAt);
                 const hasDate = !Number.isNaN(submittedAt.getTime());
                 return (
-                  <article key={product.id} className="flex flex-col rounded-2xl border border-white/[0.07] bg-[#121215]/80 p-5 transition hover:-translate-y-0.5 hover:border-white/[0.15]">
+                  <article key={product.id} className="product-card relative flex flex-col rounded-2xl border border-white/[0.07] bg-[#121215]/80 p-5 transition hover:-translate-y-0.5 hover:border-white/[0.15]">
                     <div className="flex items-start gap-4">
-                      <Link href={`/products/${encodeURIComponent(product.id)}`} className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-black/25">
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-black/25">
                         <ProductMark product={product} />
-                      </Link>
+                      </span>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-lg font-semibold">
-                          <Link href={`/products/${encodeURIComponent(product.id)}`} className="transition hover:text-[#ffbe18]">{product.title}</Link>
+                          <Link href={`/products/${encodeURIComponent(product.id)}`} className="card-primary-link transition hover:text-[#ffbe18]">{product.title}</Link>
                         </h3>
                         <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-400">{product.tagline}</p>
                       </div>
                     </div>
                     <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.06] pt-4 text-xs text-zinc-500">
                       <span>By {product.makerName}</span>
+                      {product.category ? <Link href={`/categories/${product.category}`} className="card-secondary-link text-[#A78BFA] hover:underline">{categoryLabel(product.category)}</Link> : null}
                       {hasDate ? <time dateTime={submittedAt.toISOString()}>{submittedAt.toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}</time> : null}
                       <span>{product.votesCount} votes</span>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
-                      <Link href={`/products/${encodeURIComponent(product.id)}`} className="rounded-lg border border-white/[0.1] px-3 py-2 transition hover:bg-white/[0.05]">View product profile</Link>
+                      <span aria-hidden="true" className="inline-flex min-h-11 items-center text-zinc-300">View product →</span>
                       {website ? (
-                        <a href={website} target="_blank" rel="noopener" className="rounded-lg px-3 py-2 text-[#ffbe18] transition hover:bg-[#ffbe18]/10">
+                        <a href={website} target="_blank" rel="noopener" className="card-secondary-link rounded-lg px-3 py-2 text-[#ffbe18] transition hover:bg-[#ffbe18]/10">
                           Visit {product.title} official website ↗
                         </a>
                       ) : null}

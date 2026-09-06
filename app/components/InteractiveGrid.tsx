@@ -32,13 +32,16 @@ export default function InteractiveGrid() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let animationId: number;
+    let animationId = 0;
+    const motionPreference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let bounds = { width: 0, height: 0 };
     let sparks: Spark[] = [];
     let waves: Wave[] = [];
 
     const initCanvas = () => {
-      const dpr = window.devicePixelRatio || 1;
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       const rect = canvas.getBoundingClientRect();
+      bounds = { width: rect.width, height: rect.height };
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
       ctx.scale(dpr, dpr);
@@ -105,6 +108,7 @@ export default function InteractiveGrid() {
 
     const resizeObserver = new ResizeObserver(() => {
       initCanvas();
+      restart();
     });
     if (canvas.parentElement) {
       resizeObserver.observe(canvas.parentElement);
@@ -118,8 +122,9 @@ export default function InteractiveGrid() {
     let globalTime = 0;
 
     const draw = () => {
+      if (document.hidden) return;
       globalTime += 0.0025;
-      const rect = canvas.getBoundingClientRect();
+      const rect = bounds;
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       // Interpolate mouse movement to prevent any jittering
@@ -234,12 +239,16 @@ export default function InteractiveGrid() {
       });
 
       ctx.globalAlpha = 1.0;
-      animationId = requestAnimationFrame(draw);
+      if (!motionPreference.matches) animationId = requestAnimationFrame(draw);
     };
 
-    draw();
+    const restart = () => { cancelAnimationFrame(animationId); draw(); };
+    restart();
+    document.addEventListener("visibilitychange", restart);
+    motionPreference.addEventListener("change", restart);
 
     const handleMouseMove = (e: MouseEvent) => {
+      if (motionPreference.matches) return;
       const rect = canvas.getBoundingClientRect();
       mouseRef.current.x = e.clientX - rect.left;
       mouseRef.current.y = e.clientY - rect.top;
@@ -256,6 +265,8 @@ export default function InteractiveGrid() {
     return () => {
       cancelAnimationFrame(animationId);
       resizeObserver.disconnect();
+      document.removeEventListener("visibilitychange", restart);
+      motionPreference.removeEventListener("change", restart);
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseleave", handleMouseLeave);
     };
@@ -266,6 +277,7 @@ export default function InteractiveGrid() {
       <canvas
         ref={canvasRef}
         id="indieclash-bg-canvas"
+        aria-hidden="true"
         className="absolute inset-0 w-full h-full pointer-events-none mix-blend-screen opacity-[0.95]"
       />
     </div>

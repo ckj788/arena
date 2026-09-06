@@ -9,7 +9,7 @@ export async function GET(request: Request) {
   try {
     // Fail closed: CRON_SECRET is mandatory, not optional.
     requireCronSecret(request);
-    const result = await settleArenaIfDue();
+    const result = await settleArenaIfDue({ allowScheduledStart: true });
     if (result.changed) invalidateArenaPublic();
     return NextResponse.json(result);
   } catch (error) {

@@ -21,7 +21,21 @@ CREATE TABLE IF NOT EXISTS shipandbattle_products (
   shipandbattle_votes_count INT NOT NULL DEFAULT 0,
   shipandbattle_creator_uid UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   shipandbattle_creator_username TEXT,
-  shipandbattle_arena_enqueued BOOLEAN NOT NULL DEFAULT FALSE
+  shipandbattle_arena_enqueued BOOLEAN NOT NULL DEFAULT FALSE,
+  shipandbattle_arena_enqueued_at TIMESTAMPTZ,
+  shipandbattle_description TEXT,
+  shipandbattle_category TEXT CHECK (shipandbattle_category IS NULL OR shipandbattle_category IN ('ai-tools', 'developer-tools', 'productivity', 'marketing', 'design-tools', 'video-tools', 'founder-tools', 'saas')),
+  shipandbattle_pricing_model TEXT NOT NULL DEFAULT 'unspecified' CHECK (shipandbattle_pricing_model IN ('unspecified', 'free', 'freemium', 'paid', 'open-source', 'contact')),
+  shipandbattle_platforms TEXT[] NOT NULL DEFAULT '{}'::TEXT[],
+  shipandbattle_target_audience TEXT,
+  shipandbattle_maker_story TEXT,
+  shipandbattle_feedback_request TEXT,
+  shipandbattle_published_at TIMESTAMPTZ DEFAULT NOW(),
+  shipandbattle_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  shipandbattle_qualified_impressions INT NOT NULL DEFAULT 0,
+  shipandbattle_last_exposed_at TIMESTAMPTZ,
+  shipandbattle_exposure_status TEXT NOT NULL DEFAULT 'new' CHECK (shipandbattle_exposure_status IN ('new', 'legacy_catchup', 'needs_more_eyes', 'evergreen')),
+  shipandbattle_discovery_boost_until TIMESTAMPTZ
 );
 
 -- 2. shipandbattle_brackets 表 (存放晋级赛阶段状态)
@@ -31,6 +45,10 @@ CREATE TABLE IF NOT EXISTS shipandbattle_brackets (
   shipandbattle_winner_id TEXT REFERENCES shipandbattle_products(shipandbattle_id) ON DELETE SET NULL,
   shipandbattle_created_at TIMESTAMPTZ DEFAULT NOW(),
   shipandbattle_round_started_at TIMESTAMPTZ DEFAULT NOW(),
+  shipandbattle_round_ends_at TIMESTAMPTZ,
+  shipandbattle_bracket_size INT NOT NULL DEFAULT 16 CHECK (shipandbattle_bracket_size IN (2, 4, 8, 16)),
+  shipandbattle_arena_scope TEXT NOT NULL DEFAULT 'global' CHECK (shipandbattle_arena_scope IN ('global', 'category')),
+  shipandbattle_category_slug TEXT,
   shipandbattle_settlement_lock_token UUID,
   shipandbattle_settlement_lock_until TIMESTAMPTZ
 );

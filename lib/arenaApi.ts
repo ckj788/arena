@@ -29,7 +29,7 @@ async function fetchWithTimeout(
   }
 }
 
-async function authenticatedJson<T>(path: string, body?: unknown): Promise<T> {
+async function authenticatedJson<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
   if (!supabase) {
     throw new Error("Cloud mode is not configured.");
   }
@@ -42,12 +42,12 @@ async function authenticatedJson<T>(path: string, body?: unknown): Promise<T> {
   const response = await fetchWithTimeout(
     path,
     {
-      method: "POST",
+      method,
       headers: {
         Authorization: `Bearer ${data.session.access_token}`,
         "Content-Type": "application/json",
       },
-      body: body === undefined ? "{}" : JSON.stringify(body),
+      body: method === "GET" ? undefined : (body === undefined ? "{}" : JSON.stringify(body)),
     },
     20_000,
     "Unable to reach the product submission service. Please try again.",
@@ -69,6 +69,13 @@ export interface ProductSubmission {
   makerTwitter: string;
   makerAvatar: string;
   logo: string;
+  description: string;
+  category?: Product["category"];
+  pricingModel: NonNullable<Product["pricingModel"]>;
+  platforms: string[];
+  targetAudience: string;
+  makerStory: string;
+  feedbackRequest: string;
 }
 
 function imageDataUrlToBlob(value: string): Blob {
@@ -129,6 +136,26 @@ export async function submitArenaProduct(input: ProductSubmission): Promise<Prod
   return result.product;
 }
 
+export async function updateArenaProduct(productId: string, input: ProductSubmission): Promise<Product> {
+  const result = await authenticatedJson<{ product: Product }>(
+    `/api/arena/products/${encodeURIComponent(productId)}`,
+    input,
+    "PATCH",
+  );
+  return result.product;
+}
+
+export async function fetchOwnedArenaProductIds(): Promise<string[]> {
+  const result = await authenticatedJson<{ productIds: string[] }>("/api/arena/products/mine", undefined, "GET");
+  return Array.isArray(result.productIds) ? result.productIds.filter((id) => typeof id === "string") : [];
+}
+
+export async function fetchOwnedArenaProducts(): Promise<{ productIds: string[]; products: Product[] }> {
+  const result = await authenticatedJson<{ productIds?: string[]; products?: Product[] }>("/api/arena/products/mine", undefined, "GET");
+  if (!Array.isArray(result.productIds)) throw new Error("Unable to load your products. Please retry.");
+  return { productIds: result.productIds.filter((id) => typeof id === "string"), products: Array.isArray(result.products) ? result.products : [] };
+}
+
 export async function enqueueArenaProduct(productId: string): Promise<{ bracketStarted: boolean }> {
   return authenticatedJson(`/api/arena/products/${encodeURIComponent(productId)}/queue`);
 }
@@ -150,4 +177,19 @@ export async function castArenaVote(input: {
 
 export async function requestArenaSettlement(): Promise<void> {
   await authenticatedJson("/api/arena/settle");
+}
+
+export async function recordQualifiedExposure(productId: string): Promise<void> {
+  const response = await fetchWithTimeout(
+    "/api/arena/exposure",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productIds: [productId] }),
+      keepalive: true,
+    },
+    10_000,
+    "",
+  );
+  if (!response.ok) throw new Error("Unable to record exposure.");
 }

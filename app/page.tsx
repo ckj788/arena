@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { unstable_cache } from "next/cache";
 import ArenaClient from "./ArenaClient";
-import { fetchCloudProducts, fetchCloudPastChampions, fetchCloudBracket } from "@/lib/arenaStore";
+import { fetchCloudPastChampions, fetchCloudBracket } from "@/lib/arenaStore";
+import { getPublicProducts } from "@/lib/server/publicSeoData";
 import { absoluteUrl, serializeJsonLd, SITE_DESCRIPTION } from "@/lib/site";
 
 export const revalidate = 60;
 
 const getHomepageData = unstable_cache(async () => {
-  const products = await fetchCloudProducts();
+  const products = await getPublicProducts();
   const [pastChampions, bracket] = await Promise.all([
     fetchCloudPastChampions(products),
     fetchCloudBracket(products),
@@ -16,7 +17,7 @@ const getHomepageData = unstable_cache(async () => {
 // Keep the cache key versioned. The v2 entry may contain the temporary empty
 // fallback produced before the production-safe Supabase views were installed,
 // and Next's data cache persists across deployments.
-}, ["arena-home-v3"], { revalidate: 60, tags: ["arena-public"] });
+}, ["arena-home-v4"], { revalidate: 60, tags: ["arena-public"] });
 
 export const metadata: Metadata = {
   title: { absolute: "Discover New Indie Products | Indie Clash" },
@@ -30,6 +31,10 @@ export default async function Page() {
     pastChampions: initialPastChampions,
     bracket: initialBracket,
   } = await getHomepageData();
+  const latestProducts = initialProducts
+    .slice()
+    .sort((a, b) => new Date(b.publishedAt || b.submittedAt).getTime() - new Date(a.publishedAt || a.submittedAt).getTime())
+    .slice(0, 50);
 
   const homeJsonLd = {
     "@context": "https://schema.org",
@@ -57,7 +62,7 @@ export default async function Page() {
         isPartOf: { "@id": `${absoluteUrl("/")}#website` },
         mainEntity: {
           "@type": "ItemList",
-          itemListElement: initialProducts.slice(0, 30).map((product, index) => ({
+          itemListElement: latestProducts.map((product, index) => ({
             "@type": "ListItem",
             position: index + 1,
             url: absoluteUrl(`/products/${encodeURIComponent(product.id)}`),

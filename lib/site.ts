@@ -1,8 +1,10 @@
 export const SITE_NAME = "Indie Clash";
 export const SITE_URL = "https://www.indieclash.com";
 export const SITE_DESCRIPTION =
-  "Discover newly launched indie products, compare real arena matchups, and read constructive feedback from authenticated community members.";
+  "Discover new and underrated indie products, explore permanent maker profiles, and compare critique-driven Arena matchups without paid rankings.";
 export const PRODUCT_LOGO_BUCKET = "product-logos";
+const LEGACY_PRODUCT_IMAGE_LIMIT = 100_000;
+const LEGACY_PRODUCT_IMAGE_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/]+={0,2}$/i;
 
 export function absoluteUrl(path = "/") {
   return new URL(path, SITE_URL).toString();
@@ -19,6 +21,18 @@ export function isPublicImageUrl(value: string | undefined) {
 export function trustedProductImageUrl(value: string | undefined) {
   if (!value) return undefined;
   if (value.startsWith("/")) return value;
+
+  // Products submitted before the Storage upload route was introduced keep a
+  // small raster logo as a data URI in the database. These are public product
+  // assets, not authentication data. Accept only tightly validated raster
+  // formats and cap their encoded size; SVG/HTML and arbitrary data URIs stay
+  // blocked. New submissions continue to use the public Storage bucket.
+  if (
+    value.length <= LEGACY_PRODUCT_IMAGE_LIMIT
+    && LEGACY_PRODUCT_IMAGE_PATTERN.test(value)
+  ) {
+    return value;
+  }
 
   try {
     const imageUrl = new URL(value);
@@ -41,8 +55,15 @@ export function trustedProductImageUrl(value: string | undefined) {
 export function publicHttpUrl(value: string | undefined) {
   if (!value) return undefined;
   try {
-    const url = new URL(value);
-    if ((url.protocol === "https:" || url.protocol === "http:") && url.hostname) {
+    const trimmed = value.trim();
+    const url = new URL(trimmed);
+    if (
+      (url.protocol === "https:" || url.protocol === "http:") &&
+      url.hostname &&
+      url.hostname.includes(".") &&
+      !url.hostname.includes("%20") &&
+      !url.hostname.includes(" ")
+    ) {
       return url.toString();
     }
   } catch {

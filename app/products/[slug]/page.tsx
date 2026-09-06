@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import Link from "@/app/components/NavigationLink";
 import { notFound, permanentRedirect } from "next/navigation";
 import CopyLink from "@/app/components/CopyLink";
-import { getProductSeoData, matchSlug } from "@/lib/server/publicSeoData";
-import { absoluteUrl, isPublicImageUrl, publicHttpUrl, serializeJsonLd } from "@/lib/site";
+import { getProductSeoData, getPublicProducts, matchSlug } from "@/lib/server/publicSeoData";
+import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
+import { categoryLabel, pricingLabel } from "@/lib/productTaxonomy";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -11,8 +12,14 @@ interface Props {
 
 export const revalidate = 1800;
 
-function conciseDescription(title: string, tagline: string) {
-  const description = `${title}: ${tagline} View its maker, launch details, arena match history, votes, and constructive community feedback.`;
+export async function generateStaticParams() {
+  const products = await getPublicProducts();
+  return products.map((product) => ({ slug: product.id }));
+}
+
+function conciseDescription(title: string, tagline: string, longDescription?: string) {
+  const source = longDescription || tagline;
+  const description = `${title}: ${source}`;
   return description.length <= 160 ? description : `${description.slice(0, 157).trimEnd()}…`;
 }
 
@@ -23,7 +30,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const { product } = data;
   const canonicalPath = `/products/${encodeURIComponent(product.id)}`;
-  const description = conciseDescription(product.title, product.tagline);
+  const description = conciseDescription(product.title, product.tagline, product.description);
   const image = `/api/og/versus?slug=${encodeURIComponent(product.id)}`;
 
   return {
@@ -49,11 +56,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 function ProductLogo({ logo, title, className = "h-14 w-14" }: { logo: string; title: string; className?: string }) {
-  if (!logo) return <span className="text-4xl" aria-hidden="true">🚀</span>;
-  if (logo.startsWith("data:image") || logo.startsWith("http") || logo.startsWith("/")) {
-    return <img src={logo} alt={`${title} logo`} className={`${className} rounded-lg object-contain`} />;
-  }
-  return <span className="text-5xl" aria-hidden="true">{logo}</span>;
+  const image = trustedProductImageUrl(logo);
+  if (image) return <img src={image} alt={`${title} logo`} className={`${className} rounded-lg object-contain`} />;
+  const compactSymbol = logo && logo.length <= 8 && !logo.includes(":") && !logo.includes("/") ? logo : "🚀";
+  return <span className="text-5xl" aria-hidden="true">{compactSymbol}</span>;
 }
 
 export default async function ProductPage({ params }: Props) {
@@ -67,6 +73,8 @@ export default async function ProductPage({ params }: Props) {
   const canonicalPath = `/products/${encodeURIComponent(product.id)}`;
   const canonicalUrl = absoluteUrl(canonicalPath);
   const productWebsite = publicHttpUrl(product.url);
+  const productCategory = categoryLabel(product.category);
+  const productPricing = pricingLabel(product.pricingModel);
   const publishedDate = product.submittedAt ? new Date(product.submittedAt) : null;
   const validPublishedDate = publishedDate && !Number.isNaN(publishedDate.getTime()) ? publishedDate : null;
   const faqEntries = [
@@ -92,9 +100,11 @@ export default async function ProductPage({ params }: Props) {
         "@type": "Product",
         "@id": `${canonicalUrl}#product`,
         name: product.title,
-        description: product.tagline,
+        description: product.description || product.tagline,
+        category: productCategory || undefined,
+        audience: product.targetAudience ? { "@type": "Audience", audienceType: product.targetAudience } : undefined,
         url: canonicalUrl,
-        image: isPublicImageUrl(product.logo)
+        image: trustedProductImageUrl(product.logo)
           ? (product.logo.startsWith("/") ? absoluteUrl(product.logo) : product.logo)
           : undefined,
         sameAs: productWebsite,
@@ -103,13 +113,15 @@ export default async function ProductPage({ params }: Props) {
           { "@type": "PropertyValue", name: "Arena votes", value: product.votesCount },
           { "@type": "PropertyValue", name: "Arena matches", value: matchups.length },
           { "@type": "PropertyValue", name: "Arena wins", value: wins },
-        ],
+          productPricing ? { "@type": "PropertyValue", name: "Pricing", value: productPricing } : undefined,
+          product.platforms?.length ? { "@type": "PropertyValue", name: "Platforms", value: product.platforms.join(", ") } : undefined,
+        ].filter(Boolean),
       },
       {
         "@type": "WebPage",
         "@id": canonicalUrl,
         name: `${product.title} — Product Profile`,
-        description: conciseDescription(product.title, product.tagline),
+        description: conciseDescription(product.title, product.tagline, product.description),
         url: canonicalUrl,
         datePublished: validPublishedDate?.toISOString(),
         mainEntity: { "@id": `${canonicalUrl}#product` },
@@ -177,6 +189,13 @@ export default async function ProductPage({ params }: Props) {
                   <span>Shipped in {product.shipTimeframe}</span>
                   {validPublishedDate ? <time dateTime={validPublishedDate.toISOString()}>Launched {validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}</time> : null}
                 </div>
+                {(productCategory || productPricing || product.platforms?.length) ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {productCategory && product.category ? <Link href={`/categories/${product.category}`} className="rounded-full border border-[#A78BFA]/20 bg-[#A78BFA]/[0.06] px-3 py-1 text-xs text-[#c4b5fd] transition hover:border-[#A78BFA]/40">{productCategory}</Link> : null}
+                    {productPricing ? <span className="rounded-full border border-white/[0.08] px-3 py-1 text-xs text-zinc-400">{productPricing}</span> : null}
+                    {product.platforms?.map((platform) => <span key={platform} className="rounded-full border border-white/[0.08] px-3 py-1 text-xs text-zinc-400">{platform}</span>)}
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -218,11 +237,34 @@ export default async function ProductPage({ params }: Props) {
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Product overview</p>
                   <h2 id="about-heading" className="mt-1 text-2xl font-semibold">About {product.title}</h2>
                 </div>
-                <p className="text-base leading-8 text-zinc-300">
-                  <strong>{product.title}</strong> is an independent product created by {product.makerName}. {product.tagline}
-                  {validPublishedDate ? ` It was listed on Indie Clash on ${validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "long", day: "numeric" })}.` : ""}
+                <p className="whitespace-pre-line text-base leading-8 text-zinc-300">
+                  {product.description || <><strong>{product.title}</strong> is an independent product created by {product.makerName}. {product.tagline}{validPublishedDate ? ` It was listed on Indie Clash on ${validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "long", day: "numeric" })}.` : ""}</>}
                 </p>
+                {product.targetAudience ? (
+                  <div className="mt-6 rounded-xl border border-white/[0.07] bg-[#121215]/60 p-5">
+                    <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">Built for</span>
+                    <p className="mt-2 leading-7 text-zinc-300">{product.targetAudience}</p>
+                  </div>
+                ) : null}
               </section>
+
+              {product.makerStory ? (
+                <section aria-labelledby="maker-story-heading">
+                  <div className="mb-5 border-b border-white/[0.08] pb-4">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Behind the build</p>
+                    <h2 id="maker-story-heading" className="mt-1 text-2xl font-semibold">Why {product.makerName} built it</h2>
+                  </div>
+                  <p className="whitespace-pre-line text-base leading-8 text-zinc-300">{product.makerStory}</p>
+                </section>
+              ) : null}
+
+              {product.feedbackRequest ? (
+                <section aria-labelledby="feedback-request-heading" className="rounded-xl border border-[#ffbe18]/20 bg-[#ffbe18]/[0.04] p-6">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[#ffbe18]">Maker feedback request</p>
+                  <h2 id="feedback-request-heading" className="mt-2 text-xl font-semibold">What feedback would help most?</h2>
+                  <p className="mt-3 whitespace-pre-line leading-7 text-zinc-300">{product.feedbackRequest}</p>
+                </section>
+              ) : null}
 
               <section aria-labelledby="critiques-heading">
                 <div className="mb-5 flex items-end justify-between border-b border-white/[0.08] pb-4">
@@ -338,7 +380,7 @@ export default async function ProductPage({ params }: Props) {
               <h2 className="text-2xl font-semibold">Launch your own indie product</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Create a public product profile, enter real 1v1 matchups, and collect useful builder feedback.</p>
             </div>
-            <Link href="/" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-black">Submit a product</Link>
+            <Link href="/?submit=1" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-black">Submit a product</Link>
           </section>
         </article>
       </main>

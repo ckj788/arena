@@ -38,7 +38,7 @@ export interface AuthenticatedRequest {
   client: SupabaseClient;
 }
 
-export type RateLimitAction = "logo" | "product_submit" | "queue" | "settle";
+export type RateLimitAction = "logo" | "product_submit" | "product_update" | "queue" | "settle";
 
 export async function consumeUserRateLimit(client: SupabaseClient, action: RateLimitAction): Promise<void> {
   const { error } = await client.rpc(`${DB_PREFIX}consume_rate_limit`, { p_action: action });

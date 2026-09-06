@@ -8,12 +8,16 @@ import {
   fromDbMatch,
   fromDbProduct,
   getActiveRound,
+  getBracketSize,
+  getInitialRoundMatches,
+  getInitialRoundNumber,
   toDbMatch,
   toDbProduct,
+  type BracketSize,
 } from "@/lib/arenaStore";
 import type { Bracket, Match, Product } from "@/lib/mockData";
 import { DB_PREFIX } from "@/lib/supabaseClient";
-import { getMillisecondsToNextNYMidnight, getRoundRemainingMs } from "@/lib/timeHelpers";
+import { getMillisecondsToNextNYMidnight, getRoundEndAtIso, getRoundRemainingMs } from "@/lib/timeHelpers";
 import { getAdminClient, HttpError } from "./auth";
 
 type DbRow = Record<string, unknown>;
@@ -67,6 +71,13 @@ export interface NewProductInput {
   makerName: string;
   makerTwitter: string;
   logo: string;
+  description: string;
+  category?: Product["category"];
+  pricingModel: NonNullable<Product["pricingModel"]>;
+  platforms: string[];
+  targetAudience: string;
+  makerStory: string;
+  feedbackRequest: string;
 }
 
 export async function createProductForUser(user: User, input: NewProductInput): Promise<Product> {
@@ -99,6 +110,17 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     creator_uid: user.id,
     creatorUsername: username,
     arenaEnqueued: false,
+    description: input.description,
+    category: input.category,
+    pricingModel: input.pricingModel,
+    platforms: input.platforms,
+    targetAudience: input.targetAudience || undefined,
+    makerStory: input.makerStory || undefined,
+    feedbackRequest: input.feedbackRequest || undefined,
+    publishedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    qualifiedImpressions: 0,
+    exposureStatus: "new",
   };
 
   const { data, error } = await client
@@ -108,6 +130,57 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     .single();
   if (error || !data) databaseError("creating product", error);
   return fromDbProduct(data);
+}
+
+export async function updateOwnedProduct(user: User, productId: string, input: NewProductInput): Promise<Product> {
+  const client = getAdminClient();
+  const { data: existing, error: fetchError } = await client
+    .from(`${DB_PREFIX}products`)
+    .select(`${DB_PREFIX}id,${DB_PREFIX}creator_uid`)
+    .eq(`${DB_PREFIX}id`, productId)
+    .maybeSingle();
+  if (fetchError) databaseError("loading product for profile update", fetchError);
+  if (!existing) throw new HttpError(404, "Product not found.");
+  const existingRow = existing as unknown as DbRow;
+  if (existingRow[`${DB_PREFIX}creator_uid`] !== user.id) throw new HttpError(403, "You do not own this product.");
+
+  const { data, error } = await client
+    .from(`${DB_PREFIX}products`)
+    .update({
+      [`${DB_PREFIX}title`]: input.title,
+      [`${DB_PREFIX}tagline`]: input.tagline,
+      [`${DB_PREFIX}url`]: input.url,
+      [`${DB_PREFIX}ship_timeframe`]: input.shipTimeframe,
+      [`${DB_PREFIX}maker_name`]: input.makerName,
+      [`${DB_PREFIX}maker_twitter`]: input.makerTwitter,
+      [`${DB_PREFIX}logo`]: input.logo,
+      [`${DB_PREFIX}description`]: input.description,
+      [`${DB_PREFIX}pricing_model`]: input.pricingModel,
+      [`${DB_PREFIX}platforms`]: input.platforms,
+      [`${DB_PREFIX}target_audience`]: input.targetAudience || null,
+      [`${DB_PREFIX}maker_story`]: input.makerStory || null,
+      [`${DB_PREFIX}feedback_request`]: input.feedbackRequest || null,
+      [`${DB_PREFIX}updated_at`]: new Date().toISOString(),
+    })
+    .eq(`${DB_PREFIX}id`, productId)
+    .eq(`${DB_PREFIX}creator_uid`, user.id)
+    .select("*")
+    .single();
+  if (error || !data) databaseError("updating product profile", error);
+  return fromDbProduct(data);
+}
+
+export async function getOwnedProducts(user: User, client: SupabaseClient): Promise<Product[]> {
+  // The verified user's JWT + existing owner SELECT policy enforce ownership.
+  // Reading your own products must not require the service-role secret.
+  const { data, error } = await client
+    .from(`${DB_PREFIX}products`)
+    .select("*")
+    .eq(`${DB_PREFIX}creator_uid`, user.id)
+    .order(`${DB_PREFIX}submitted_at`, { ascending: true })
+    .limit(500);
+  if (error) databaseError("loading owned products", error);
+  return (data ?? []).map(fromDbProduct);
 }
 
 export async function enqueueOwnedProduct(user: User, productId: string): Promise<boolean> {
@@ -129,7 +202,10 @@ export async function enqueueOwnedProduct(user: User, productId: string): Promis
 
   const { error: updateError } = await client
     .from(`${DB_PREFIX}products`)
-    .update({ [`${DB_PREFIX}arena_enqueued`]: true })
+    .update({
+      [`${DB_PREFIX}arena_enqueued`]: true,
+      [`${DB_PREFIX}arena_enqueued_at`]: productRow[`${DB_PREFIX}arena_enqueued_at`] || new Date().toISOString(),
+    })
     .eq(`${DB_PREFIX}id`, productId)
     .eq(`${DB_PREFIX}creator_uid`, user.id);
   if (updateError) databaseError("enqueueing product", updateError);
@@ -183,6 +259,12 @@ async function fetchOpenBracket(client: SupabaseClient, products?: Product[]): P
       ? productMap.get(String(bracketRow[`${DB_PREFIX}winner_id`]))
       : undefined,
     roundStartedAt: String(bracketRow[`${DB_PREFIX}round_started_at`] || ""),
+    roundEndsAt: String(bracketRow[`${DB_PREFIX}round_ends_at`] || "") || undefined,
+    bracketSize: [2, 4, 8, 16].includes(Number(bracketRow[`${DB_PREFIX}bracket_size`]))
+      ? Number(bracketRow[`${DB_PREFIX}bracket_size`]) as BracketSize
+      : undefined,
+    arenaScope: bracketRow[`${DB_PREFIX}arena_scope`] === "category" ? "category" : "global",
+    categorySlug: String(bracketRow[`${DB_PREFIX}category_slug`] || "") || undefined,
     round1: rounds[1],
     round2: rounds[2],
     round3: rounds[3],
@@ -197,7 +279,7 @@ async function saveBracket(
 ): Promise<void> {
   const matches = [...bracket.round1, ...bracket.round2, ...bracket.round3, ...bracket.round4];
   const productIds = [...new Set(
-    bracket.round1.flatMap((match) => [match.productA.id, match.productB.id]),
+    getInitialRoundMatches(bracket).flatMap((match) => [match.productA.id, match.productB.id]),
   )];
   const { error } = await client.rpc(`${DB_PREFIX}save_bracket_state`, {
     p_bracket: {
@@ -205,6 +287,10 @@ async function saveBracket(
       status: bracket.status,
       winner_id: bracket.winner?.id || null,
       round_started_at: bracket.roundStartedAt || new Date().toISOString(),
+      round_ends_at: bracket.roundEndsAt || null,
+      bracket_size: getBracketSize(bracket),
+      arena_scope: bracket.arenaScope || "global",
+      category_slug: bracket.categorySlug || null,
     },
     p_matches: matches.map((match) => toDbMatch(match, bracket.id)),
     p_product_ids: productIds,
@@ -214,7 +300,14 @@ async function saveBracket(
   if (error) databaseError("saving bracket transaction", error);
 }
 
-async function tryStartBracket(client: SupabaseClient): Promise<boolean> {
+function fallbackBracketSize(queuedCount: number): BracketSize | null {
+  if (queuedCount >= 8) return 8;
+  if (queuedCount >= 4) return 4;
+  if (queuedCount >= 2) return 2;
+  return null;
+}
+
+async function tryStartBracket(client: SupabaseClient, allowDailyFallback = false): Promise<boolean> {
   const openBracket = await fetchOpenBracket(client);
   if (openBracket) return false;
 
@@ -223,12 +316,18 @@ async function tryStartBracket(client: SupabaseClient): Promise<boolean> {
     .select("*")
     .eq(`${DB_PREFIX}queue_status`, "waiting")
     .eq(`${DB_PREFIX}arena_enqueued`, true)
+    .order(`${DB_PREFIX}arena_enqueued_at`, { ascending: true, nullsFirst: false })
     .order(`${DB_PREFIX}submitted_at`, { ascending: true })
     .limit(16);
   if (error || !data) databaseError("loading arena queue", error);
-  if (data.length < 16) return false;
+  const bracketSize: BracketSize | null = data.length >= 16
+    ? 16
+    : allowDailyFallback
+      ? fallbackBracketSize(data.length)
+      : null;
+  if (!bracketSize) return false;
 
-  const { bracket } = buildInitialBracket(data.map(fromDbProduct));
+  const { bracket } = buildInitialBracket(data.map(fromDbProduct), bracketSize, bracketSize < 16);
   try {
     await saveBracket(client, bracket);
     return true;
@@ -270,17 +369,23 @@ export interface SettlementResult {
   round?: number;
 }
 
-export async function settleArenaIfDue(): Promise<SettlementResult> {
+export async function settleArenaIfDue(options: { allowScheduledStart?: boolean } = {}): Promise<SettlementResult> {
   const client = getAdminClient();
   const bracket = await fetchOpenBracket(client);
-  if (!bracket) return { changed: false, message: "No active bracket found." };
+  if (!bracket) {
+    const started = await tryStartBracket(client, options.allowScheduledStart === true);
+    return started
+      ? { changed: true, message: "A queued Arena bracket was started." }
+      : { changed: false, message: "No active bracket is due and no scheduled bracket is ready." };
+  }
 
   if (bracket.status === "preparing") {
-    const remaining = getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
+    const explicitStart = bracket.roundEndsAt ? new Date(bracket.roundEndsAt).getTime() - Date.now() : Number.NaN;
+    const remaining = Number.isFinite(explicitStart) ? Math.max(0, explicitStart) : getMillisecondsToNextNYMidnight(bracket.roundStartedAt);
     if (remaining > 0) return { changed: false, message: "Bracket is still preparing.", status: bracket.status };
   } else {
     const round = getActiveRound(bracket);
-    const remaining = getRoundRemainingMs(round, bracket.roundStartedAt || new Date().toISOString());
+    const remaining = getRoundRemainingMs(round, bracket.roundStartedAt || new Date().toISOString(), bracket.roundEndsAt);
     if (remaining > 0) {
       return { changed: false, message: "Round is still active.", status: bracket.status, round };
     }
@@ -304,6 +409,7 @@ export async function settleArenaIfDue(): Promise<SettlementResult> {
         ...lockedBracket,
         status: "active",
         roundStartedAt: new Date().toISOString(),
+        roundEndsAt: getRoundEndAtIso(getInitialRoundNumber(getBracketSize(lockedBracket))),
       };
       await saveBracket(client, activeBracket);
       return { changed: true, message: "Tournament started.", status: activeBracket.status, round: 1 };
@@ -312,7 +418,7 @@ export async function settleArenaIfDue(): Promise<SettlementResult> {
     const advanced = advanceTournamentRound(lockedBracket);
     await saveBracket(client, advanced);
     if (advanced.status === "completed") {
-      await tryStartBracket(client);
+      await tryStartBracket(client, options.allowScheduledStart === true);
     }
     return {
       changed: true,
@@ -349,6 +455,7 @@ export async function resetArenaToRoundThree(): Promise<string[]> {
     status: "active",
     winner: undefined,
     roundStartedAt: new Date().toISOString(),
+    roundEndsAt: getRoundEndAtIso(3),
     round3,
     round4: [],
   }, 3);

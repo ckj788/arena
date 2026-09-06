@@ -2,7 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
-import { fromDbProduct } from "@/lib/arenaStore";
+import { fetchCloudProducts, fromDbProduct } from "@/lib/arenaStore";
 import { Product, SEED_PRODUCTS } from "@/lib/mockData";
 import { DB_PREFIX, publicArenaTable, supabase } from "@/lib/supabaseClient";
 
@@ -61,7 +61,24 @@ export interface VersusSeoData {
 export interface SitemapProduct {
   id: string;
   submittedAt?: string;
+  updatedAt?: string;
+  category?: string;
 }
+
+const loadPublicProducts = unstable_cache(async () => {
+  if (!supabase) return fetchCloudProducts();
+  const { data, error } = await supabase.from(publicArenaTable("products"))
+    .select("*").order(`${DB_PREFIX}submitted_at`, { ascending: true });
+  // Do not persist an offline fallback as a successful empty catalogue. An
+  // unsuccessful revalidation must preserve the last successful cached value.
+  if (error || !data) throw new Error("Public products are temporarily unavailable.");
+  return data.map(fromDbProduct);
+}, ["arena-public-products-v2"], {
+  revalidate: 60,
+  tags: ["arena-public"],
+});
+
+export const getPublicProducts = cache(loadPublicProducts);
 
 function stringValue(row: DatabaseRow, key: string) {
   const value = row[key];
@@ -128,16 +145,6 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
     };
   }
 
-  const { data: productRow, error: productError } = await supabase
-    .from(publicArenaTable("products"))
-    .select("*")
-    .eq(`${DB_PREFIX}id`, slug)
-    .maybeSingle();
-
-  if (productError) throw new Error(`Unable to load product: ${productError.message}`);
-  if (!productRow) return null;
-
-  const product = fromDbProduct(productRow);
   const matchFields = [
     `${DB_PREFIX}id`,
     `${DB_PREFIX}bracket_id`,
@@ -149,48 +156,38 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
     `${DB_PREFIX}winner_id`,
   ].join(",");
 
-  const { data: matchRows, error: matchError } = await supabase
-    .from(publicArenaTable("matches"))
-    .select(matchFields)
-    .or(`${DB_PREFIX}product_a_id.eq.${slug},${DB_PREFIX}product_b_id.eq.${slug}`)
-    .limit(50);
-
-  if (matchError) throw new Error(`Unable to load product matchups: ${matchError.message}`);
-  const matches = ((matchRows ?? []) as unknown as DatabaseRow[]).map(mapMatch);
-  const opponentIds = [...new Set(matches.map((match) =>
-    match.productAId === slug ? match.productBId : match.productAId,
-  ).filter(Boolean))];
-
-  const [{ data: critiqueRows, error: critiqueError }, { data: opponentRows, error: opponentError }, { data: relatedRows, error: relatedError }] = await Promise.all([
-    matches.length
-      ? supabase
-          .from(publicArenaTable("votes"))
-          .select("*")
-          .in(`${DB_PREFIX}match_id`, matches.map((match) => match.id))
-          .order(`${DB_PREFIX}created_at`, { ascending: false })
-          .limit(50)
-      : Promise.resolve({ data: [], error: null }),
-    opponentIds.length
-      ? supabase.from(publicArenaTable("products")).select("*").in(`${DB_PREFIX}id`, opponentIds)
-      : Promise.resolve({ data: [], error: null }),
+  const [products, { data: matchRows, error: matchError }] = await Promise.all([
+    getPublicProducts(),
     supabase
-      .from(publicArenaTable("products"))
-      .select("*")
-      .neq(`${DB_PREFIX}id`, slug)
-      .order(`${DB_PREFIX}submitted_at`, { ascending: false })
-      .limit(6),
+      .from(publicArenaTable("matches"))
+      .select(matchFields)
+      .or(`${DB_PREFIX}product_a_id.eq.${slug},${DB_PREFIX}product_b_id.eq.${slug}`)
+      .limit(50),
   ]);
 
+  if (matchError) throw new Error(`Unable to load product matchups: ${matchError.message}`);
+  const product = products.find((item) => item.id.toLowerCase() === slug);
+  if (!product) return null;
+
+  const matches = ((matchRows ?? []) as unknown as DatabaseRow[]).map(mapMatch);
+  const { data: critiqueRows, error: critiqueError } = matches.length
+    ? await supabase
+        .from(publicArenaTable("votes"))
+        .select("*")
+        .in(`${DB_PREFIX}match_id`, matches.map((match) => match.id))
+        .order(`${DB_PREFIX}created_at`, { ascending: false })
+        .limit(50)
+    : { data: [], error: null };
+
   if (critiqueError) throw new Error(`Unable to load critiques: ${critiqueError.message}`);
-  if (opponentError) throw new Error(`Unable to load matchup products: ${opponentError.message}`);
-  if (relatedError) throw new Error(`Unable to load related products: ${relatedError.message}`);
 
   const opponents = new Map(
-    (opponentRows ?? []).map((row) => {
-      const mapped = fromDbProduct(row);
-      return [mapped.id, mapped] as const;
-    }),
+    products.map((item) => [item.id, item] as const),
   );
+  const relatedProducts = products
+    .filter((item) => item.id !== product.id)
+    .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
+    .slice(0, 6);
 
   const critiques = ((critiqueRows ?? []) as DatabaseRow[]).flatMap((row): PublicCritique[] => {
     const votedProductId = stringValue(row, `${DB_PREFIX}voted_product_id`);
@@ -218,7 +215,7 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
       const opponent = opponents.get(opponentId);
       return opponent ? [{ match, opponent }] : [];
     }),
-    relatedProducts: (relatedRows ?? []).map(fromDbProduct),
+    relatedProducts,
     wins: matches.filter((match) => match.winnerId === product.id).length,
   };
 }, ["arena-product-seo-v2"], { revalidate: 1800, tags: ["arena-public"] });
@@ -319,7 +316,7 @@ async function loadSitemapRecords(): Promise<{
   for (let start = 0; ; start += pageSize) {
     const { data, error } = await supabase
       .from(publicArenaTable("products"))
-      .select(`${DB_PREFIX}id,${DB_PREFIX}submitted_at`)
+      .select("*")
       .order(`${DB_PREFIX}id`, { ascending: true })
       .range(start, start + pageSize - 1);
     if (error) throw new Error(`Unable to build product sitemap: ${error.message}`);
@@ -351,7 +348,12 @@ async function loadSitemapRecords(): Promise<{
     products: productRows.flatMap((row): SitemapProduct[] => {
       const id = stringValue(row, `${DB_PREFIX}id`);
       if (!id || !SAFE_ID.test(id)) return [];
-      return [{ id, submittedAt: stringValue(row, `${DB_PREFIX}submitted_at`) || undefined }];
+      return [{
+        id,
+        submittedAt: stringValue(row, `${DB_PREFIX}submitted_at`) || undefined,
+        updatedAt: stringValue(row, `${DB_PREFIX}updated_at`) || undefined,
+        category: stringValue(row, `${DB_PREFIX}category`) || undefined,
+      }];
     }),
     matches: matchRows.map(mapMatch).filter((match) =>
       Boolean(match.id && SAFE_ID.test(match.productAId) && SAFE_ID.test(match.productBId)),

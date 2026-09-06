@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getSitemapRecords, matchSlug } from "@/lib/server/publicSeoData";
 import { absoluteUrl } from "@/lib/site";
+import { PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
 
 // The route stays dynamic while its paginated database result is cached in the
 // data layer and invalidated after arena writes.
@@ -29,15 +30,52 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.2,
     },
   ];
-  const { products, matches } = await getSitemapRecords();
+  let products: Awaited<ReturnType<typeof getSitemapRecords>>["products"] = [];
+  let matches: Awaited<ReturnType<typeof getSitemapRecords>>["matches"] = [];
+  try {
+    ({ products, matches } = await getSitemapRecords());
+  } catch (error) {
+    console.error("[SITEMAP] Database unavailable; serving stable base URLs:", error);
+    return entries;
+  }
+  const categorizedCount = products.filter((product) => product.category).length;
+  const discoveryEntries: MetadataRoute.Sitemap = [
+    ...(categorizedCount >= 4 ? [{
+      url: absoluteUrl("/categories"),
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }] : []),
+    ...(products.length >= 6 ? [{
+      url: absoluteUrl("/underrated"),
+      changeFrequency: "daily" as const,
+      priority: 0.8,
+    }] : []),
+  ];
   const productEntries = products.map((product) => {
-    const submittedAt = product.submittedAt ? new Date(product.submittedAt) : null;
+    const timestamp = product.updatedAt || product.submittedAt;
+    const submittedAt = timestamp ? new Date(timestamp) : null;
     return {
       url: absoluteUrl(`/products/${encodeURIComponent(product.id)}`),
       lastModified: submittedAt && !Number.isNaN(submittedAt.getTime()) ? submittedAt : undefined,
       changeFrequency: "weekly" as const,
       priority: 0.8,
     };
+  });
+  const categoryEntries = PRODUCT_CATEGORIES.flatMap((category) => {
+    const categoryProducts = products.filter((product) => product.category === category.value);
+    if (categoryProducts.length < 4) return [];
+    const latestTimestamp = categoryProducts
+      .map((product) => product.updatedAt || product.submittedAt)
+      .filter((value): value is string => Boolean(value))
+      .sort()
+      .at(-1);
+    const latestDate = latestTimestamp ? new Date(latestTimestamp) : null;
+    return [{
+      url: absoluteUrl(`/categories/${category.value}`),
+      lastModified: latestDate && !Number.isNaN(latestDate.getTime()) ? latestDate : undefined,
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    }];
   });
   const seenMatches = new Set<string>();
   const matchEntries = matches.flatMap((match) => {
@@ -51,5 +89,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }];
   });
 
-  return [...entries, ...productEntries, ...matchEntries];
+  return [...entries, ...discoveryEntries, ...categoryEntries, ...productEntries, ...matchEntries];
 }

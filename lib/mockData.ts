@@ -1,3 +1,5 @@
+import type { PricingModel, ProductCategory } from "./productTaxonomy";
+
 export interface Product {
   id: string;
   title: string;
@@ -14,6 +16,20 @@ export interface Product {
   creatorUsername?: string;
   creator_uid?: string;
   arenaEnqueued?: boolean;
+  arenaEnqueuedAt?: string;
+  description?: string;
+  category?: ProductCategory;
+  pricingModel?: PricingModel;
+  platforms?: string[];
+  targetAudience?: string;
+  makerStory?: string;
+  feedbackRequest?: string;
+  publishedAt?: string;
+  updatedAt?: string;
+  qualifiedImpressions?: number;
+  lastExposedAt?: string;
+  exposureStatus?: "new" | "legacy_catchup" | "needs_more_eyes" | "evergreen";
+  discoveryBoostUntil?: string;
 }
 
 export interface Match {
@@ -36,6 +52,10 @@ export interface Bracket {
   status: "preparing" | "active" | "completed";
   winner?: Product;
   roundStartedAt?: string; // ISO datetime when the active round was generated/advanced
+  roundEndsAt?: string;
+  bracketSize?: 2 | 4 | 8 | 16;
+  arenaScope?: "global" | "category";
+  categorySlug?: string;
 }
 
 export const SEED_PRODUCTS: Product[] = [
