@@ -5,6 +5,12 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   async redirects() {
     return [
+      ...["arena-chi-coral\\.vercel\\.app", "indieclash\\.com"].map((host) => ({
+        source: "/:path*",
+        has: [{ type: "host" as const, value: host }],
+        destination: "https://www.indieclash.com/:path*",
+        permanent: true,
+      })),
       {
         source: "/reviews/:slug",
         destination: "/products/:slug",

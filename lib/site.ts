@@ -55,12 +55,17 @@ export function trustedProductImageUrl(value: string | undefined) {
 export function publicHttpUrl(value: string | undefined) {
   if (!value) return undefined;
   try {
-    const trimmed = value.trim();
+    // Older submissions sometimes prepended https:// to an already complete
+    // address (for example https://HTTPS://mistol.ai). Strip only redundant
+    // leading HTTP(S) schemes; never guess a domain or rewrite path/query data.
+    const trimmed = value.trim().replace(/^(?:https?:\/\/\s*)+(?=https?:\/\/)/i, "");
+    if (/\s|\\/.test(trimmed)) return undefined;
     const url = new URL(trimmed);
     if (
       (url.protocol === "https:" || url.protocol === "http:") &&
       url.hostname &&
       url.hostname.includes(".") &&
+      !url.username && !url.password &&
       !url.hostname.includes("%20") &&
       !url.hostname.includes(" ")
     ) {

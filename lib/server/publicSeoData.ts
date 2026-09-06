@@ -307,7 +307,7 @@ async function loadSitemapRecords(): Promise<{
   products: SitemapProduct[];
   matches: PublicMatch[];
 }> {
-  if (!supabase) return { products: [], matches: [] };
+  if (!supabase) throw new Error("Sitemap database is not configured.");
 
   const pageSize = 1_000;
   const productRows: DatabaseRow[] = [];
@@ -319,7 +319,7 @@ async function loadSitemapRecords(): Promise<{
       .select("*")
       .order(`${DB_PREFIX}id`, { ascending: true })
       .range(start, start + pageSize - 1);
-    if (error) throw new Error(`Unable to build product sitemap: ${error.message}`);
+    if (error || !data) throw new Error(`Unable to build product sitemap: ${error?.message || "Missing response"}`);
     productRows.push(...((data ?? []) as unknown as DatabaseRow[]));
     if (!data || data.length < pageSize) break;
   }
@@ -339,7 +339,7 @@ async function loadSitemapRecords(): Promise<{
       ].join(","))
       .order(`${DB_PREFIX}id`, { ascending: true })
       .range(start, start + pageSize - 1);
-    if (error) throw new Error(`Unable to build matchup sitemap: ${error.message}`);
+    if (error || !data) throw new Error(`Unable to build matchup sitemap: ${error?.message || "Missing response"}`);
     matchRows.push(...((data ?? []) as unknown as DatabaseRow[]));
     if (!data || data.length < pageSize) break;
   }
@@ -361,7 +361,8 @@ async function loadSitemapRecords(): Promise<{
   };
 }
 
-export const getSitemapRecords = unstable_cache(loadSitemapRecords, ["arena-sitemap-v2"], {
-  revalidate: 3600,
-  tags: ["arena-public"],
-});
+// The sitemap route owns the complete ISR snapshot. A second stale-while-
+// revalidate cache here could turn an old dataset into a newly cached XML after
+// submission, delaying new URLs for another hour. Regenerate from fresh records
+// and let a failed query preserve the route's last successful snapshot instead.
+export const getSitemapRecords = loadSitemapRecords;

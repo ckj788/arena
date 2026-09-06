@@ -2,7 +2,7 @@ import "server-only";
 
 import type { NewProductInput } from "@/lib/server/arenaAdmin";
 import { HttpError } from "@/lib/server/auth";
-import { trustedProductImageUrl } from "@/lib/site";
+import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { PRICING_MODELS, PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
 
 function requiredText(value: unknown, field: string, min: number, max: number): string {
@@ -31,16 +31,9 @@ function stringList(value: unknown, field: string): string[] {
 
 function safeHttpUrl(value: unknown, field: string): string {
   const raw = requiredText(value, field, 4, 500);
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    throw new HttpError(400, `${field} must be a valid URL.`);
-  }
-  if (url.protocol !== "https:" && url.protocol !== "http:") {
-    throw new HttpError(400, `${field} must use http or https.`);
-  }
-  return url.toString();
+  const url = publicHttpUrl(raw);
+  if (!url) throw new HttpError(400, `${field} must be a valid public http or https URL without spaces or credentials.`);
+  return url;
 }
 
 function safeLogo(value: unknown): string {

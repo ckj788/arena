@@ -1,1 +1,1 @@
-export { default } from "../products/loading";
+export { default } from "../products/(directory)/loading";

@@ -3,9 +3,10 @@ import { getSitemapRecords, matchSlug } from "@/lib/server/publicSeoData";
 import { absoluteUrl } from "@/lib/site";
 import { PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
 
-// The route stays dynamic while its paginated database result is cached in the
-// data layer and invalidated after arena writes.
-export const dynamic = "force-dynamic";
+// Cache the complete XML with ISR, not a partial fallback. A failed regeneration
+// leaves the previous successful sitemap in place. Arena writes also invalidate
+// /sitemap.xml. With no successful snapshot, fail rather than publish missing URLs.
+export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
@@ -30,14 +31,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.2,
     },
   ];
-  let products: Awaited<ReturnType<typeof getSitemapRecords>>["products"] = [];
-  let matches: Awaited<ReturnType<typeof getSitemapRecords>>["matches"] = [];
-  try {
-    ({ products, matches } = await getSitemapRecords());
-  } catch (error) {
-    console.error("[SITEMAP] Database unavailable; serving stable base URLs:", error);
-    return entries;
-  }
+  const { products, matches } = await getSitemapRecords();
   const categorizedCount = products.filter((product) => product.category).length;
   const discoveryEntries: MetadataRoute.Sitemap = [
     ...(categorizedCount >= 4 ? [{

@@ -65,6 +65,14 @@ One valid Arena vote requires feedback for both products and activates seven day
 
 After the production deployment, submit `https://www.indieclash.com/sitemap.xml` in Google Search Console and inspect the homepage plus a representative product and matchup URL.
 
+### SEO reliability checks
+
+- Redundant leading HTTP(S) schemes in legacy website URLs are normalized for public links without changing stored IDs or records. New submissions use the same URL validation.
+- Product existence is checked outside loading boundaries so unknown product URLs return HTTP 404. The product directory's route group changes no public URLs.
+- The complete sitemap is regenerated with hourly ISR and invalidated after arena writes. Failed regeneration retains the last successful XML; a cold build without database access fails instead of publishing an incomplete sitemap.
+- Only `arena-chi-coral.vercel.app` and the bare `indieclash.com` host redirect permanently to `www.indieclash.com`, preserving paths and queries. Localhost and other preview hosts are unchanged.
+- After `npm run build`, start `node node_modules/next/dist/bin/next start --port 3107` and run `node scripts/verify-seo.mjs`. These checks do not submit products, votes, exposures, or settlement requests.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to optimize the Inter and Outfit font families.
