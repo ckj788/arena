@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { cache } from "react";
 import type { Product } from "@/lib/mockData";
 import { fetchCloudProducts } from "@/lib/arenaStore";
-import { PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
+import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { compareFairDiscovery } from "@/lib/discoveryRanking";
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
 
@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 const getProducts = cache(fetchCloudProducts);
 
 export function generateStaticParams() {
+  if (!PUBLIC_CATEGORIES_ENABLED) return [];
   return PRODUCT_CATEGORIES.map((category) => ({ slug: category.value }));
 }
 
@@ -22,6 +23,7 @@ function categoryFromSlug(slug: string) {
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  if (!PUBLIC_CATEGORIES_ENABLED) notFound();
   const { slug } = await params;
   const category = categoryFromSlug(slug);
   if (!category) notFound();
@@ -63,6 +65,7 @@ function ProductGrid({ products }: { products: Product[] }) {
 }
 
 export default async function CategoryPage({ params }: Props) {
+  if (!PUBLIC_CATEGORIES_ENABLED) notFound();
   const { slug } = await params;
   const category = categoryFromSlug(slug);
   if (!category) notFound();

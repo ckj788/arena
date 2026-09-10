@@ -1,4 +1,5 @@
 import type { Product } from "./mockData";
+import { PUBLIC_CATEGORIES_ENABLED } from "./productTaxonomy";
 
 function validTime(value?: string) {
   if (!value) return 0;
@@ -91,7 +92,7 @@ export function buildFairDiscoverySequence(
     while (deck.length < batchSize && remaining.length) {
       const leadingScore = discoveryExposureScore(remaining[0], now);
       let candidateIndex = remaining.findIndex((product) => {
-        const category = product.category || "uncategorized";
+        const category = PUBLIC_CATEGORIES_ENABLED ? product.category || "uncategorized" : "uncategorized";
         return discoveryExposureScore(product, now) === leadingScore
           && !makers.has(makerKey(product))
           && !domains.has(productDomain(product))
@@ -107,7 +108,7 @@ export function buildFairDiscoverySequence(
       deck.push(candidate);
       makers.add(makerKey(candidate));
       domains.add(productDomain(candidate));
-      const category = candidate.category || "uncategorized";
+      const category = PUBLIC_CATEGORIES_ENABLED ? candidate.category || "uncategorized" : "uncategorized";
       categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
     }
 

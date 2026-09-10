@@ -1,3 +1,6 @@
+// Collect categories now; public category browsing is an explicit later launch.
+export const PUBLIC_CATEGORIES_ENABLED = false;
+
 export const PRODUCT_CATEGORIES = [
   { value: "ai-tools", label: "AI Tools", description: "Independent AI assistants, agents, generators, and applied machine-learning products." },
   { value: "developer-tools", label: "Developer Tools", description: "APIs, infrastructure, debugging, automation, and software-building tools for developers." },
@@ -23,6 +26,7 @@ export const PRICING_MODELS = [
 export type PricingModel = (typeof PRICING_MODELS)[number]["value"];
 
 export function categoryLabel(value?: string): string | null {
+  if (!PUBLIC_CATEGORIES_ENABLED) return null;
   return PRODUCT_CATEGORIES.find((category) => category.value === value)?.label ?? null;
 }
 

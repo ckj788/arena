@@ -1,4 +1,4 @@
-import { PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
+import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { SITE_DESCRIPTION, SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-static";
@@ -17,11 +17,10 @@ Indie Clash exists to give independent products durable discovery rather than a 
 - Homepage and live Arena: ${SITE_URL}/
 - Product directory: ${SITE_URL}/products
 - Underrated products: ${SITE_URL}/underrated
-- Product categories: ${SITE_URL}/categories
+${PUBLIC_CATEGORIES_ENABLED ? `- Product categories: ${SITE_URL}/categories\n` : ""}\
 - Sitemap: ${SITE_URL}/sitemap.xml
 
-## Categories
-${categories}
+${PUBLIC_CATEGORIES_ENABLED ? `## Categories\n${categories}\n` : ""}\
 
 ## How discovery works
 - Each accepted product receives a permanent public profile.

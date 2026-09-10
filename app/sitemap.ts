@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
 import { getSitemapRecords, matchSlug } from "@/lib/server/publicSeoData";
 import { absoluteUrl } from "@/lib/site";
-import { PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
+import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 
 // Cache the complete XML with ISR, not a partial fallback. A failed regeneration
 // leaves the previous successful sitemap in place. Arena writes also invalidate
@@ -34,7 +34,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const { products, matches } = await getSitemapRecords();
   const categorizedCount = products.filter((product) => product.category).length;
   const discoveryEntries: MetadataRoute.Sitemap = [
-    ...(categorizedCount >= 4 ? [{
+    ...(PUBLIC_CATEGORIES_ENABLED && categorizedCount >= 4 ? [{
       url: absoluteUrl("/categories"),
       changeFrequency: "weekly" as const,
       priority: 0.7,
@@ -55,7 +55,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.8,
     };
   });
-  const categoryEntries = PRODUCT_CATEGORIES.flatMap((category) => {
+  const categoryEntries = (PUBLIC_CATEGORIES_ENABLED ? PRODUCT_CATEGORIES : []).flatMap((category) => {
     const categoryProducts = products.filter((product) => product.category === category.value);
     if (categoryProducts.length < 4) return [];
     const latestTimestamp = categoryProducts

@@ -155,6 +155,7 @@ export async function updateOwnedProduct(user: User, productId: string, input: N
       [`${DB_PREFIX}maker_twitter`]: input.makerTwitter,
       [`${DB_PREFIX}logo`]: input.logo,
       [`${DB_PREFIX}description`]: input.description,
+      [`${DB_PREFIX}category`]: input.category || null,
       [`${DB_PREFIX}pricing_model`]: input.pricingModel,
       [`${DB_PREFIX}platforms`]: input.platforms,
       [`${DB_PREFIX}target_audience`]: input.targetAudience || null,

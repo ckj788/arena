@@ -145,7 +145,7 @@ export default async function ProductsPage() {
                     </div>
                     <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.06] pt-4 text-xs text-zinc-500">
                       <span>By {product.makerName}</span>
-                      {product.category ? <Link href={`/categories/${product.category}`} className="card-secondary-link text-[#A78BFA] hover:underline">{categoryLabel(product.category)}</Link> : null}
+                      {categoryLabel(product.category) ? <Link href={`/categories/${product.category}`} className="card-secondary-link text-[#A78BFA] hover:underline">{categoryLabel(product.category)}</Link> : null}
                       {hasDate ? <time dateTime={submittedAt.toISOString()}>{submittedAt.toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}</time> : null}
                       <span>{product.votesCount} votes</span>
                     </div>

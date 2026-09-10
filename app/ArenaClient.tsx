@@ -49,7 +49,7 @@ import ClashLogo from "@/app/components/ClashLogo";
 import MakerConsole from "@/app/components/MakerConsole";
 import FairDiscoverySection from "@/app/components/FairDiscoverySection";
 import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
-import { PRICING_MODELS, type PricingModel } from "@/lib/productTaxonomy";
+import { PRICING_MODELS, PRODUCT_CATEGORIES, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, safeOAuthReturnPath } from "@/lib/browserOAuth";
@@ -233,6 +233,7 @@ export default function ArenaClient({
   const [newTagline, setNewTagline] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [newDescription, setNewDescription] = useState("");
+  const [newCategory, setNewCategory] = useState<ProductCategory | "">("");
   const [newPricingModel, setNewPricingModel] = useState<PricingModel>("unspecified");
   const [newPlatforms, setNewPlatforms] = useState("");
   const [newTargetAudience, setNewTargetAudience] = useState("");
@@ -275,6 +276,7 @@ export default function ArenaClient({
         setNewTagline(typeof draft.tagline === "string" ? draft.tagline : "");
         setNewUrl(typeof draft.url === "string" ? draft.url : "");
         setNewDescription(typeof draft.description === "string" ? draft.description : "");
+        setNewCategory(PRODUCT_CATEGORIES.some((item) => item.value === draft.category) ? draft.category as ProductCategory : "");
         setNewPricingModel(PRICING_MODELS.some((item) => item.value === draft.pricingModel) ? draft.pricingModel as PricingModel : "unspecified");
         setNewPlatforms(typeof draft.platforms === "string" ? draft.platforms : "");
         setNewTargetAudience(typeof draft.targetAudience === "string" ? draft.targetAudience : "");
@@ -307,6 +309,7 @@ export default function ArenaClient({
     setNewTagline("");
     setNewUrl("");
     setNewDescription("");
+    setNewCategory("");
     setNewPricingModel("unspecified");
     setNewPlatforms("");
     setNewTargetAudience("");
@@ -342,6 +345,7 @@ export default function ArenaClient({
     setNewTagline(product.tagline);
     setNewUrl(product.url);
     setNewDescription(product.description || "");
+    setNewCategory(product.category || "");
     setNewPricingModel(product.pricingModel || "unspecified");
     setNewPlatforms(product.platforms?.join(", ") || "");
     setNewTargetAudience(product.targetAudience || "");
@@ -572,6 +576,7 @@ export default function ArenaClient({
           tagline: newTagline,
           url: newUrl,
           description: newDescription,
+          category: newCategory,
           pricingModel: newPricingModel,
           platforms: newPlatforms,
           targetAudience: newTargetAudience,
@@ -1252,7 +1257,7 @@ export default function ArenaClient({
           makerAvatar,
           logo: uploadedLogo,
           description: newDescription,
-          category: editingProduct?.category,
+          category: newCategory || undefined,
           pricingModel: newPricingModel,
           platforms: newPlatforms.split(",").map((item) => item.trim()).filter(Boolean),
           targetAudience: newTargetAudience,
@@ -1291,7 +1296,7 @@ export default function ArenaClient({
           creator_uid: userSupabaseId,
           arenaEnqueued: editingProduct?.arenaEnqueued || false,
           description: newDescription,
-          category: editingProduct?.category,
+          category: newCategory || undefined,
           pricingModel: newPricingModel,
           platforms: newPlatforms.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
           targetAudience: newTargetAudience || undefined,
@@ -3090,15 +3095,30 @@ export default function ArenaClient({
                   minLength={80}
                   maxLength={2000}
                   rows={5}
-                  placeholder="Explain what the product does, who it helps, and what makes it different. This becomes the main content of your permanent profile."
+                  placeholder="What does it do? Who is it for? What makes it different?"
                   id="product-description"
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
                   className="w-full resize-y rounded-md border border-white/[0.08] bg-black p-2.5 text-xs leading-5 text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-white/[0.2]"
                 />
-                <p className="text-[10px] leading-4 text-zinc-600">Minimum 80 characters. Write for humans—no keyword stuffing.</p>
+                <p className="text-[10px] leading-4 text-zinc-600">80–2,000 characters. Describe a real use case.</p>
               </div>
 
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="product-category" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Primary category <span className="normal-case tracking-normal text-zinc-600">(optional)</span></label>
+                <select
+                  id="product-category"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value as ProductCategory | "")}
+                  aria-describedby="product-category-hint"
+                  className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none focus:border-white/[0.2]"
+                >
+                  <option value="">Not sure yet</option>
+                  {PRODUCT_CATEGORIES.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
+                </select>
+                <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-600">Choose the main use. Not displayed publicly yet.</p>
+              </div>
               <div className="flex flex-col gap-1">
                 <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing</label>
                 <select
@@ -3109,6 +3129,7 @@ export default function ArenaClient({
                 >
                   {PRICING_MODELS.map((pricing) => <option key={pricing.value} value={pricing.value}>{pricing.label}</option>)}
                 </select>
+              </div>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

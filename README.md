@@ -56,6 +56,13 @@ One valid Arena vote requires feedback for both products and activates seven day
 
 ## Search architecture
 
+Categories are currently **collection-only**. Submit and Edit Profile accept an
+optional primary category ("Not sure yet" stores NULL). OAuth drafts preserve it.
+`PUBLIC_CATEGORIES_ENABLED` in `lib/productTaxonomy.ts` remains false: category
+badges, routes, sitemap/llms entries and category-based discovery diversification
+stay disabled until an explicit future rollout. No database migration is needed
+if the product-profile migration has already been applied.
+
 - `/products/[slug]` is the canonical product identity page. Legacy `/reviews/[slug]` URLs permanently redirect to it.
 - `/categories/[slug]` provides a deliberately small eight-category taxonomy. Thin category pages remain `noindex,follow` until they contain at least four products.
 - `/underrated` orders real products by qualified visibility rather than payment or raw popularity.

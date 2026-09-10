@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { cache } from "react";
 import { fetchCloudProducts } from "@/lib/arenaStore";
-import { PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
+import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
 const getProducts = cache(fetchCloudProducts);
 
 export async function generateMetadata(): Promise<Metadata> {
+  if (!PUBLIC_CATEGORIES_ENABLED) notFound();
   const categorizedCount = (await getProducts()).filter((product) => product.category).length;
   return {
     title: "Indie Product Categories",
@@ -19,6 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function CategoriesPage() {
+  if (!PUBLIC_CATEGORIES_ENABLED) notFound();
   const products = await getProducts();
   const categories = PRODUCT_CATEGORIES.map((category) => ({
     ...category,
