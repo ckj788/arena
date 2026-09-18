@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "@/app/components/NavigationLink";
+import PublicSiteHeader from "@/app/components/PublicSiteHeader";
 import type { Product } from "@/lib/mockData";
 import { getPublicProducts } from "@/lib/server/publicSeoData";
 import { categoryLabel } from "@/lib/productTaxonomy";
@@ -60,15 +61,7 @@ export default async function UnderratedPage() {
     <div className="min-h-screen bg-[#0B0B0C] text-white antialiased selection:bg-white selection:text-black">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-black/80 py-4 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="text-xl font-semibold tracking-tight">INDIE CLASH</Link>
-          <div className="flex items-center gap-4 text-xs text-zinc-400">
-            
-            <Link href="/products" className="transition hover:text-white">All products</Link>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader actionHref="/products" actionLabel="All products" />
       <main className="relative mx-auto max-w-6xl px-4 py-12 sm:py-16">
         <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2 font-mono text-xs text-zinc-500">
           <Link href="/" className="transition hover:text-white">Indie Clash</Link><span>/</span><span className="text-zinc-300">Underrated</span>

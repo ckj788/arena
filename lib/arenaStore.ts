@@ -481,16 +481,16 @@ export async function fetchCloudProducts(): Promise<Product[]> {
     const { data, error } = await supabase
       .from(publicArenaTable("products"))
       .select("*")
-      .order(`${DB_PREFIX}submitted_at`, { ascending: true });
+      .order(`${DB_PREFIX}submitted_at`, { ascending: true }).abortSignal(AbortSignal.timeout(15_000));
 
     if (error || !data) {
       console.warn("⚠️ [INDIE CLASH] Cloud products fetch warning, using fallback store:", error?.message || error);
-      return loadProducts();
+      throw new Error("Unable to refresh products.");
     }
     return data.map(fromDbProduct);
   } catch (err: unknown) {
     console.warn("⚠️ [INDIE CLASH] Cloud products network exception, using fallback store:", exceptionMessage(err));
-    return loadProducts();
+    throw err;
   }
 }
 
@@ -506,22 +506,20 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
       .in(`${DB_PREFIX}status`, ["preparing", "active"])
       .order(`${DB_PREFIX}created_at`, { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .abortSignal(AbortSignal.timeout(15_000)).maybeSingle();
 
-    if (bErr || !bData) {
-      if (bErr) console.warn("⚠️ [INDIE CLASH] Active bracket fetch issue, using fallback:", bErr?.message || bErr);
-      return loadBracket();
-    }
+    if (bErr) throw new Error("Unable to refresh the Arena.");
+    if (!bData) return null;
 
     // B. 抓取该对局树下的所有场次
     const { data: mData, error: mErr } = await supabase
       .from(publicArenaTable("matches"))
       .select("*")
-      .eq(`${DB_PREFIX}bracket_id`, bData[`${DB_PREFIX}id`]);
+      .eq(`${DB_PREFIX}bracket_id`, bData[`${DB_PREFIX}id`]).abortSignal(AbortSignal.timeout(15_000));
 
     if (mErr || !mData) {
       if (mErr) console.warn("⚠️ [INDIE CLASH] Bracket matches fetch issue, using fallback:", mErr?.message || mErr);
-      return loadBracket();
+      throw new Error("Unable to refresh Arena matches.");
     }
 
     // C. 载入云端产品库以便装配成嵌套对象
@@ -573,7 +571,7 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
     };
   } catch (err: unknown) {
     console.warn("⚠️ [INDIE CLASH] Cloud bracket network exception, using fallback:", exceptionMessage(err));
-    return loadBracket();
+    throw err;
   }
 }
 
@@ -619,9 +617,9 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
     const { data: bData, error: bErr } = await supabase
       .from(publicArenaTable("brackets"))
       .select("*")
-      .eq(`${DB_PREFIX}status`, "completed");
+      .eq(`${DB_PREFIX}status`, "completed").abortSignal(AbortSignal.timeout(15_000));
     
-    if (bErr || !bData) return [];
+    if (bErr || !bData) throw new Error("Unable to refresh champions.");
     const winnerIds = bData
       .filter(row => {
         const size = Number((row as unknown as DatabaseRow)[`${DB_PREFIX}bracket_size`] || 16);
@@ -640,12 +638,12 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
     const { data: pData, error: pErr } = await supabase
       .from(publicArenaTable("products"))
       .select("*")
-      .in(`${DB_PREFIX}id`, winnerIds);
+      .in(`${DB_PREFIX}id`, winnerIds).abortSignal(AbortSignal.timeout(15_000));
       
-    if (pErr || !pData) return [];
+    if (pErr || !pData) throw new Error("Unable to refresh champion products.");
     return pData.map(fromDbProduct);
   } catch (err: unknown) {
     console.warn("⚠️ [INDIE CLASH] Cloud past champions network exception:", exceptionMessage(err));
-    return loadLocalPastChampions();
+    throw err;
   }
 }

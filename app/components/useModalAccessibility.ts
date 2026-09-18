@@ -3,6 +3,9 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 import useSurfaceMotion from "./useSurfaceMotion";
 
+const scrollLocks = new Set<HTMLElement>();
+let originalOverflow = "";
+
 /** Lock background scrolling, contain keyboard focus, and restore the trigger. */
 export default function useModalAccessibility(
   open: boolean,
@@ -17,7 +20,8 @@ export default function useModalAccessibility(
     const dialog = dialogRef.current;
     if (!dialog) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    const overflow = document.body.style.overflow;
+    if (!scrollLocks.size) originalOverflow = document.body.style.overflow;
+    scrollLocks.add(dialog);
     document.body.style.overflow = "hidden";
     dialog.focus({ preventScroll: true });
     const handleKey = (event: KeyboardEvent) => {
@@ -40,8 +44,11 @@ export default function useModalAccessibility(
     document.addEventListener("keydown", handleKey, true);
     return () => {
       document.removeEventListener("keydown", handleKey, true);
-      document.body.style.overflow = overflow;
-      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+      scrollLocks.delete(dialog);
+      if (!scrollLocks.size) document.body.style.overflow = originalOverflow;
+      const remaining = Array.from(scrollLocks).at(-1);
+      if (remaining?.isConnected && !remaining.contains(trigger)) remaining.focus({ preventScroll: true });
+      else if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     };
   }, [open, dialogRef]);
 }

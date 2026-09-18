@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { withDeadline } from '@/lib/requestSafety';
 
 interface CopyLinkProps {
   value: string;
@@ -21,20 +22,30 @@ const CheckIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
 
 export default function CopyLink({ value }: CopyLinkProps) {
   const [copied, setCopied] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(value);
+      await withDeadline(navigator.clipboard.writeText(value), 3_000);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error('Failed to copy text: ', err);
+      setFailed(false);
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setFailed(true);
+      input.current?.focus();
+      input.current?.select();
     }
   };
 
   return (
     <div className="relative flex items-center">
       <input
+        ref={input}
+        aria-label="Share link"
         type="text"
         readOnly
         value={value}
@@ -42,6 +53,7 @@ export default function CopyLink({ value }: CopyLinkProps) {
         className="w-full h-10 bg-zinc-950 border border-white/[0.08] rounded-md pl-3 pr-24 text-[10px] font-mono text-zinc-400 focus:outline-none focus:border-zinc-400 select-all leading-normal"
       />
       <button
+        type="button"
         onClick={handleCopy}
         className={`absolute right-1 top-1 bottom-1 px-3.5 rounded-[4px] flex items-center justify-center gap-1 transition-all duration-150 cursor-pointer font-mono text-[9px] uppercase tracking-wider font-bold ${
           copied 
@@ -61,6 +73,7 @@ export default function CopyLink({ value }: CopyLinkProps) {
           </>
         )}
       </button>
+      <span role="status" className={failed ? "absolute top-full mt-1 text-xs text-zinc-300" : "sr-only"}>{failed ? "Select and copy the link manually." : copied ? "Link copied." : ""}</span>
     </div>
   );
 }

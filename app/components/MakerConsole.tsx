@@ -16,8 +16,10 @@ interface MakerConsoleProps {
   activeBracket: Bracket | null;
   userTwitter: string;
   userSubId: string;
-  ownershipStatus: "loading" | "ready" | "error";
+  ownershipStatus: "loading" | "ready" | "error" | "reauth";
+  ownershipError?: string;
   onRetryOwnership: () => void;
+  onSignIn: () => void;
   onPushToQueue: (productId: string) => void | Promise<void>;
   renderLogo: (logo: string, className?: string) => React.ReactNode;
   onExportCsv?: (product: Product) => void;
@@ -33,7 +35,9 @@ export default function MakerConsole({
   userTwitter,
   userSubId,
   ownershipStatus,
+  ownershipError,
   onRetryOwnership,
+  onSignIn,
   onPushToQueue,
   renderLogo,
   onExportCsv,
@@ -46,6 +50,7 @@ export default function MakerConsole({
 
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const [isEnqueuing, setIsEnqueuing] = useState(false);
+  const enqueuePending = useRef(false);
   const [queueError, setQueueError] = useState("");
   useModalAccessibility(isOpen && Boolean(selectedProductForPush), dialogRef, () => {
     if (!isEnqueuing) setSelectedProductForPush(null);
@@ -110,7 +115,7 @@ export default function MakerConsole({
             YOUR PRODUCTS
           </h1>
           <p className="text-zinc-400 text-[10px] mt-1.5 font-mono uppercase tracking-wider">
-            Connected account: <span className="text-white font-bold">{userTwitter || "Indie Mode"}</span>
+            {ownershipStatus === "reauth" ? "Sign in to view your products" : <>Connected account: <span className="text-white font-bold">{userTwitter || "Indie Mode"}</span></>}
           </p>
         </div>
       </div>
@@ -134,7 +139,7 @@ export default function MakerConsole({
               Product profiles
             </h2>
           </div>
-          {onSubmitProductClick && (
+          {onSubmitProductClick && ownershipStatus !== "reauth" && (
             <button
               onClick={onSubmitProductClick}
               className="px-4 py-2.5 bg-[#ffbe18] hover:bg-[#e0a612] text-black font-semibold text-xs rounded transition duration-150 cursor-pointer flex items-center gap-1.5 font-mono uppercase tracking-wider"
@@ -147,8 +152,10 @@ export default function MakerConsole({
         <div className="space-y-4">
           {ownershipStatus === "loading" ? (
             <div role="status" className="space-y-3 py-6"><span className="text-sm text-zinc-400">Loading your products…</span><div className="h-24 rounded-xl bg-white/[0.04] animate-pulse" /></div>
+          ) : ownershipStatus === "reauth" ? (
+            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-300">Your sign-in could not be verified. This does not delete your products.</p><button type="button" onClick={onSignIn} className="mt-4 rounded-lg bg-[#ffbe18] px-4 py-2.5 text-sm font-semibold text-black">Sign in again</button></div>
           ) : ownershipStatus === "error" ? (
-            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-300">Your products couldn&apos;t load.</p><button type="button" onClick={onRetryOwnership} className="mt-3 rounded-lg border border-white/15 px-4 text-sm text-white">Retry</button></div>
+            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-300">Your products couldn&apos;t load.</p>{ownershipError && <p className="mt-2 text-xs text-zinc-400">{ownershipError}</p>}<button type="button" onClick={onRetryOwnership} className="mt-3 rounded-lg border border-white/15 px-4 py-2 text-sm text-white">Retry</button></div>
           ) : myProducts.length === 0 ? (
             <div className="py-12 text-center text-sm text-zinc-400">
               No products linked to this account.
@@ -278,7 +285,7 @@ export default function MakerConsole({
           <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
             Queue: <span className="text-white font-bold">{globalQueueCount}</span>
             {!arenaIsLive && dailyRosterSize ? (
-              <> · Daily auto-run: <span className="text-[#A78BFA] font-bold">{dailyRosterSize}</span> in <span className="text-zinc-300 font-bold"><DailyArenaRunCountdown /></span></>
+              <> · Daily auto-run: <span className="text-[#A78BFA] font-bold">{dailyRosterSize}</span> <span className="text-zinc-300 font-bold"><DailyArenaRunCountdown /></span></>
             ) : (
               <> · <span className="text-zinc-300">16 locks automatically</span></>
             )}
@@ -338,15 +345,16 @@ export default function MakerConsole({
                 disabled={isEnqueuing}
                 aria-busy={isEnqueuing}
                 onClick={async () => {
-                  if (isEnqueuing) return;
+                  if (enqueuePending.current) return;
+                  enqueuePending.current = true;
                   setIsEnqueuing(true);
                   setQueueError("");
                   try {
                     await onPushToQueue(selectedProductForPush.id);
                     setSelectedProductForPush(null);
-                  } catch {
-                    setQueueError("Unable to join right now. Please try again.");
-                  } finally { setIsEnqueuing(false); }
+                  } catch (error) {
+                    setQueueError(error instanceof Error ? error.message : "Unable to join right now. Please try again.");
+                  } finally { enqueuePending.current = false; setIsEnqueuing(false); }
                 }}
                 className="px-5 py-2 bg-[#ffbe18] hover:bg-[#ffc634] text-black font-extrabold rounded text-[10px] font-mono uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10 transition"
               >

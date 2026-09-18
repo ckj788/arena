@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "@/app/components/NavigationLink";
+import PublicSiteHeader from "@/app/components/PublicSiteHeader";
 import { notFound, permanentRedirect } from "next/navigation";
 import CopyLink from "@/app/components/CopyLink";
 import { getProductSeoData, getPublicProducts, matchSlug } from "@/lib/server/publicSeoData";
@@ -153,17 +154,7 @@ export default async function ProductPage({ params }: Props) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
 
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-black/50 py-4 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-2xl font-semibold tracking-tighter">INDIE CLASH</span>
-            <span className="rounded border border-white/[0.08] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-zinc-400">Products</span>
-          </Link>
-          <Link href="/products" className="rounded-md border border-white/[0.1] px-3.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.04] hover:text-white">
-            Discover products
-          </Link>
-        </div>
-      </header>
+      <PublicSiteHeader actionHref="/products" actionLabel="All products" />
 
       <main className="relative mx-auto max-w-5xl px-4 py-10 sm:py-14">
         <nav aria-label="Breadcrumb" className="mb-8 flex flex-wrap items-center gap-2 font-mono text-xs text-zinc-500">
@@ -328,7 +319,7 @@ export default async function ProductPage({ params }: Props) {
                 <h2 className="text-lg font-semibold">Shareable launch badge</h2>
                 <p className="mt-2 text-xs leading-5 text-zinc-500">Optionally link visitors to this public profile from your site or README.</p>
                 <a href={canonicalUrl} className="mt-5 inline-block">
-                  <img src="https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Indie_Clash-Voted_on_Arena-ffbe18?style=flat-square" alt="Voted on Indie Clash" />
+                  <img src="https://img.shields.io/badge/Featured_on-Indie_Clash-ffbe18?style=flat-square" alt="Featured on Indie Clash" />
                 </a>
                 <div className="mt-5 space-y-4">
                   <div>
@@ -337,7 +328,7 @@ export default async function ProductPage({ params }: Props) {
                   </div>
                   <div>
                     <span className="mb-1.5 block font-mono text-[10px] uppercase tracking-wider text-zinc-500">Markdown badge</span>
-                    <textarea readOnly value={`[![Voted on Indie Clash](https://img.shields.io/badge/%E2%9A%94%EF%B8%8F_Indie_Clash-Voted_on_Arena-ffbe18?style=flat-square)](${canonicalUrl})`} className="h-20 w-full rounded-md border border-white/[0.08] bg-zinc-950 p-2 font-mono text-[10px] leading-normal text-zinc-400" />
+                    <textarea aria-label="Copy launch badge Markdown" readOnly value={`[![Featured on Indie Clash](https://img.shields.io/badge/Featured_on-Indie_Clash-ffbe18?style=flat-square)](${canonicalUrl})`} className="h-20 w-full rounded-md border border-white/[0.08] bg-zinc-950 p-2 font-mono text-[10px] leading-normal text-zinc-400" />
                   </div>
                 </div>
               </section>

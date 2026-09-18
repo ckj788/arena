@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { withDeadline } from "@/lib/requestSafety";
 
 export default function ShareProductButton({ url }: { url: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
@@ -9,7 +10,7 @@ export default function ShareProductButton({ url }: { url: string }) {
   return <div>
     <button type="button" className="min-h-11 rounded-md border border-white/[0.12] px-3 text-sm text-zinc-300 hover:bg-white/[0.05]" onClick={async () => {
       try {
-        await navigator.clipboard.writeText(url);
+        await withDeadline(navigator.clipboard.writeText(url), 3_000);
         setStatus("copied");
         if (timer.current) clearTimeout(timer.current);
         timer.current = setTimeout(() => setStatus("idle"), 2500);

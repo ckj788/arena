@@ -14,7 +14,9 @@ export function GET() {
 Indie Clash exists to give independent products durable discovery rather than a single popularity-driven launch moment. Product placement cannot be purchased.
 
 ## Core pages
-- Homepage and live Arena: ${SITE_URL}/
+- Discover indie products: ${SITE_URL}/
+- Live Arena: ${SITE_URL}/arena
+- Champions and how Indie Clash works: ${SITE_URL}/champions
 - Product directory: ${SITE_URL}/products
 - Underrated products: ${SITE_URL}/underrated
 ${PUBLIC_CATEGORIES_ENABLED ? `- Product categories: ${SITE_URL}/categories\n` : ""}\

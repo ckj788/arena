@@ -10,12 +10,15 @@ const BOT_USER_AGENT = /bot|crawler|spider|slurp|bingpreview|facebookexternalhit
 
 export async function POST(request: Request) {
   try {
+    // Browser cross-site traffic must not consume discovery budget.
+    if (request.headers.get("sec-fetch-site") === "cross-site") throw new HttpError(403, "Cross-site exposure requests are not allowed.");
     const userAgent = request.headers.get("user-agent") || "";
     if (!userAgent || BOT_USER_AGENT.test(userAgent)) {
       return NextResponse.json({ recorded: 0 });
     }
 
-    const body = await readJsonRequest(request) as { productIds?: unknown };
+    const body = await readJsonRequest(request, 2_048) as { productIds?: unknown };
+    if (!body || typeof body !== "object") throw new HttpError(400, "Invalid exposure payload.");
     if (!Array.isArray(body.productIds) || body.productIds.length < 1 || body.productIds.length > 6) {
       throw new HttpError(400, "One to six product IDs are required.");
     }

@@ -1,23 +1,9 @@
 import type { Metadata } from "next";
-import { unstable_cache } from "next/cache";
 import ArenaClient from "./ArenaClient";
-import { fetchCloudPastChampions, fetchCloudBracket } from "@/lib/arenaStore";
-import { getPublicProducts } from "@/lib/server/publicSeoData";
+import { getArenaPageData } from "@/lib/server/arenaPageData";
 import { absoluteUrl, serializeJsonLd, SITE_DESCRIPTION } from "@/lib/site";
 
 export const revalidate = 60;
-
-const getHomepageData = unstable_cache(async () => {
-  const products = await getPublicProducts();
-  const [pastChampions, bracket] = await Promise.all([
-    fetchCloudPastChampions(products),
-    fetchCloudBracket(products),
-  ]);
-  return { products, pastChampions, bracket };
-// Keep the cache key versioned. The v2 entry may contain the temporary empty
-// fallback produced before the production-safe Supabase views were installed,
-// and Next's data cache persists across deployments.
-}, ["arena-home-v4"], { revalidate: 60, tags: ["arena-public"] });
 
 export const metadata: Metadata = {
   title: { absolute: "Discover New Indie Products | Indie Clash" },
@@ -30,7 +16,7 @@ export default async function Page() {
     products: initialProducts,
     pastChampions: initialPastChampions,
     bracket: initialBracket,
-  } = await getHomepageData();
+  } = await getArenaPageData();
   const latestProducts = initialProducts
     .slice()
     .sort((a, b) => new Date(b.publishedAt || b.submittedAt).getTime() - new Date(a.publishedAt || a.submittedAt).getTime())

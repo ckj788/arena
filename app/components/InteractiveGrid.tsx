@@ -21,7 +21,7 @@ interface Spark {
   speed: number;
 }
 
-export default function InteractiveGrid() {
+function InteractiveGrid() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mouseRef = useRef({ x: -1000, y: -1000, active: false });
 
@@ -37,10 +37,13 @@ export default function InteractiveGrid() {
     let bounds = { width: 0, height: 0 };
     let sparks: Spark[] = [];
     let waves: Wave[] = [];
+    let fills: CanvasGradient[] = [];
+    let peakGradient: CanvasGradient | null = null;
 
     const initCanvas = () => {
       const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
       const rect = canvas.getBoundingClientRect();
+      if (bounds.width === rect.width && bounds.height === rect.height) return;
       bounds = { width: rect.width, height: rect.height };
       canvas.width = rect.width * dpr;
       canvas.height = rect.height * dpr;
@@ -88,6 +91,17 @@ export default function InteractiveGrid() {
         }
       ];
 
+      // These gradients depend on size, not time. Do not recreate them per frame.
+      fills = waves.map(wave => {
+        const gradient = ctx.createLinearGradient(0, wave.offsetY - 150, 0, rect.height);
+        gradient.addColorStop(0, wave.color.replace("0.11", "0.015").replace("0.09", "0.01").replace("0.07", "0.006").replace("0.08", "0.01"));
+        gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+        return gradient;
+      });
+      peakGradient = ctx.createRadialGradient(rect.width * 0.2, rect.height * 0.15, 0, rect.width * 0.2, rect.height * 0.15, 600);
+      peakGradient.addColorStop(0, "rgba(6, 182, 212, 0.045)");
+      peakGradient.addColorStop(1, "rgba(0,0,0,0)");
+
       // Pure micro star bokeh particles drifting peacefully
       sparks = [];
       const colors = ["#22D3EE", "#A78BFA", "#F472B6", "#34D399"];
@@ -120,10 +134,18 @@ export default function InteractiveGrid() {
     let currentMouseX = -1000;
     let currentMouseY = -1000;
     let globalTime = 0;
+    let lastPaint = 0;
 
-    const draw = () => {
+    const draw = (now: number) => {
       if (document.hidden) return;
-      globalTime += 0.0025;
+      // Slow ambient motion needs only 30fps; reserve rendering budget for UI.
+      if (!motionPreference.matches && lastPaint && now - lastPaint < 1000 / 30 - 1) {
+        animationId = requestAnimationFrame(draw);
+        return;
+      }
+      const delta = motionPreference.matches ? 0 : Math.min(lastPaint ? (now - lastPaint) / (1000 / 60) : 1, 3);
+      lastPaint = now;
+      globalTime += 0.0025 * delta;
       const rect = bounds;
       ctx.clearRect(0, 0, rect.width, rect.height);
 
@@ -133,19 +155,19 @@ export default function InteractiveGrid() {
           currentMouseX = mouseRef.current.x;
           currentMouseY = mouseRef.current.y;
         } else {
-          currentMouseX += (mouseRef.current.x - currentMouseX) * 0.07;
-          currentMouseY += (mouseRef.current.y - currentMouseY) * 0.07;
+          currentMouseX += (mouseRef.current.x - currentMouseX) * (1 - Math.pow(0.93, delta));
+          currentMouseY += (mouseRef.current.y - currentMouseY) * (1 - Math.pow(0.93, delta));
         }
       } else {
         // Slow fallback off-screen float when mouse leaves, avoiding sudden jumps
-        currentMouseX += (-1000 - currentMouseX) * 0.03;
-        currentMouseY += (-1000 - currentMouseY) * 0.03;
+        currentMouseX += (-1000 - currentMouseX) * (1 - Math.pow(0.97, delta));
+        currentMouseY += (-1000 - currentMouseY) * (1 - Math.pow(0.97, delta));
       }
 
       // 1. ADVANCED DYNAMIC FLUID ORGANIC BREATHING RIBBONS
       waves.forEach((wave, idx) => {
         // Move the phase of the ribbon
-        wave.phase += wave.speed;
+        wave.phase += wave.speed * delta;
 
         // Slow, elegant mathematical breathing amplitude & offset oscillations (creates genuine organic float)
         const breathingOffsetY = Math.sin(globalTime * 1.8 + idx * 1.7) * 25;
@@ -177,12 +199,7 @@ export default function InteractiveGrid() {
         ctx.lineTo(0, rect.height);
         ctx.closePath();
         
-        const gradientFill = ctx.createLinearGradient(0, wave.offsetY - 150, 0, rect.height);
-        // Generates pristine ambient twilight depth without distracting colors
-        gradientFill.addColorStop(0, wave.color.replace("0.11", "0.015").replace("0.09", "0.01").replace("0.07", "0.006").replace("0.08", "0.01"));
-        gradientFill.addColorStop(1, "rgba(0, 0, 0, 0)");
-        
-        ctx.fillStyle = gradientFill;
+        ctx.fillStyle = fills[idx];
         ctx.fill();
         ctx.restore();
       });
@@ -207,21 +224,15 @@ export default function InteractiveGrid() {
       }
 
       // Ambient static depth lighting peaks (Left-top cyan highlight, right-bottom lavender highlight)
-      const peakGradL = ctx.createRadialGradient(
-        rect.width * 0.2, rect.height * 0.15, 0,
-        rect.width * 0.2, rect.height * 0.15, 600
-      );
-      peakGradL.addColorStop(0, "rgba(6, 182, 212, 0.045)");
-      peakGradL.addColorStop(1, "rgba(0,0,0,0)");
-      ctx.fillStyle = peakGradL;
+      ctx.fillStyle = peakGradient!;
       ctx.beginPath();
       ctx.arc(rect.width * 0.2, rect.height * 0.15, 600, 0, Math.PI * 2);
       ctx.fill();
 
       // 3. SOFTEST CELESTIAL BOKEH STARS
       sparks.forEach((s) => {
-        s.x += s.vx;
-        s.y += s.vy;
+        s.x += s.vx * delta;
+        s.y += s.vy * delta;
 
         // Loop boundaries gently
         if (s.x < 0) s.x = rect.width;
@@ -242,16 +253,16 @@ export default function InteractiveGrid() {
       if (!motionPreference.matches) animationId = requestAnimationFrame(draw);
     };
 
-    const restart = () => { cancelAnimationFrame(animationId); draw(); };
+    const restart = () => { cancelAnimationFrame(animationId); lastPaint = 0; draw(performance.now()); };
     restart();
     document.addEventListener("visibilitychange", restart);
     motionPreference.addEventListener("change", restart);
 
     const handleMouseMove = (e: MouseEvent) => {
       if (motionPreference.matches) return;
-      const rect = canvas.getBoundingClientRect();
-      mouseRef.current.x = e.clientX - rect.left;
-      mouseRef.current.y = e.clientY - rect.top;
+      // Canvas is fixed to the viewport; no layout read on every pointer event.
+      mouseRef.current.x = e.clientX;
+      mouseRef.current.y = e.clientY;
       mouseRef.current.active = true;
     };
 
@@ -259,7 +270,7 @@ export default function InteractiveGrid() {
       mouseRef.current.active = false;
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
     window.addEventListener("mouseleave", handleMouseLeave);
 
     return () => {
@@ -283,3 +294,5 @@ export default function InteractiveGrid() {
     </div>
   );
 }
+
+export default React.memo(InteractiveGrid);

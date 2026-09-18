@@ -69,7 +69,16 @@ export async function authenticateRequest(request: Request): Promise<Authenticat
   });
 
   const { data, error } = await client.auth.getUser(accessToken);
-  if (error || !data.user) {
+  if (error) {
+    // Supabase returns AuthRetryableFetchError (status 0/5xx) when Auth is
+    // unreachable. Calling that an expired login would wrongly sign makers out.
+    if (error.status !== 400 && error.status !== 401 && error.status !== 403) {
+      console.warn("[ARENA API] Auth verification unavailable:", error.name, error.status);
+      throw new HttpError(503, "Sign-in verification is temporarily unavailable. Please retry.");
+    }
+    throw new HttpError(401, "Invalid or expired session.");
+  }
+  if (!data.user) {
     throw new HttpError(401, "Invalid or expired session.");
   }
 

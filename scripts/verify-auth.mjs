@@ -38,7 +38,10 @@ let currentPage;
 let diagnostics = () => ({});
 
 try {
-  for (const scenario of ['success', 'submit-draft', 'cancel', 'cancel-fragment', 'expired', 'missing-verifier']) {
+  for (const scenario of ['success', 'submit-draft', 'arena-success', 'champions-success', 'arena-submit-draft', 'arena-cancel', 'cancel', 'cancel-fragment', 'expired', 'missing-verifier']) {
+    const startPath = scenario.startsWith('arena-') ? '/arena' : scenario.startsWith('champions-') ? '/champions' : '/';
+    const draftScenario = scenario.endsWith('submit-draft');
+    const cancelScenario = scenario.endsWith('cancel');
     const context = await browser.createBrowserContext();
     const page = await context.newPage();
     currentPage = page;
@@ -57,7 +60,7 @@ try {
       if (url.pathname === '/auth/v1/authorize') {
         handoffs.push({ redirect: url.searchParams.get('redirect_to'), challenge: url.searchParams.get('code_challenge'), method: url.searchParams.get('code_challenge_method') });
         const callback = new URL('/auth/callback', base);
-        if (scenario === 'cancel') callback.searchParams.set('error', 'access_denied');
+        if (cancelScenario) callback.searchParams.set('error', 'access_denied');
         else if (scenario === 'cancel-fragment') callback.hash = 'error=access_denied&error_description=User+cancelled';
         else callback.searchParams.set('code', `fixture-${scenario}`);
         return request.respond({ status: 302, headers: { location: callback.toString() } });
@@ -81,21 +84,22 @@ try {
       return request.continue();
     });
 
-    await page.goto(scenario === 'missing-verifier' ? `${base}/?code=fixture-missing` : base, { waitUntil: 'domcontentloaded' });
+    await page.goto(scenario === 'missing-verifier' ? `${base}/?code=fixture-missing` : `${base}${startPath}`, { waitUntil: 'domcontentloaded' });
     if (scenario !== 'missing-verifier') {
-      if (scenario === 'submit-draft') {
+      if (draftScenario) {
         await clickText(page, 'Submit Product');
         await page.type('#product-title', 'Keep this product draft');
         await page.type('#product-tagline', 'The form survives signing in');
       } else await clickText(page, 'Sign in');
       await clickText(page, 'Continue with Google');
     }
-    const success = ['success', 'submit-draft'].includes(scenario);
+    const success = scenario.endsWith('success') || draftScenario;
     if (success) {
       await page.waitForFunction(() => document.body.textContent.includes('Auth Test Maker') && !location.search.includes('code='));
+      await page.waitForFunction((path) => location.pathname === path && document.querySelector('[data-main-page]')?.getAttribute('data-main-page') === (path === '/' ? 'discover' : path.slice(1)), {}, startPath);
       assert.equal(exchanges, 1);
-      assert.equal(homeDocuments, 2, 'Completing sign-in must not reload home a second time');
-      if (scenario === 'submit-draft') {
+      assert.equal(homeDocuments, startPath === '/' ? 2 : 1, 'Completing sign-in must not reload home a second time');
+      if (draftScenario) {
         await page.waitForSelector('[aria-labelledby="product-form-title"]');
         assert.equal(await page.$eval('#product-title', (el) => el.value), 'Keep this product draft');
         assert.equal(await page.$eval('#product-tagline', (el) => el.value), 'The form survives signing in');
@@ -106,7 +110,8 @@ try {
     } else {
       await page.waitForSelector('[data-auth-error]');
       const message = await page.$eval('[data-auth-error]', (el) => el.textContent);
-      assert(message.includes(scenario === 'missing-verifier' ? 'different site' : scenario.startsWith('cancel') ? 'cancelled' : 'could not finish'));
+      assert(message.includes(scenario === 'missing-verifier' ? 'different site' : cancelScenario || scenario.startsWith('cancel') ? 'cancelled' : 'could not finish'));
+      await page.waitForFunction((path) => location.pathname === path && !location.search.includes('error='), {}, startPath);
       assert(!page.url().includes('code=') && !page.url().includes('error='));
       assert.equal(exchanges, scenario === 'expired' ? 1 : 0);
       await clickText(page, 'Sign in');

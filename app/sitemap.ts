@@ -21,6 +21,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.9,
     },
     {
+      url: absoluteUrl("/arena"),
+      changeFrequency: "daily",
+      priority: 0.8,
+    },
+    {
+      url: absoluteUrl("/champions"),
+      changeFrequency: "weekly",
+      priority: 0.7,
+    },
+    {
       url: absoluteUrl("/privacy"),
       changeFrequency: "yearly",
       priority: 0.2,

@@ -68,7 +68,7 @@ export interface SitemapProduct {
 const loadPublicProducts = unstable_cache(async () => {
   if (!supabase) return fetchCloudProducts();
   const { data, error } = await supabase.from(publicArenaTable("products"))
-    .select("*").order(`${DB_PREFIX}submitted_at`, { ascending: true });
+    .select("*").order(`${DB_PREFIX}submitted_at`, { ascending: true }).abortSignal(AbortSignal.timeout(15_000));
   // Do not persist an offline fallback as a successful empty catalogue. An
   // unsuccessful revalidation must preserve the last successful cached value.
   if (error || !data) throw new Error("Public products are temporarily unavailable.");
@@ -162,7 +162,7 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
       .from(publicArenaTable("matches"))
       .select(matchFields)
       .or(`${DB_PREFIX}product_a_id.eq.${slug},${DB_PREFIX}product_b_id.eq.${slug}`)
-      .limit(50),
+      .limit(50).abortSignal(AbortSignal.timeout(15_000)),
   ]);
 
   if (matchError) throw new Error(`Unable to load product matchups: ${matchError.message}`);
@@ -176,7 +176,7 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
         .select("*")
         .in(`${DB_PREFIX}match_id`, matches.map((match) => match.id))
         .order(`${DB_PREFIX}created_at`, { ascending: false })
-        .limit(50)
+        .limit(50).abortSignal(AbortSignal.timeout(15_000))
     : { data: [], error: null };
 
   if (critiqueError) throw new Error(`Unable to load critiques: ${critiqueError.message}`);
@@ -249,6 +249,7 @@ const loadVersusSeoData = unstable_cache(async (rawSlug: string): Promise<Versus
       .select(matchFields)
       .or(filter)
       .limit(1)
+      .abortSignal(AbortSignal.timeout(15_000))
       .maybeSingle();
     if (error) throw new Error(`Unable to load matchup: ${error.message}`);
     if (data) {
@@ -263,13 +264,13 @@ const loadVersusSeoData = unstable_cache(async (rawSlug: string): Promise<Versus
     supabase
       .from(publicArenaTable("products"))
       .select("*")
-      .in(`${DB_PREFIX}id`, [match.productAId, match.productBId]),
+      .in(`${DB_PREFIX}id`, [match.productAId, match.productBId]).abortSignal(AbortSignal.timeout(15_000)),
     supabase
       .from(publicArenaTable("votes"))
       .select("*")
       .eq(`${DB_PREFIX}match_id`, match.id)
       .order(`${DB_PREFIX}created_at`, { ascending: false })
-      .limit(30),
+      .limit(30).abortSignal(AbortSignal.timeout(15_000)),
   ]);
 
   if (productError) throw new Error(`Unable to load matchup products: ${productError.message}`);
@@ -318,7 +319,7 @@ async function loadSitemapRecords(): Promise<{
       .from(publicArenaTable("products"))
       .select("*")
       .order(`${DB_PREFIX}id`, { ascending: true })
-      .range(start, start + pageSize - 1);
+      .range(start, start + pageSize - 1).abortSignal(AbortSignal.timeout(15_000));
     if (error || !data) throw new Error(`Unable to build product sitemap: ${error?.message || "Missing response"}`);
     productRows.push(...((data ?? []) as unknown as DatabaseRow[]));
     if (!data || data.length < pageSize) break;
@@ -338,7 +339,7 @@ async function loadSitemapRecords(): Promise<{
         `${DB_PREFIX}winner_id`,
       ].join(","))
       .order(`${DB_PREFIX}id`, { ascending: true })
-      .range(start, start + pageSize - 1);
+      .range(start, start + pageSize - 1).abortSignal(AbortSignal.timeout(15_000));
     if (error || !data) throw new Error(`Unable to build matchup sitemap: ${error?.message || "Missing response"}`);
     matchRows.push(...((data ?? []) as unknown as DatabaseRow[]));
     if (!data || data.length < pageSize) break;

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "@/app/components/NavigationLink";
+import PublicSiteHeader from "@/app/components/PublicSiteHeader";
 import type { Product } from "@/lib/mockData";
 import { getPublicProducts } from "@/lib/server/publicSeoData";
 import {
@@ -87,16 +88,7 @@ export default async function ProductsPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
 
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-black/80 py-4 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="text-xl font-semibold tracking-tight">INDIE CLASH</Link>
-          <div className="flex items-center gap-3">
-            <Link href="/underrated" className="hidden text-xs text-zinc-400 transition hover:text-white sm:inline">Underrated</Link>
-            <Link href="/#arena-section" className="hidden text-xs text-zinc-400 transition hover:text-white sm:inline">Live arena</Link>
-            <Link href="/?submit=1" className="rounded-lg bg-[#ffbe18] px-4 py-2 text-xs font-semibold text-black">Submit a product</Link>
-          </div>
-        </div>
-      </header>
+      <PublicSiteHeader />
 
       <main className="relative mx-auto max-w-6xl px-4 py-12 sm:py-16">
         <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2 font-mono text-xs text-zinc-500">
@@ -110,6 +102,7 @@ export default async function ProductsPage() {
           <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">Discover new indie products</h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg">{directoryDescription}</p>
           <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-400">
+            <Link href="/underrated" className="rounded-full border border-[#A78BFA]/25 px-3 py-1.5 text-[#A78BFA] hover:text-white">Explore overlooked products →</Link>
             <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">{products.length} public profiles</span>
             <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">Followed official-site links</span>
             <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">Authenticated builder feedback</span>

@@ -126,7 +126,32 @@ body {
   }
 }
 
-/* Content is visible by default; scoped GSAP effects progressively enhance it. */
+/* First-paint CSS owns the hero. A late hydration must never re-hide it. */
+@keyframes hero-first-paint {
+  from { opacity: 0; transform: translate3d(0, 22px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+/* Arena / Champions start at first paint too, without waiting for hydration.
+   Off-screen blocks are handed to the GSAP scroll reveal by useHomeMotion. */
+@keyframes route-first-paint {
+  from { opacity: 0; transform: translate3d(var(--route-x, 0px), 18px, 0); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-route-enter] { animation: route-first-paint .85s cubic-bezier(.22, 1, .36, 1) var(--route-delay, 0ms) both; }
+  [data-route-enter="left"] { --route-x: -24px; }
+  [data-route-enter="right"] { --route-x: 24px; }
+  .hero-badge, .hero-title, .hero-desc, .hero-stats {
+    animation: hero-first-paint .9s cubic-bezier(.22, 1, .36, 1) both;
+  }
+  .hero-title { animation-delay: .06s; }
+  .hero-desc { animation-delay: .13s; }
+  .hero-stats { animation-delay: .2s; }
+}
+@media (max-width: 767px) {
+  [data-route-enter="left"] { --route-x: -14px; }
+  [data-route-enter="right"] { --route-x: 14px; }
+}
 
 /* ========================================================
    HERO ACT — Floating pixel particles

@@ -6,6 +6,8 @@ import { gsap } from "gsap";
 import type { Product } from "@/lib/mockData";
 import { recordQualifiedExposure } from "@/lib/arenaApi";
 import { buildFairDiscoverySequence, hasActiveDiscoveryBoost } from "@/lib/discoveryRanking";
+import { discoverySeed, readSession, writeSession, removeSession } from "@/lib/browserStorage";
+import { observeQualifiedExposures } from "@/lib/qualifiedExposure";
 
 
 const BATCH_SIZE = 6;
@@ -25,38 +27,44 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
   const [isVisible, setIsVisible] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [gridHeight, setGridHeight] = useState<number>();
-  const animatedBatchRef = useRef("");
+  // Keep the server-painted first deck while restoring the visitor seed.
+  // Only the unseen tail is reshuffled; hydration is not a Next action.
+  const [firstDeckIds] = useState(() => buildFairDiscoverySequence(products, "initial", BATCH_SIZE).slice(0, BATCH_SIZE).map(product => product.id));
+  const [isFirstPass, setIsFirstPass] = useState(true);
   const sectionRef = useRef<HTMLElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
   const isTransitioningRef = useRef(false);
   const recordedExposureIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    let seed = sessionStorage.getItem(SEED_KEY);
+    let seed = readSession(SEED_KEY);
     if (!seed) {
-      seed = crypto.randomUUID();
-      sessionStorage.setItem(SEED_KEY, seed);
+      seed = discoverySeed();
+      writeSession(SEED_KEY, seed);
     }
 
     const restoreTimer = window.setTimeout(() => {
       setSessionSeed(seed);
       try {
-        const storedSeen = JSON.parse(sessionStorage.getItem(SEEN_KEY) || "[]");
+        const storedSeen = JSON.parse(readSession(SEEN_KEY) || "[]");
         if (Array.isArray(storedSeen)) {
           setSeenIds(new Set(storedSeen.filter((id): id is string => typeof id === "string")));
         }
       } catch {
-        sessionStorage.removeItem(SEEN_KEY);
+        removeSession(SEEN_KEY);
       }
     }, 0);
 
     return () => window.clearTimeout(restoreTimer);
   }, []);
 
-  const sequence = useMemo(
-    () => buildFairDiscoverySequence(products, sessionSeed, BATCH_SIZE),
-    [products, sessionSeed],
-  );
+  const sequence = useMemo(() => {
+    if (!isFirstPass) return buildFairDiscoverySequence(products, sessionSeed, BATCH_SIZE);
+    const byId = new Map(products.map(product => [product.id, product]));
+    const leading = firstDeckIds.flatMap(id => byId.has(id) ? [byId.get(id)!] : []);
+    const locked = new Set(firstDeckIds);
+    return [...leading, ...buildFairDiscoverySequence(products.filter(product => !locked.has(product.id)), sessionSeed, BATCH_SIZE)];
+  }, [products, sessionSeed, isFirstPass, firstDeckIds]);
   const batchCount = Math.ceil(sequence.length / BATCH_SIZE);
   const activeBatchIndex = batchCount ? batchIndex % batchCount : 0;
   const visibleProducts = useMemo(() => {
@@ -88,7 +96,7 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
       setSeenIds((current) => {
         if (ids.every((id) => current.has(id))) return current;
         const next = new Set([...current, ...ids]);
-        try { sessionStorage.setItem(SEEN_KEY, JSON.stringify([...next])); } catch {}
+        writeSession(SEEN_KEY, JSON.stringify([...next]));
         return next;
       });
     }, { threshold: 0.5 });
@@ -98,14 +106,12 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
 
   useLayoutEffect(() => {
     const grid = gridRef.current;
-    const batchKey = `${activeBatchIndex}:${sessionSeed}`;
-    if (!grid || animatedBatchRef.current === batchKey) return;
-    animatedBatchRef.current = batchKey;
+    if (!grid || !isTransitioningRef.current) return;
     const media = gsap.matchMedia(sectionRef);
     media.add("(prefers-reduced-motion: no-preference)", () => {
-      gsap.fromTo(grid, { opacity: 0.55, x: 8 }, {
-        opacity: 1, x: 0, duration: 0.22, ease: "power2.out",
-        clearProps: "transform,opacity,visibility",
+      gsap.fromTo(grid, { opacity: 0, x: 14, willChange: "transform,opacity" }, {
+        opacity: 1, x: 0, duration: 0.36, ease: "power3.out",
+        clearProps: "transform,opacity,visibility,willChange",
         onComplete: () => { isTransitioningRef.current = false; setIsTransitioning(false); },
       });
     });
@@ -113,8 +119,8 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
     const release = window.setTimeout(() => {
       isTransitioningRef.current = false;
       setIsTransitioning(false);
-    }, 250);
-    return () => { media.revert(); gsap.set(grid, { clearProps: "transform,opacity,visibility" }); window.clearTimeout(release); };
+    }, 500);
+    return () => { media.revert(); gsap.set(grid, { clearProps: "transform,opacity,visibility,willChange" }); window.clearTimeout(release); };
   }, [activeBatchIndex, sessionSeed]);
 
   useEffect(() => {
@@ -126,53 +132,8 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
 
   useEffect(() => {
     if (!visibleProducts.length || typeof IntersectionObserver === "undefined") return;
-    const timers = new Map<string, number>();
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        const element = entry.target as HTMLElement;
-        const productId = element.dataset.qualifiedExposureId;
-        if (!productId || recordedExposureIdsRef.current.has(productId)) continue;
-        const storageKey = `indieclash_exposure_${productId}_${new Date().toISOString().slice(0, 10)}`;
-        if (sessionStorage.getItem(storageKey)) {
-          recordedExposureIdsRef.current.add(productId);
-          observer.unobserve(element);
-          continue;
-        }
-
-        if (entry.isIntersecting && entry.intersectionRatio >= 0.7 && document.visibilityState === "visible") {
-          if (timers.has(productId)) continue;
-          timers.set(productId, window.setTimeout(() => {
-            timers.delete(productId);
-            if (document.visibilityState !== "visible") return;
-            recordedExposureIdsRef.current.add(productId);
-            sessionStorage.setItem(storageKey, "1");
-            observer.unobserve(element);
-            void recordQualifiedExposure(productId).catch(() => {
-              // Telemetry must never interrupt discovery.
-            });
-          }, 4_000));
-        } else {
-          const timer = timers.get(productId);
-          if (timer) window.clearTimeout(timer);
-          timers.delete(productId);
-        }
-      }
-    }, { threshold: [0.7] });
-
-    const elements = gridRef.current?.querySelectorAll<HTMLElement>("[data-qualified-exposure-id]") || [];
-    elements.forEach((element) => observer.observe(element));
-    const cancelHiddenTimers = () => {
-      if (document.visibilityState === "visible") return;
-      timers.forEach((timer) => window.clearTimeout(timer));
-      timers.clear();
-    };
-    document.addEventListener("visibilitychange", cancelHiddenTimers);
-
-    return () => {
-      observer.disconnect();
-      timers.forEach((timer) => window.clearTimeout(timer));
-      document.removeEventListener("visibilitychange", cancelHiddenTimers);
-    };
+    const elements = Array.from(gridRef.current?.querySelectorAll<HTMLElement>("[data-qualified-exposure-id]") || []);
+    return observeQualifiedExposures(elements, recordedExposureIdsRef.current, recordQualifiedExposure);
   }, [visibleProducts]);
 
   const showNext = () => {
@@ -184,10 +145,11 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
 
     const swapBatch = () => {
       if (activeBatchIndex >= batchCount - 1) {
-        const nextSeed = crypto.randomUUID();
-        sessionStorage.setItem(SEED_KEY, nextSeed);
-        sessionStorage.removeItem(SEEN_KEY);
+        const nextSeed = discoverySeed();
+        writeSession(SEED_KEY, nextSeed);
+        removeSession(SEEN_KEY);
         setSeenIds(new Set());
+        setIsFirstPass(false);
         setSessionSeed(nextSeed);
         setBatchIndex(0);
       } else {
@@ -203,13 +165,14 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
       return;
     }
 
-    // One short compositor-only movement gives immediate feedback. The new
-    // deck mounts before the eye can perceive an empty loading state.
+    // Finish fading before changing text. Swapping a half-visible grid looks
+    // like a flash even when every frame is fast. No layout properties animate.
     gsap.to(grid, {
-      x: -6,
-      opacity: 0.55,
-      duration: 0.07,
-      ease: "power1.in",
+      x: -10,
+      opacity: 0,
+      duration: 0.12,
+      ease: "power2.in",
+      willChange: "transform,opacity",
       force3D: true,
       overwrite: true,
       onComplete: swapBatch,

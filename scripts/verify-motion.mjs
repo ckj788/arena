@@ -38,7 +38,8 @@ try {
     else await page.reload({ waitUntil: 'domcontentloaded' });
     await delay(1800);
     const frames = await page.evaluate(() => window.motionSamples.filter((opacity) => opacity > 0.01 && opacity < 0.99).length);
-    assert(frames >= 5, `${pass}: expected visible GSAP entrance, got ${frames} intermediate frames`);
+    assert(frames >= 5, `${pass}: expected visible first-paint entrance, got ${frames} intermediate frames`);
+    assert(await page.evaluate(() => window.motionSamples.every((opacity, index, all) => index === 0 || opacity >= all[index - 1] - 0.02)), `${pass}: the hero must never re-hide after being painted`);
     assert.equal(await page.$eval('.hero-title', (el) => getComputedStyle(el).opacity), '1');
     console.log(`PASS ${pass}: ${frames} animated hero frames, ends visible`);
   }
@@ -76,10 +77,11 @@ try {
   assert(frames.every(({ opacity, x }) => opacity === 1 && x === 0), 'Do not repeatedly hide a visited section');
   console.log('PASS scroll reveal and no replay on revisiting a module');
   await page.goto(`${base}/#arena-section`, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-main-page="arena"]');
   await delay(1300);
-  assert.equal(await page.$eval('.hero-title', (el) => getComputedStyle(el).opacity), '1');
+  assert.equal(new URL(page.url()).pathname, '/arena');
   assert.equal(await page.$eval('[data-home-reveal="arena-heading"]', (el) => getComputedStyle(el).opacity), '1');
-  console.log('PASS anchor navigation leaves content visible');
+  console.log('PASS legacy anchor navigation opens the visible Arena page');
   await page.setViewport({ width: 390, height: 844 });
   await page.goto(base, { waitUntil: 'domcontentloaded' });
   await delay(1800);
@@ -105,8 +107,10 @@ try {
   assert(await page.evaluate(() => window.motionSamples.every((opacity) => opacity === 1)));
   assert((await sampleReveal()).every(({ opacity, x }) => opacity === 1 && x === 0));
   console.log('PASS reduced-motion: no entrances or hidden content');
+  await page.emulateMediaFeatures([{ name: 'prefers-reduced-motion', value: 'no-preference' }]);
   await page.setJavaScriptEnabled(false);
   await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await delay(1200);
   assert.equal(await page.$eval('.hero-title', (el) => getComputedStyle(el).opacity), '1');
   assert.equal(await page.$eval(selector, (el) => getComputedStyle(el).opacity), '1');
   console.log('PASS server HTML stays visible without JavaScript');

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import Link from "@/app/components/NavigationLink";
 import useModalAccessibility from "@/app/components/useModalAccessibility";
@@ -8,6 +9,7 @@ import useHomeMotion from "@/app/components/useHomeMotion";
 import useArenaNavigation from "@/app/components/useArenaNavigation";
 import AuthProviderButton from "@/app/components/AuthProviderButton";
 import { gsap } from "gsap";
+import { withDeadline } from "@/lib/requestSafety";
 import { Product, Match, Bracket } from "@/lib/mockData";
 import {
   loadProducts,
@@ -29,6 +31,7 @@ import {
   saveLocalPastChampions
 } from "@/lib/arenaStore";
 import {
+  AuthSessionExpiredError,
   castArenaVote,
   enqueueArenaProduct,
   fetchOwnedArenaProducts,
@@ -49,6 +52,7 @@ import ClashLogo from "@/app/components/ClashLogo";
 import MakerConsole from "@/app/components/MakerConsole";
 import FairDiscoverySection from "@/app/components/FairDiscoverySection";
 import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
+import PrimaryNavigation, { type MainPage } from "@/app/components/PrimaryNavigation";
 import { PRICING_MODELS, PRODUCT_CATEGORIES, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
@@ -145,6 +149,7 @@ let memoryCache: {
 const OAUTH_SUBMIT_DRAFT_KEY = "indieclash_oauth_submit_draft_v1";
 
 interface ArenaClientProps {
+  page?: MainPage;
   initialProducts: Product[];
   initialPastChampions: Product[];
   initialBracket: Bracket | null;
@@ -170,10 +175,12 @@ function errorMessage(error: unknown) {
 }
 
 export default function ArenaClient({
+  page = "discover",
   initialProducts,
   initialPastChampions,
   initialBracket
 }: ArenaClientProps) {
+  const router = useRouter();
   const arenaRootRef = useRef<HTMLDivElement | null>(null);
   const submitDialogRef = useRef<HTMLDivElement | null>(null);
   const authDialogRef = useRef<HTMLDivElement | null>(null);
@@ -225,6 +232,10 @@ export default function ArenaClient({
   const [isSubmitOpen, setIsSubmitOpen] = useState(false);
   const [submitSource, setSubmitSource] = useState<'home' | 'console'>('home');
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const submitPendingRef = useRef(false);
+  const publicRevisionRef = useRef(0);
+  const publicSyncPendingRef = useRef(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
@@ -254,6 +265,7 @@ export default function ArenaClient({
     // Wait for the code exchange before consuming the draft/return context.
     if (isOAuthCallback) return;
     const shouldOpenFromQuery = params.get("submit") === "1";
+    const shouldSignIn = params.get("signin") === "1";
     const shouldRestoreConsole = params.get("view") === "console";
     let savedDraft: string | null = null;
     try { savedDraft = sessionStorage.getItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Storage may be restricted. */ }
@@ -267,9 +279,10 @@ export default function ArenaClient({
       }
     }
 
-    if (!shouldOpenFromQuery && !savedDraft && !shouldRestoreConsole) return;
+    if (!shouldOpenFromQuery && !savedDraft && !shouldRestoreConsole && !shouldSignIn) return;
 
     restoreTimer = window.setTimeout(() => {
+      if (shouldSignIn) { setIsAuthOpen(true); params.delete("signin"); }
       if (restoredDraft) {
         const draft = restoredDraft;
         setNewTitle(typeof draft.title === "string" ? draft.title : "");
@@ -363,6 +376,8 @@ export default function ArenaClient({
   const [voteWinnerFeedback, setVoteWinnerFeedback] = useState("");
   const [voteLoserFeedback, setVoteLoserFeedback] = useState("");
   const [voteError, setVoteError] = useState("");
+  const [isVoting, setIsVoting] = useState(false);
+  const votePendingRef = useRef(false);
   
   // User simulated login
   const [userLoggedIn, setUserLoggedIn] = useState(false);
@@ -370,12 +385,26 @@ export default function ArenaClient({
   const [userAuthType, setUserAuthType] = useState<"google" | "github" | null>(null);
   const [userSupabaseId, setUserSupabaseId] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
-  const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [authReady, setAuthReady] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const logoutPendingRef = useRef(false);
   const [authError, setAuthError] = useState<string | null>(null);
-  const [ownership, setOwnership] = useState<{ userId: string; status: "loading" | "ready" | "error"; ids: string[]; products: Product[] }>({ userId: "", status: "loading", ids: [], products: [] });
+  const [ownership, setOwnership] = useState<{ userId: string; status: "loading" | "ready" | "error"; ids: string[]; products: Product[]; error?: string }>({ userId: "", status: "loading", ids: [], products: [] });
   const [ownershipRevision, setOwnershipRevision] = useState(0);
   const retryOwnership = useCallback(() => setOwnershipRevision((value) => value + 1), []);
+  useEffect(() => {
+    const onSessionExpired = () => {
+      setUserLoggedIn(false);
+      setUserSupabaseId("");
+      setUserEmail("");
+      setMockUserTwitter("");
+      setUserAuthType(null);
+      setOwnership({ userId: "", status: "error", ids: [], products: [] });
+      try { localStorage.removeItem("ship_duel_sandbox_user"); } catch { /* Private browsing may restrict storage. */ }
+    };
+    window.addEventListener("indieclash:auth-expired", onSessionExpired);
+    return () => window.removeEventListener("indieclash:auth-expired", onSessionExpired);
+  }, []);
   useEffect(() => {
     if (!supabase || !userSupabaseId || !userLoggedIn) return;
     let active = true;
@@ -385,8 +414,9 @@ export default function ArenaClient({
       try {
         const result = await fetchOwnedArenaProducts();
         if (active) setOwnership({ userId: userSupabaseId, status: "ready", ids: result.productIds, products: result.products });
-      } catch {
-        if (active) setOwnership((previous) => ({ ...previous, status: "error" }));
+      } catch (error) {
+        if (error instanceof AuthSessionExpiredError) return;
+        if (active) setOwnership((previous) => ({ ...previous, status: "error", error: error instanceof Error ? error.message : "Please try again." }));
       }
     });
     return () => { active = false; };
@@ -473,25 +503,43 @@ export default function ArenaClient({
     const callbackError = url.searchParams.get("error") || fragment.get("error");
     const isCallback = Boolean(code || callbackError || url.searchParams.has("error_description"));
 
-    const restoreAfterOAuth = () => {
+    const restoreAfterOAuth = (failureCode?: string) => {
       let requestedReturn: string | null = null;
       try {
         requestedReturn = sessionStorage.getItem(OAUTH_RETURN_TO_KEY);
         sessionStorage.removeItem(OAUTH_RETURN_TO_KEY);
       } catch { /* A missing saved context must not hide the sign-in result. */ }
       const destination = safeOAuthReturnPath(requestedReturn || `${url.pathname}${url.search}${url.hash}`, url.origin);
-      // Stay in this mounted page: update the session and restore the form or
-      // console directly, instead of reloading the complete website again.
+      // OAuth may return through the homepage. Load the original route before
+      // restoring its form or Console; changing the address alone leaves the
+      // wrong page mounted when signing in from Arena or Champions.
+      const returnUrl = new URL(destination, url.origin);
+      if (returnUrl.pathname !== window.location.pathname) {
+        // Carry cancellation/failure feedback to the route that opened login.
+        if (failureCode) returnUrl.searchParams.set("error", failureCode);
+        router.replace(`${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`);
+        return;
+      }
       window.history.replaceState(window.history.state, "", destination);
       window.dispatchEvent(new Event(OAUTH_RESTORE_EVENT));
     };
 
     const recoverSession = async () => {
+      let failureCode: string | undefined;
       try {
         if (callbackError) throw { code: callbackError };
         if (isCallback && !code) throw new Error("Missing sign-in code");
-        const result = code ? await exchangeOAuthCodeOnce(authClient, code) : await authClient.auth.getSession();
-        if (result.error) throw result.error;
+        const result = await withDeadline(code ? exchangeOAuthCodeOnce(authClient, code) : authClient.auth.getSession(), 15_000);
+        if (result.error) {
+          const isStaleToken =
+            result.error.message?.toLowerCase().includes("refresh token") ||
+            (result.error as { code?: string })?.code === "refresh_token_not_found";
+          if (isStaleToken && !isCallback) {
+            await authClient.auth.signOut().catch(() => {});
+            return;
+          }
+          throw result.error;
+        }
         if (code && !result.data.session) throw new Error("Missing sign-in session");
         if (!active) return;
         if (result.data.session?.user) handleUserSession(result.data.session.user);
@@ -501,10 +549,21 @@ export default function ArenaClient({
           pushToast("Signed in successfully.");
         }
       } catch (error) {
-        if (active) setAuthError(oauthFailureMessage(error));
+        const isStaleToken =
+          error &&
+          typeof error === "object" &&
+          "message" in error &&
+          typeof (error as { message?: unknown }).message === "string" &&
+          ((error as { message: string }).message.toLowerCase().includes("refresh token"));
+        if (isStaleToken && !isCallback) {
+          await authClient.auth.signOut().catch(() => {});
+        } else {
+          failureCode = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "sign_in_failed";
+          if (active && isCallback) setAuthError(oauthFailureMessage(error));
+        }
       } finally {
         if (active) {
-          if (isCallback) restoreAfterOAuth();
+          if (isCallback) restoreAfterOAuth(failureCode);
           setAuthReady(true);
         }
       }
@@ -536,7 +595,7 @@ export default function ArenaClient({
       active = false;
       subscription?.unsubscribe();
     };
-  }, [handleUserSession, pushToast]);
+  }, [handleUserSession, pushToast, router]);
 
   const handleSandboxLogin = (provider: "google" | "github") => {
     const mockUser = provider === "google" ? "Google_Hacker_Sandbox" : "@GitHub_Indie_Sandbox";
@@ -604,13 +663,13 @@ export default function ArenaClient({
     sessionStorage.setItem(OAUTH_RETURN_TO_KEY, returnTo);
     const callbackUrl = new URL("/auth/callback", window.location.origin);
 
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await withDeadline(supabase.auth.signInWithOAuth({
       provider,
       options: {
         redirectTo: callbackUrl.toString(),
         skipBrowserRedirect: true,
       },
-    });
+    }), 15_000);
     if (error || !data?.url) {
       sessionStorage.removeItem(OAUTH_RETURN_TO_KEY);
       sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY);
@@ -639,12 +698,13 @@ export default function ArenaClient({
   };
 
   const handleLogout = async () => {
+    if (logoutPendingRef.current || submitPendingRef.current || votePendingRef.current) return;
+    logoutPendingRef.current = true;
+    setIsLoggingOut(true);
+    try {
     if (supabase) {
-      try {
-        await supabase.auth.signOut();
-      } catch (err) {
-        console.warn("Supabase signOut error:", err);
-      }
+      const { error } = await withDeadline(supabase.auth.signOut(), 10_000);
+      if (error) throw error;
     }
     
     // Forcefully clean up client state in all scenarios (live & local sandbox fallback)
@@ -655,8 +715,11 @@ export default function ArenaClient({
     setUserEmail("");
     setCurrentView("home", { replace: true });
     if (typeof window !== "undefined") {
-      localStorage.removeItem("ship_duel_sandbox_user");
+      try { localStorage.removeItem("ship_duel_sandbox_user"); } catch {}
     }
+    } catch {
+      pushToast("Sign-out could not finish. Please retry; your session may still be active.", "info");
+    } finally { logoutPendingRef.current = false; setIsLoggingOut(false); }
   };
   
   // Custom Success Modal States
@@ -716,7 +779,7 @@ export default function ArenaClient({
 
   // Sync products and bracket from cloud or local storage with Stale-While-Revalidate
   const syncCloudData = useCallback(async () => {
-    if (isResettingRef.current || isSyncLockedRef.current) {
+    if (isResettingRef.current || isSyncLockedRef.current || publicSyncPendingRef.current) {
       console.log("ℹ️ [INDIE CLASH] syncCloudData bypassed because operation lock is active.");
       return;
     }
@@ -754,7 +817,7 @@ export default function ArenaClient({
     if (memoryCache.bracket) {
       setBracket((current) => current ?? memoryCache.bracket);
       const b = memoryCache.bracket;
-      setActiveMatch(firstOpenBracketMatch(b));
+      setActiveMatch(current => current ?? firstOpenBracketMatch(b));
     }
 
     // 3. Skip background fetch if we did one in the last 1 second (reduced from 3s to prevent stale data)
@@ -765,12 +828,14 @@ export default function ArenaClient({
     }
 
     // 4. Background revalidation: fetch fresh database records in parallel
+    publicSyncPendingRef.current = true;
+    const revision = publicRevisionRef.current;
     try {
-      const [prods, champs, b] = await Promise.all([
-        fetchCloudProducts(),
-        fetchCloudPastChampions(),
-        fetchCloudBracket()
+      const prods = await fetchCloudProducts();
+      const [champs, b] = await Promise.all([
+        fetchCloudPastChampions(prods), fetchCloudBracket(prods),
       ]);
+      if (isSyncLockedRef.current || revision !== publicRevisionRef.current) return;
 
       memoryCache.lastFetchTime = Date.now();
 
@@ -787,7 +852,8 @@ export default function ArenaClient({
       if (b) {
         setBracket(b);
         memoryCache.bracket = b;
-        setActiveMatch(firstOpenBracketMatch(b));
+        // A background refresh updates scores, not the user's selected duel.
+        setActiveMatch(current => getRoundMatches(b, getActiveRound(b)).find(match => match.id === current?.id) ?? firstOpenBracketMatch(b));
       } else {
         setBracket(null);
         memoryCache.bracket = null;
@@ -802,6 +868,7 @@ export default function ArenaClient({
     } catch (e) {
       console.error("Error syncing data:", e);
     } finally {
+      publicSyncPendingRef.current = false;
       isInitialSyncDone.current = true;
     }
   }, [setPastChampions]);
@@ -1214,7 +1281,7 @@ export default function ArenaClient({
   // Onboard Submission
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmittingProduct) return;
+    if (submitPendingRef.current) return;
     setSubmitError(null);
 
     if (!userLoggedIn) {
@@ -1238,6 +1305,8 @@ export default function ArenaClient({
     const normalizedUrl = newUrl.startsWith("http") ? newUrl : `https://${newUrl}`;
 
     isSyncLockedRef.current = true;
+    publicRevisionRef.current += 1;
+    submitPendingRef.current = true;
     setIsSubmittingProduct(true);
     try {
       let newProd: Product;
@@ -1334,24 +1403,27 @@ export default function ArenaClient({
         pushToast("Product profile updated!", "success");
       } else if (submitSource === "home") {
         setSuccessModalTitle("PROJECT SUBMITTED 🛡️");
-        setSuccessModalText("Your product has been successfully submitted and is now live on the Releases list!\n\nTo enter the 1v1 Arena matchmaking queue, click 'ENTER THE CONSOLE' below and click 'Push to Arena'.");
+        setSuccessModalText("Your product is live. Open your console to view its profile or choose Join Arena to enter a matchup.");
         setIsSuccessOpen(true);
       } else {
         pushToast("Product successfully submitted!", "success");
       }
-      if (supabase) await syncCloudData();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit this product.";
       setSubmitError(message);
       pushToast(message, "info");
     } finally {
+      submitPendingRef.current = false;
       setIsSubmittingProduct(false);
       isSyncLockedRef.current = false;
+      if (supabase) void syncCloudData();
     }
   };
 
   // Push project to arena waitlist matchmaking queue
   const handlePushToQueue = async (productId: string) => {
+    if (isSyncLockedRef.current) throw new Error("Please wait for your current action to finish.");
+    publicRevisionRef.current += 1;
     synthClick(300, "sine", 0.05);
     isSyncLockedRef.current = true;
     try {
@@ -1459,12 +1531,13 @@ export default function ArenaClient({
   // Submit vote with dual-input feedback
   const handleVoteSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (votePendingRef.current) return;
     if (!userLoggedIn) {
       synthClick(150, "sawtooth", 0.12);
       setVoteError("Please link your Google or GitHub account first to authorize your vote.");
       return;
     }
-    if (voteWinnerFeedback.length < 10 || voteLoserFeedback.length < 10) {
+    if (voteWinnerFeedback.trim().length < 10 || voteLoserFeedback.trim().length < 10) {
       synthClick(150, "sawtooth", 0.12);
       setVoteError("Dual feedback inputs must both be at least 10 characters long.");
       return;
@@ -1483,6 +1556,11 @@ export default function ArenaClient({
       setVoteError("Voting Limit Reached! To ensure fair play, you can only cast ONE vote per separate 1v1 matchup.");
       return;
     }
+    votePendingRef.current = true;
+    publicRevisionRef.current += 1;
+    setIsVoting(true);
+    setVoteError("");
+    try {
     const voteForA = votingMatch?.productA && votingTarget.id === votingMatch.productA.id;
     let exactVotesA = voteForA ? votingMatch.votesA + 1 : votingMatch.votesA;
     let exactVotesB = voteForA ? votingMatch.votesB : votingMatch.votesB + 1;
@@ -1591,6 +1669,12 @@ export default function ArenaClient({
     setVoteWinnerFeedback("");
     setVoteLoserFeedback("");
     setVoteError("");
+    } catch (error) {
+      setVoteError(error instanceof Error ? error.message : "Unable to finish your vote. Please check the match before retrying.");
+    } finally {
+      votePendingRef.current = false;
+      setIsVoting(false);
+    }
   };
 
   const handleDiscoveryAdvance = useCallback(() => playHaptics(320, "sine", 0.04, 0.02), []);
@@ -1602,6 +1686,7 @@ export default function ArenaClient({
         <span className={`${className} relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md`}>
           <span aria-hidden="true" className="text-base leading-none">🚀</span>
           <img
+            key={trustedImage || localPreview}
             src={trustedImage || localPreview}
             alt="Logo"
             loading="lazy"
@@ -1609,7 +1694,9 @@ export default function ArenaClient({
             referrerPolicy="no-referrer"
             className="absolute inset-0 h-full w-full bg-[#0b0b0d] object-contain"
             onError={(event) => {
-              event.currentTarget.remove();
+              // React owns this node. Removing it here crashes a later list /
+              // matchup update with removeChild; reveal the fallback instead.
+              event.currentTarget.style.opacity = "0";
             }}
           />
         </span>
@@ -1890,32 +1977,44 @@ export default function ArenaClient({
   }, []);
   useModalAccessibility(isAuthOpen, authDialogRef, closeAuthDialog);
   useModalAccessibility(Boolean(votingMatch && votingTarget), voteDialogRef, () => {
+    if (votePendingRef.current) return;
     setVotingMatch(null); setVotingTarget(null); setVoteError("");
   });
   useModalAccessibility(isSuccessOpen, successDialogRef, () => setIsSuccessOpen(false));
 
-  useHomeMotion(currentView === "home", arenaRootRef);
+  useHomeMotion(currentView === "home", arenaRootRef, page);
 
-  useEffect(() => {
-    if (currentView !== "home" || !currentRoundMatches.length) return;
+  const matchMotionKey = currentRoundMatches.map(match => match.id).join(":");
+  const inspectorMotionKey = activeMatch?.id;
+  const previousMatchMotion = useRef<string | undefined>(undefined);
+  const previousInspectorMotion = useRef<string | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const firstPaint = previousMatchMotion.current === undefined;
+    if (previousMatchMotion.current === matchMotionKey) return;
+    previousMatchMotion.current = matchMotionKey;
+    if (firstPaint || currentView !== "home" || page !== "arena" || !matchMotionKey) return;
     const media = gsap.matchMedia(arenaRootRef);
     media.add("(prefers-reduced-motion: no-preference)", () => {
-      gsap.fromTo(".match-card-item", { opacity: 0, x: -10 },
-        { opacity: 1, x: 0, duration: 0.25, stagger: 0.025, ease: "power2.out", clearProps: "opacity,transform" });
+      gsap.fromTo(".match-card-item", { opacity: 0, x: -14 },
+        { opacity: 1, x: 0, duration: 0.48, stagger: 0.04, ease: "power3.out", clearProps: "opacity,transform" });
     });
     return () => media.revert();
-  }, [currentView, activeRoundNum, currentRoundMatches]);
+  }, [currentView, page, matchMotionKey]);
 
-  useEffect(() => {
-    if (currentView !== "home" || !activeMatch) return;
+  useLayoutEffect(() => {
+    const firstPaint = previousInspectorMotion.current === undefined;
+    if (previousInspectorMotion.current === (inspectorMotionKey || "")) return;
+    previousInspectorMotion.current = inspectorMotionKey || "";
+    if (firstPaint || currentView !== "home" || page !== "arena" || !inspectorMotionKey) return;
     const media = gsap.matchMedia(arenaRootRef);
     media.add("(prefers-reduced-motion: no-preference)", () => {
       gsap.fromTo(".inspector-title, .inspector-card-a, .inspector-card-b, .inspector-vs",
-        { opacity: 0, y: 10 },
-        { opacity: 1, y: 0, duration: 0.25, stagger: 0.02, ease: "power2.out", clearProps: "opacity,transform" });
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: 0.45, stagger: 0.035, ease: "power3.out", clearProps: "opacity,transform" });
     });
     return () => media.revert();
-  }, [currentView, activeMatch]);
+  }, [currentView, page, inspectorMotionKey]);
 
   useEffect(() => {
     if (!isSwordsClashing) return;
@@ -1929,7 +2028,7 @@ export default function ArenaClient({
   }, [isSwordsClashing]);
 
   return (
-    <div ref={arenaRootRef} className={`arena-app min-h-screen bg-[#030303] text-[#E4E4E7] font-sans selection:bg-[#E4E4E7] selection:text-black antialiased relative pb-24 overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
+    <div ref={arenaRootRef} data-main-page={page} className={`arena-app min-h-screen bg-[#030303] text-[#E4E4E7] font-sans selection:bg-[#E4E4E7] selection:text-black antialiased relative overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
       
       {/* HIGH PERFORMANCE DYNAMIC CANVAS BACKGROUND */}
       <InteractiveGrid />
@@ -1954,53 +2053,16 @@ export default function ArenaClient({
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 flex items-center justify-between gap-2">
           
           <div className="flex min-w-0 items-center gap-6">
-            <button type="button" aria-label="Indie Clash home"
+            <Link href="/" aria-label="Indie Clash home"
               className="flex min-h-11 items-center gap-2 cursor-pointer"
-              onClick={() => {
-                synthClick(300, "sine", 0.05);
-                showHomeSection();
-                pushToast("Welcome back to Indie-Clash!", "success");
-              }}
             >
-              <ClashLogo size="md" />
-              <span className="font-bold text-white tracking-tight text-base sm:text-xl font-sans">
+              <ClashLogo size="md" className="max-sm:w-7 max-sm:h-7" />
+              <span className="whitespace-nowrap font-bold text-white tracking-tight text-sm sm:text-xl font-sans">
                 Indie-Clash
               </span>
-            </button>
+            </Link>
 
-            <nav className="hidden lg:flex items-center gap-5 text-sm font-medium text-zinc-200 font-sans">
-              <Link href="/products" prefetch className="hover:text-white transition duration-200">Products</Link>
-              <span className="text-zinc-700">/</span>
-              <Link
-                href="/#arena-section"
-                onClick={(event) => {
-                  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                  event.preventDefault();
-                  showHomeSection("arena-section");
-                }}
-                className="hover:text-white transition duration-200"
-              >Arena</Link>
-              <span className="text-zinc-700">/</span>
-              <Link
-                href="/#champions-section"
-                onClick={(event) => {
-                  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                  event.preventDefault();
-                  showHomeSection("champions-section");
-                }}
-                className="hover:text-white transition duration-200"
-              >Champion</Link>
-              <span className="text-zinc-700">/</span>
-              <Link
-                href="/#how-it-works-section"
-                onClick={(event) => {
-                  if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-                  event.preventDefault();
-                  showHomeSection("how-it-works-section");
-                }}
-                className="hover:text-white transition duration-200"
-              >How It Works</Link>
-            </nav>
+            <PrimaryNavigation activePage={currentView === "home" ? page : undefined} className="hidden lg:flex" />
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -2028,10 +2090,10 @@ export default function ArenaClient({
                   CONNECTED: <span className="text-white font-sans font-bold">{mockUserTwitter}</span>
                 </span>
                 <button 
-                  onClick={handleLogout}
+                  onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut}
                   className="px-2 py-0.5 text-xs text-zinc-400 hover:text-white transition-colors"
                 >
-                  Sign out
+                  {isLoggingOut ? "Signing out…" : "Sign out"}
                 </button>
               </div>
             ) : (
@@ -2039,7 +2101,7 @@ export default function ArenaClient({
                 disabled={!authReady}
                 aria-busy={!authReady}
                 onClick={() => setIsAuthOpen(true)}
-                className="bg-[#121215] text-white border border-white/[0.1] hover:bg-white/[0.04] text-xs font-semibold px-3 py-2 rounded-md transition-all cursor-pointer"
+                className="whitespace-nowrap bg-[#121215] text-white border border-white/[0.1] hover:bg-white/[0.04] text-[11px] sm:text-xs font-semibold px-2 sm:px-3 py-2 rounded-md transition-all cursor-pointer"
               >
                 {authReady ? "Sign in" : "Checking sign-in…"}
               </button>
@@ -2053,7 +2115,7 @@ export default function ArenaClient({
                   synthClick(420, "sine", 0.08, 0.04);
                   openSubmitModal('home');
                 }}
-                className="bg-white hover:bg-zinc-200 text-black py-2 px-3 rounded-md text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
+                className="whitespace-nowrap bg-white hover:bg-zinc-200 text-black py-2 px-2 sm:px-3 rounded-md text-[11px] sm:text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
               >
                 Submit Product
               </button>
@@ -2062,13 +2124,13 @@ export default function ArenaClient({
           </div>
 
         </div>
-        <nav aria-label="Mobile navigation" className="flex items-center gap-1 overflow-x-auto border-t border-white/[0.06] px-3 lg:hidden">
-          <Link href="/products" prefetch className="flex min-h-11 items-center px-3 text-sm text-zinc-300">Products</Link>
-          <button type="button" onClick={() => showHomeSection("arena-section")} className="min-h-11 px-3 text-sm text-zinc-300">Arena</button>
-          <button type="button" onClick={() => showHomeSection("new-and-unseen-section")} className="min-h-11 whitespace-nowrap px-3 text-sm text-zinc-300">Discover</button>
-          {userLoggedIn && <button type="button" onClick={() => currentView === "console" ? showHomeSection("arena-section") : setCurrentView("console")} className="min-h-11 whitespace-nowrap px-3 text-sm text-[#A78BFA]">{currentView === "console" ? "Back to Arena" : "My Console"}</button>}
-          {userLoggedIn && <button type="button" onClick={handleLogout} className="min-h-11 whitespace-nowrap px-3 text-sm text-zinc-400 xl:hidden">Sign out</button>}
-        </nav>
+        <div className="flex flex-wrap items-center justify-between gap-x-2 border-t border-white/[0.06] px-3 lg:hidden">
+          <PrimaryNavigation activePage={currentView === "home" ? page : undefined} className="flex" />
+          {userLoggedIn && <div className="flex items-center gap-3 px-3">
+            <button type="button" onClick={() => currentView === "console" ? showHomeSection("arena-section") : setCurrentView("console")} className="min-h-11 whitespace-nowrap text-xs text-[#A78BFA] sm:hidden">{currentView === "console" ? "Back to Arena" : "My Console"}</button>
+            <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut} className="min-h-11 whitespace-nowrap text-xs text-zinc-400">{isLoggingOut ? "Signing out…" : "Sign out"}</button>
+          </div>}
+        </div>
       </header>
 
       {authError && !isSubmitOpen && !isAuthOpen && !votingMatch && <div role="alert" data-auth-error className="mx-auto mt-4 max-w-4xl rounded-md border border-red-400/25 bg-red-950/30 px-5 py-4 text-sm leading-6 text-red-200">
@@ -2079,8 +2141,10 @@ export default function ArenaClient({
         <MakerConsole 
           isOpen={true}
           products={consoleProducts}
-          ownershipStatus={!supabase ? "ready" : ownership.userId === userSupabaseId ? ownership.status : "loading"}
+          ownershipStatus={!supabase ? "ready" : !userLoggedIn ? "reauth" : ownership.userId === userSupabaseId ? ownership.status : "loading"}
+          ownershipError={ownership.error}
           onRetryOwnership={retryOwnership}
+          onSignIn={() => setIsAuthOpen(true)}
           allProducts={products}
           activeBracket={bracket}
           userTwitter={mockUserTwitter}
@@ -2096,6 +2160,7 @@ export default function ArenaClient({
       ) : (
       <div>
           {/* Hero Banner */}
+          {page === "discover" && (
           <section className="py-14 sm:py-16 border-b border-white/[0.05] relative overflow-hidden bg-gradient-to-b from-white/[0.01] to-transparent">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
               
@@ -2122,13 +2187,14 @@ export default function ArenaClient({
 
             </div>
           </section>
+          )}
 
       {/* CORE APP WRAPPER LAYOUT */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
 
 
-        {/* LIVE ARENA CLASHES (1v1 Live Showdowns) */}
+        {page === "discover" && <>
         {/* LATEST RELEASES (System Audit Logs Terminal Style Grid Layout) */}
         <section id="launches-section" className="py-12 md:py-16">
           
@@ -2271,16 +2337,38 @@ export default function ArenaClient({
           onAdvance={handleDiscoveryAdvance}
         />
 
-        <section id="arena-section" className="scroll-mt-20 py-20 md:py-28 relative border-t border-white/[0.05]">
-          
-          <div data-home-reveal="arena-heading" className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
-                ARENA · PRODUCT BATTLES
+        <section id="arena-preview" aria-labelledby="arena-preview-title" className="border-t border-white/[0.06] py-10 md:py-14">
+          <div data-home-reveal="arena-preview" className="glass-panel flex flex-col gap-6 rounded-xl p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
+            <div className="max-w-xl">
+              <p className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-[#A78BFA]">
+                <span className={`h-1.5 w-1.5 rounded-full ${bracket?.status === "active" ? "bg-emerald-400" : "bg-[#A78BFA]"}`} />
+                {bracket?.status === "active" ? "Live in the Arena" : "The Arena"}
+              </p>
+              <h2 id="arena-preview-title" className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                {bracket?.status === "active" && activeMatch?.productA && activeMatch?.productB
+                  ? `${activeMatch.productA.title} vs ${activeMatch.productB.title}`
+                  : "Two products. Honest feedback."}
               </h2>
-              <p className="text-xs text-zinc-500 mt-2">
+              <p className="mt-2 text-sm leading-6 text-zinc-400">Meet the makers, compare their products, and help them improve.</p>
+            </div>
+            <Link href="/arena" prefetch className="inline-flex min-h-11 shrink-0 items-center justify-center gap-3 self-start rounded-lg border border-[#A78BFA]/25 bg-[#A78BFA]/[0.06] px-5 text-sm font-semibold text-zinc-100 transition hover:border-[#A78BFA]/50 hover:bg-[#A78BFA]/10 md:self-center">
+              Explore the Arena <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+        </section>
+        </>}
+
+        {page === "arena" && <section id="arena-section" className="scroll-mt-32 py-10 md:py-14 relative">
+          
+          <div data-home-reveal="arena-heading" data-route-enter="left" className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-white font-sans">
+                ARENA · PRODUCT BATTLES
+              </h1>
+              <p className="text-sm text-zinc-400 mt-3">
                 Two products. Honest feedback. Your vote.
               </p>
+              <Link href="/champions#how-it-works-section" className="mt-4 inline-flex min-h-8 items-center gap-2 text-xs text-[#A78BFA] hover:text-white">How it works <span aria-hidden="true">↗</span></Link>
             </div>
             {bracket && bracket.status === "active" && (
               <div className="flex shrink-0">
@@ -2293,7 +2381,7 @@ export default function ArenaClient({
           </div>
 
           {/* Arena Queue Status Bar */}
-          <div data-home-reveal="arena-status" className="mb-8 bg-[#0b0b0d] border border-white/[0.06] rounded-md px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div data-home-reveal="arena-status" data-route-enter="up" style={{ "--route-delay": "70ms" } as React.CSSProperties} className="mb-8 bg-[#0b0b0d] border border-white/[0.06] rounded-md px-5 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4">
               <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
                 {bracket && activeBracketSize < 16 ? "Adaptive Run" : <>Season <span className="text-white font-bold">{currentSeasonStr}</span></>}
@@ -2323,7 +2411,7 @@ export default function ArenaClient({
                 {!bracket && queuedProducts.length >= 16 ? (
                   <> <span className="text-zinc-700">|</span> <span className="font-bold text-emerald-400">Locking championship</span></>
                 ) : !bracket && fallbackBracketSize ? (
-                  <> <span className="text-zinc-700">|</span> Daily auto-run: <span className="font-bold text-[#A78BFA]">{fallbackBracketSize} players</span> in <span className="font-bold text-zinc-300"><DailyArenaRunCountdown /></span></>
+                  <> <span className="text-zinc-700">|</span> Daily auto-run: <span className="font-bold text-[#A78BFA]">{fallbackBracketSize} players</span> <span className="font-bold text-zinc-300"><DailyArenaRunCountdown /></span></>
                 ) : !bracket ? (
                   <> <span className="text-zinc-700">|</span> Daily minimum: <span className="font-bold text-zinc-300">2 players</span></>
                 ) : (
@@ -2352,7 +2440,7 @@ export default function ArenaClient({
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
               
               {/* Left Column: Matchup Slate (Grid of matches) */}
-              <div className="lg:col-span-5 space-y-4">
+              <div data-home-reveal="arena-slate" data-route-enter="left" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="lg:col-span-5 space-y-4">
                 <div className="bg-[#0b0b0d] border border-white/[0.05] p-4 rounded-md">
                   <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500">
                     MATCH SLATE // ROUND STATUS
@@ -2384,7 +2472,7 @@ export default function ArenaClient({
                           setActiveMatch(duel);
                           pushToast(`Inspecting matchup: ${duel.productA.title} vs ${duel.productB.title}`, "info");
                         }}
-                        className={`p-4 bg-[#0a0a0c]/80 border rounded-md cursor-pointer transition-all duration-200 text-left hover:border-white/[0.15] hover:bg-[#0e0e11]/80 hover:-translate-y-0.5 match-card-item ${
+                        className={`p-4 bg-[#0a0a0c]/80 border rounded-md cursor-pointer transition-[background-color,border-color,box-shadow,translate] duration-200 text-left hover:border-white/[0.15] hover:bg-[#0e0e11]/80 hover:-translate-y-0.5 match-card-item ${
                           isSelected ? "border-white/[0.2] bg-[#121215]/90 shadow-[0_0_15px_rgba(255,255,255,0.02)]" : "border-white/[0.05]"
                         }`}
                       >
@@ -2446,7 +2534,7 @@ export default function ArenaClient({
               </div>
 
               {/* Right Column: Combat Inspector Panel (Sticky) */}
-              <div className="lg:col-span-7 lg:sticky lg:top-20 space-y-4">
+              <div data-home-reveal="arena-inspector" data-route-enter="right" style={{ "--route-delay": "220ms" } as React.CSSProperties} className="lg:col-span-7 lg:sticky lg:top-20 space-y-4">
                 {activeMatch ? (
                   (() => {
                     const duel = activeMatch;
@@ -2458,7 +2546,7 @@ export default function ArenaClient({
                     
 
                     return (
-                      <div className="bg-[#0a0a0c]/80 border border-white/[0.08] rounded-md overflow-hidden premium-glass p-6 md:p-8 space-y-6 transition-all duration-300 animate-fade-in-blur inspector-panel">
+                      <div className="bg-[#0a0a0c]/80 border border-white/[0.08] rounded-md overflow-hidden premium-glass p-6 md:p-8 space-y-6 inspector-panel">
                         
                         {/* Title Bar */}
                         <div className="flex items-center justify-between border-b border-white/[0.04] pb-4 inspector-title">
@@ -2675,7 +2763,7 @@ export default function ArenaClient({
             /* ========================================================
                 WAITLIST QUEUE PREPARING SCREEN
                ======================================================== */
-            <div className="bg-[#121215] border border-white/[0.06] p-8 sm:p-12 text-white text-center max-w-2xl mx-auto rounded-lg">
+            <div data-home-reveal="arena-queue" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-[#121215] border border-white/[0.06] p-8 sm:p-12 text-white text-center max-w-2xl mx-auto rounded-lg">
               
               {/* Sleek countdown timer pill */}
               {lineupProducts.length >= 16 && (
@@ -2739,7 +2827,7 @@ export default function ArenaClient({
                 <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-4">
                   Roster Lineup ({Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget})
                 </span>
-                <div className="grid gap-2.5 justify-center" style={{ gridTemplateColumns: `repeat(${Math.min(rosterTarget, 8)}, 2.75rem)` }}>
+                <div className={`grid gap-2.5 justify-center ${rosterTarget >= 8 ? "grid-cols-[repeat(4,2.75rem)] sm:grid-cols-[repeat(8,2.75rem)]" : rosterTarget === 4 ? "grid-cols-[repeat(4,2.75rem)]" : "grid-cols-[repeat(2,2.75rem)]"}`}>
                   {Array.from({ length: rosterTarget }).map((_, idx) => {
                     const prod = lineupProducts[idx];
                     if (prod) {
@@ -2772,19 +2860,22 @@ export default function ArenaClient({
               </div>
             </div>
           )}
-        </section>
+        </section>}
 
+        {page === "champions" && <>
         {/* THE HALL OF VALOR — HISTORIC CHAMPIONS */}
-        <section id="champions-section" className="scroll-mt-20 py-20 md:py-28 border-t border-white/[0.05]">
-          <div data-home-reveal="champions-heading" className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <section id="champions-section" className="scroll-mt-32 py-10 md:py-14">
+          <div data-home-reveal="champions-heading" data-route-enter="left" className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="text-left">
-              <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
-                THE HALL OF VALOR
-              </h2>
-              <p className="text-xs text-zinc-500 mt-2">
-                Conquerors of the 1v1 arena who have secured eternal glory and completed their seasons.
+              <p className="mb-3 font-mono text-[10px] uppercase tracking-widest text-[#A78BFA]">Hall of Valor</p>
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white font-sans">
+                Champions
+              </h1>
+              <p className="text-sm text-zinc-400 mt-3">
+                Meet the products that won their Arena runs.
               </p>
             </div>
+            <Link href="/arena" className="inline-flex min-h-11 items-center gap-2 text-sm text-[#A78BFA] hover:text-white">Explore the Arena <span aria-hidden="true">→</span></Link>
           </div>
 
           {pastChampions && pastChampions.length > 0 ? (
@@ -2792,7 +2883,10 @@ export default function ArenaClient({
               {pastChampions.map((c, idx) => (
                 <div 
                   key={c.id} 
-                  className="p-5 border border-white/[0.06] bg-[#09090b]/80 rounded-md hover:border-white/[0.15] hover:-translate-y-1 hover:bg-[#0c0c0f]/95 hover:shadow-[0_4px_20px_rgba(255,255,255,0.02)] transition-all duration-300 flex flex-col justify-between"
+                  data-home-reveal={`champion-${c.id}`}
+                  data-route-enter="up"
+                  style={{ "--route-delay": `${140 + (idx % 4) * 70}ms` } as React.CSSProperties}
+                  className="p-5 border border-white/[0.06] bg-[#09090b]/80 rounded-md hover:border-white/[0.15] hover:-translate-y-1 hover:bg-[#0c0c0f]/95 hover:shadow-[0_4px_20px_rgba(255,255,255,0.02)] transition-[background-color,border-color,box-shadow,translate] duration-300 flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex justify-between items-center mb-3">
@@ -2803,12 +2897,12 @@ export default function ArenaClient({
                         SEASON {String(idx + 1).padStart(2, "0")}
                       </span>
                     </div>
-                    <a 
-                      href={`/products/${c.id}`}
+                    <Link
+                      href={`/products/${encodeURIComponent(c.id)}`}
                       className="font-sans text-xs hover:underline uppercase block mb-1 text-white font-semibold tracking-wide hover:text-[#ffbe18] transition"
                     >
                       {c.title}
-                    </a>
+                    </Link>
                     <p className="text-[10px] leading-relaxed line-clamp-2 mb-4 text-zinc-400 font-sans">{c.tagline}</p>
                   </div>
                   
@@ -2839,7 +2933,7 @@ export default function ArenaClient({
               ))}
             </div>
           ) : (
-            <div className="border border-dashed border-white/[0.06] bg-[#070709]/30 rounded-md p-16 text-center text-zinc-500 font-mono text-xs max-w-xl mx-auto flex flex-col items-center justify-center space-y-3">
+            <div data-home-reveal="champions-empty" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="border border-dashed border-white/[0.06] bg-[#070709]/30 rounded-md p-16 text-center text-zinc-500 font-mono text-xs max-w-xl mx-auto flex flex-col items-center justify-center space-y-3">
               <svg className="w-8 h-8 text-zinc-650 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
               </svg>
@@ -2850,30 +2944,30 @@ export default function ArenaClient({
         </section>
 
         {/* HOW IT WORKS SECTION */}
-        <section id="how-it-works-section" className="scroll-mt-20 py-16 border-t border-white/[0.05]">
-          <div data-home-reveal="how-heading" className="mb-12">
+        <section id="how-it-works-section" className="scroll-mt-32 py-12 md:py-16 border-t border-white/[0.05]">
+          <div data-home-reveal="how-heading" data-route-enter="left" className="mb-12">
             <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
               HOW IT WORKS
             </h2>
             <p className="text-xs text-zinc-500 mt-2 font-sans">
-              Here, victory isn&apos;t bought with upvotes. It is earned through authentic, peer-reviewed execution.
+              Free to launch. Fair discovery. Optional battles for useful feedback.
             </p>
           </div>
 
           <div data-home-reveal="how-steps" className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
             {/* Step 1 */}
-            <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-all duration-200">
+            <div data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-colors duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
                   <span className="text-4xl font-extrabold font-mono text-zinc-700">01</span>
                   <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_01</span>
                 </div>
                 <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
-                  SUBMIT & QUEUE
+                  PUBLISH YOUR PRODUCT
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
-                  Submit for free, then opt into matchmaking from My Console. Sixteen entries lock a Championship roster automatically; otherwise the daily cutoff opens the largest ready 8, 4, or 2-product FIFO run.
+                  Submit for free and get a permanent product page. Latest Launches highlights new arrivals; fair discovery gives overlooked products another chance to be seen.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
@@ -2882,36 +2976,36 @@ export default function ArenaClient({
             </div>
 
             {/* Step 2 */}
-            <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-all duration-200">
+            <div data-route-enter="up" style={{ "--route-delay": "210ms" } as React.CSSProperties} className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-colors duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
                   <span className="text-4xl font-extrabold font-mono text-zinc-700">02</span>
                   <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_02</span>
                 </div>
                 <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
-                  CRITIQUE-LOCKED VOTING
+                  JOIN THE ARENA
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
-                  No casual clicks. Every voter must connect via Google or GitHub and leave a constructive dual critique of 10+ characters. This friction drastically minimizes automated bot rigging and coordinate spamming.
+                  Opt in from My Console. Sixteen products lock a Championship roster; otherwise the daily cutoff starts the largest ready 8, 4, or 2-product run. Earlier queue entries go first.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-emerald-400 uppercase tracking-widest">
-                [ MINIMIZED MANIPULATION DESIGN ]
+                [ OPTIONAL · FREE TO ENTER ]
               </div>
             </div>
 
             {/* Step 3 */}
-            <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-all duration-200">
+            <div data-route-enter="up" style={{ "--route-delay": "280ms" } as React.CSSProperties} className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-colors duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
                   <span className="text-4xl font-extrabold font-mono text-zinc-700">03</span>
                   <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_03</span>
                 </div>
                 <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
-                  DUAL-FEEDBACK VALUE
+                  LEARN FROM EVERY MATCH
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
-                  Winners advance to the next bracket, but runners-up win where it matters: walking away with structured, highly valuable peer critiques. This feedback is 100x more valuable than empty clicks.
+                  Sign in and leave feedback for both products before voting. Winners advance, and every maker keeps their product page and the feedback they received.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-cyan-400 uppercase tracking-widest">
@@ -2921,10 +3015,11 @@ export default function ArenaClient({
 
           </div>
         </section>
+        </>}
 
       </main>
 
-      <footer className="border-t border-white/[0.05] bg-[#070709]/40 py-12 mt-20">
+      <footer className="border-t border-white/[0.05] bg-[#070709]/40 py-10 mt-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-zinc-500 text-xs">
           <div className="flex items-center space-x-1.5 font-mono">
             <span>© {new Date().getFullYear()} Indie Clash.</span>
@@ -2938,7 +3033,9 @@ export default function ArenaClient({
               Vesper
             </a>
           </div>
-          <div className="flex items-center gap-6 font-medium">
+          <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 font-medium">
+            <Link href="/products" className="hover:text-white transition">All products</Link>
+            <Link href="/champions#how-it-works-section" className="hover:text-white transition">How it works</Link>
             <Link
               href="/privacy"
               className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
@@ -3020,7 +3117,7 @@ export default function ArenaClient({
               ) : (
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={handleLogout} disabled={isLoggingOut || isSubmittingProduct}
                   className="text-zinc-400 hover:text-stone-200 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
                 >
                   Disconnect
@@ -3327,6 +3424,7 @@ export default function ArenaClient({
           <div 
             className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => {
+              if (votePendingRef.current) return;
               setVotingMatch(null);
               setVotingTarget(null);
               setVoteWinnerFeedback("");
@@ -3340,7 +3438,7 @@ export default function ArenaClient({
                 <GitCommitIcon className="w-4 h-4 text-cyan-400" /> DUELING VOTE BOX
               </h3>
               <button 
-                aria-label="Close voting" onClick={() => {
+                disabled={isVoting} aria-label="Close voting" onClick={() => {
                   setVotingMatch(null);
                   setVotingTarget(null);
                   setVoteWinnerFeedback("");
@@ -3362,7 +3460,8 @@ export default function ArenaClient({
               Tell one maker what works well and give the other a useful suggestion. Sign in to submit your vote with both pieces of feedback.
             </p>
 
-            <form onSubmit={handleVoteSubmit} noValidate className="space-y-4 text-left">
+            <form onSubmit={handleVoteSubmit} noValidate aria-busy={isVoting} className="space-y-4 text-left">
+              <fieldset disabled={isVoting} className="contents">
               {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
               {/* Auth Verification Card */}
               <div className="p-4 bg-[#141417] border border-white/[0.06] rounded-md flex flex-col gap-3">
@@ -3389,7 +3488,7 @@ export default function ArenaClient({
                 ) : (
                   <button
                     type="button"
-                    onClick={handleLogout}
+                    onClick={handleLogout} disabled={isLoggingOut || isVoting}
                     className="text-zinc-400 hover:text-stone-200 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
                   >
                     Disconnect
@@ -3463,9 +3562,10 @@ export default function ArenaClient({
                   type="submit"
                   className="px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer"
                 >
-                  Submit Dual Vote
+                  {isVoting ? "Submitting vote…" : "Submit Dual Vote"}
                 </button>
               </div>
+              </fieldset>
             </form>
           </div>
         </div>

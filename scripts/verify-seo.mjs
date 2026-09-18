@@ -66,11 +66,13 @@ assert.match(sitemap.headers.get('content-type'), /xml/);
 const xml = await sitemap.text();
 assert.match(xml, /\/products\/https</);
 assert.match(xml, /\/versus\//);
+assert.match(xml, /<loc>https:\/\/www\.indieclash\.com\/arena<\/loc>/);
+assert.match(xml, /<loc>https:\/\/www\.indieclash\.com\/champions<\/loc>/);
 assert(!xml.includes('vercel.app'));
 console.log(`PASS: complete sitemap (${(xml.match(/<loc>/g) || []).length} URLs)`);
 
 for (const host of ['arena-chi-coral.vercel.app', 'indieclash.com']) {
-  for (const path of ['/', '/products/https?source=test', '/?view=console']) {
+  for (const path of ['/', '/arena', '/champions', '/products/https?source=test', '/?view=console']) {
     const response = await get(path, { host });
     assert.equal(response.status, 308, `${host}${path}`);
     assert.equal(new URL(response.headers.get('location')).href, `https://www.indieclash.com${path}`);

@@ -91,13 +91,13 @@ export function buildFairDiscoverySequence(
 
     while (deck.length < batchSize && remaining.length) {
       const leadingScore = discoveryExposureScore(remaining[0], now);
-      let candidateIndex = remaining.findIndex((product) => {
-        const category = PUBLIC_CATEGORIES_ENABLED ? product.category || "uncategorized" : "uncategorized";
-        return discoveryExposureScore(product, now) === leadingScore
-          && !makers.has(makerKey(product))
-          && !domains.has(productDomain(product))
-          && (categoryCounts.get(category) || 0) < 2;
-      });
+      const distinctMaker = (product: Product) => discoveryExposureScore(product, now) === leadingScore
+        && !makers.has(makerKey(product)) && !domains.has(productDomain(product));
+      let candidateIndex = remaining.findIndex((product) => distinctMaker(product)
+        && (!PUBLIC_CATEGORIES_ENABLED || (categoryCounts.get(product.category || "uncategorized") || 0) < 2));
+
+      // Relax category diversity first, retaining maker/domain diversity.
+      if (candidateIndex < 0) candidateIndex = remaining.findIndex(distinctMaker);
 
       // Sparse catalogues can legitimately contain several launches by the
       // same maker/category. Relax presentation constraints, never fairness.

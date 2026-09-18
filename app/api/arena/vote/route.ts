@@ -25,6 +25,7 @@ export async function POST(request: Request) {
   try {
     const { user, client } = await authenticateRequest(request);
     const body = await readJsonRequest(request, 12_000) as Record<string, unknown>;
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "Invalid vote payload.");
     const matchId = validId(body.matchId, "Match ID");
     const votedProductId = validId(body.votedProductId, "Product ID");
     const { data, error } = await client.rpc(`${DB_PREFIX}cast_vote`, {

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import PublicSiteHeader from "@/app/components/PublicSiteHeader";
 import { notFound, permanentRedirect } from "next/navigation";
 import { getVersusSeoData } from "@/lib/server/publicSeoData";
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
@@ -122,7 +123,7 @@ export default async function VersusPage({ params }: Props) {
         "@id": `${canonicalUrl}#breadcrumb`,
         itemListElement: [
           { "@type": "ListItem", position: 1, name: "Indie Clash", item: absoluteUrl("/") },
-          { "@type": "ListItem", position: 2, name: "Arena matchups", item: absoluteUrl("/#arena-section") },
+          { "@type": "ListItem", position: 2, name: "Arena matchups", item: absoluteUrl("/arena") },
           { "@type": "ListItem", position: 3, name: `${productA.title} vs ${productB.title}`, item: canonicalUrl },
         ],
       },
@@ -139,21 +140,13 @@ export default async function VersusPage({ params }: Props) {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
 
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-black/50 py-4 backdrop-blur-md">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
-          <Link href="/" className="flex items-center gap-2">
-            <span className="text-2xl font-semibold tracking-tighter">INDIE CLASH</span>
-            <span className="rounded border border-white/[0.08] px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wider text-zinc-400">Arena</span>
-          </Link>
-          <Link href="/#arena-section" className="rounded-md border border-white/[0.1] px-3.5 py-1.5 text-xs text-zinc-300 transition hover:bg-white/[0.04] hover:text-white">Enter arena</Link>
-        </div>
-      </header>
+      <PublicSiteHeader actionHref="/arena" actionLabel="Enter Arena" />
 
       <main className="relative mx-auto max-w-6xl px-4 py-10 sm:py-14">
         <nav aria-label="Breadcrumb" className="mb-8 flex flex-wrap items-center gap-2 font-mono text-xs text-zinc-500">
           <Link href="/" className="transition hover:text-white">Indie Clash</Link>
           <span aria-hidden="true">/</span>
-          <Link href="/#arena-section" className="transition hover:text-white">Arena matchups</Link>
+          <Link href="/arena" className="transition hover:text-white">Arena matchups</Link>
           <span aria-hidden="true">/</span>
           <span aria-current="page" className="text-zinc-300">{productA.title} vs {productB.title}</span>
         </nav>
