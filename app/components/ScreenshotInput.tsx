@@ -7,10 +7,19 @@ export default function ScreenshotInput({ value, onChange, onBusy, disabled = fa
   const [busy, setBusy] = useState(false);
   const task = useRef(0);
   useEffect(() => { const token = task; return () => { token.current++; onBusy(false); }; }, [onBusy]);
+  const uploadDisabled = disabled || busy || value.length >= 5;
   return <div className="space-y-3">
-    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-300">Product images (optional) · {value.length}/5
+    <div className="block text-xs font-semibold uppercase tracking-wider text-zinc-300">Product images (optional) · {value.length}/5
       <span className="block mt-1 text-xs normal-case font-normal text-zinc-400">Up to 5 images · 5 MB each · Product detail page only</span>
-      <input type="file" multiple disabled={disabled || busy || value.length >= 5} accept="image/png,image/jpeg,image/webp" className="mt-2 block w-full rounded-lg border border-white/10 p-3 text-xs normal-case file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-zinc-200 disabled:opacity-50" onChange={async event => {
+      <div className={`mt-2 flex min-h-14 items-center gap-3 rounded-lg border border-white/10 p-3 normal-case ${uploadDisabled ? "opacity-50" : ""}`}>
+        <label htmlFor="product-images-input" className={`rounded-md bg-white/10 px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors ${uploadDisabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-white/15"}`}>
+          {busy ? "Preparing images…" : "Choose images"}
+        </label>
+        <span className="text-xs font-normal text-zinc-400" aria-live="polite">
+          {value.length === 0 ? "No images selected" : `${value.length} of 5 images selected`}
+        </span>
+      </div>
+      <input id="product-images-input" type="file" multiple disabled={uploadDisabled} accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={async event => {
         const files = Array.from(event.target.files || []); event.target.value = ""; if (!files.length) return;
         if (value.length + files.length > 5) { setError("You can upload no more than 5 images."); return; }
         const id = ++task.current; setError(""); onBusy(true); setBusy(true);
@@ -36,7 +45,7 @@ export default function ScreenshotInput({ value, onChange, onBusy, disabled = fa
         } catch (e) { if (id === task.current) setError(e instanceof Error ? e.message : "Unable to read image."); }
         finally { bitmap?.close(); if (id === task.current) { onBusy(false); setBusy(false); } }
       }} />
-    </label>
+    </div>
     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{value.map((src, index) => <div key={`${index}-${src.slice(-32)}`} className="min-w-0 rounded-lg border border-white/10 p-2">
       <img src={src.startsWith("data:image/jpeg;base64,") ? src : trustedProductImageUrl(src)} alt={`Product image ${index + 1} preview`} className="aspect-video w-full rounded object-contain" />
       <div className="mt-2 flex justify-between text-xs text-zinc-300">
