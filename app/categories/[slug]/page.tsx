@@ -7,6 +7,7 @@ import { fetchCloudProducts } from "@/lib/arenaStore";
 import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { compareFairDiscovery } from "@/lib/discoveryRanking";
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
+import { productLinkRel } from "@/lib/productSafety";
 
 interface Props { params: Promise<{ slug: string }> }
 
@@ -56,7 +57,7 @@ function ProductGrid({ products }: { products: Product[] }) {
               <div className="min-w-0"><h3 className="font-semibold"><Link href={`/products/${encodeURIComponent(product.id)}`} className="hover:text-[#ffbe18]">{product.title}</Link></h3><p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-400">{product.tagline}</p></div>
             </div>
             <div className="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-4 text-xs text-zinc-500"><span>By {product.makerName}</span><span>{product.votesCount} votes</span></div>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold"><Link href={`/products/${encodeURIComponent(product.id)}`} className="rounded-md border border-white/[0.1] px-3 py-2 hover:bg-white/[0.05]">View profile</Link>{website ? <a href={website} target="_blank" rel="noopener" className="px-3 py-2 text-[#ffbe18]">Visit website ↗</a> : null}</div>
+            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold"><Link href={`/products/${encodeURIComponent(product.id)}`} className="rounded-md border border-white/[0.1] px-3 py-2 hover:bg-white/[0.05]">View profile</Link>{website ? <a href={website} target="_blank" rel={productLinkRel(product)} className="px-3 py-2 text-[#ffbe18]">Visit website ↗</a> : null}</div>
           </article>
         );
       })}

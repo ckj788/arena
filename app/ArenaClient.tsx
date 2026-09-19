@@ -56,6 +56,8 @@ import PrimaryNavigation, { type MainPage } from "@/app/components/PrimaryNaviga
 import { PRICING_MODELS, PRODUCT_CATEGORIES, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
+import { isVisibleProduct, productLinkRel } from "@/lib/productSafety";
+import ScreenshotInput from "@/app/components/ScreenshotInput";
 import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, safeOAuthReturnPath } from "@/lib/browserOAuth";
 
 function firstOpenBracketMatch(bracket: Bracket): Match | null {
@@ -254,6 +256,8 @@ export default function ArenaClient({
   const [newMaker, setNewMaker] = useState("");
   const [newTwitter, setNewTwitter] = useState("");
   const [newLogo, setNewLogo] = useState("🚀");
+  const [newScreenshot, setNewScreenshot] = useState<string[]>([]);
+  const [preparingScreenshot, setPreparingScreenshot] = useState(false);
   const [activeCardProduct, setActiveCardProduct] = useState<Product | null>(null);
 
   useEffect(() => {
@@ -298,6 +302,7 @@ export default function ArenaClient({
         setNewMaker(typeof draft.maker === "string" ? draft.maker : "");
         setNewTwitter(typeof draft.twitter === "string" ? draft.twitter : "");
         setNewLogo(typeof draft.logo === "string" ? draft.logo : "🚀");
+        setNewScreenshot(Array.isArray(draft.screenshot) ? draft.screenshot.filter((item): item is string => typeof item === "string").slice(0, 5) : typeof draft.screenshot === "string" && draft.screenshot ? [draft.screenshot] : []);
         setSubmitSource(draft.source === "console" ? "console" : "home");
       }
       if (shouldOpenFromQuery || savedDraft) setIsSubmitOpen(true);
@@ -331,6 +336,7 @@ export default function ArenaClient({
     setNewMaker("");
     setNewTwitter("");
     setNewLogo("🚀");
+    setNewScreenshot([]);
   };
 
   const openSubmitModal = (source: 'home' | 'console') => {
@@ -367,6 +373,7 @@ export default function ArenaClient({
     setNewMaker(product.makerName);
     setNewTwitter(product.makerTwitter);
     setNewLogo(product.logo || "🚀");
+    setNewScreenshot(product.screenshots ?? (product.screenshot ? [product.screenshot] : []));
     setIsSubmitOpen(true);
   };
 
@@ -644,10 +651,12 @@ export default function ArenaClient({
           maker: newMaker,
           twitter: newTwitter,
           logo: newLogo,
+          screenshot: newScreenshot,
           source: submitSource,
         }));
       } catch {
-        // Continue authentication even when browser storage is unavailable.
+        setSubmitError("Your draft is too large for this browser to preserve during sign-in. Remove the images, sign in, then add them again. Your current form has not been cleared.");
+        return;
       }
     }
 
@@ -1281,7 +1290,7 @@ export default function ArenaClient({
   // Onboard Submission
   const handleSubmitProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (submitPendingRef.current) return;
+    if (submitPendingRef.current || preparingScreenshot) return;
     setSubmitError(null);
 
     if (!userLoggedIn) {
@@ -1316,6 +1325,12 @@ export default function ArenaClient({
 
       if (supabase) {
         const uploadedLogo = await uploadArenaLogo(newLogo);
+        setNewLogo(uploadedLogo);
+        const uploadedScreenshot = [...newScreenshot];
+        for (let i = 0; i < uploadedScreenshot.length; i++) {
+          uploadedScreenshot[i] = await uploadArenaLogo(uploadedScreenshot[i]);
+          setNewScreenshot([...uploadedScreenshot]);
+        }
         const input = {
           title: newTitle,
           tagline: newTagline,
@@ -1325,6 +1340,8 @@ export default function ArenaClient({
           makerTwitter,
           makerAvatar,
           logo: uploadedLogo,
+          screenshot: uploadedScreenshot[0] || "",
+          screenshots: uploadedScreenshot,
           description: newDescription,
           category: newCategory || undefined,
           pricingModel: newPricingModel,
@@ -1358,6 +1375,8 @@ export default function ArenaClient({
           makerTwitter,
           makerAvatar: `${makerAvatar}#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}&pushed=false`,
           logo: newLogo,
+          screenshot: newScreenshot[0],
+          screenshots: newScreenshot,
           submittedAt: editingProduct?.submittedAt || new Date().toISOString(),
           queueStatus: editingProduct?.queueStatus || "waiting",
           votesCount: editingProduct?.votesCount || 0,
@@ -1954,12 +1973,13 @@ export default function ArenaClient({
     }
     return queuedProducts.slice(0, rosterTarget);
   }, [bracket, queuedProducts, rosterTarget]);
+  const visibleProducts = useMemo(() => products.filter(isVisibleProduct), [products]);
   const showcaseProducts = useMemo(() => {
     // Preserve the newest-first rolling feed while keeping it bounded to the
     // latest 50 permanent product profiles.
-    const sorted = [...products].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+    const sorted = [...visibleProducts].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
     return sorted.slice(0, 50);
-  }, [products]);
+  }, [visibleProducts]);
   const currentSeasonNum = pastChampions.length + 1;
   const currentSeasonStr = String(currentSeasonNum).padStart(2, "0");
 
@@ -2181,7 +2201,7 @@ export default function ArenaClient({
               </p>
               <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-zinc-400 hero-stats">
                 <span className="bg-[#0b0b0c] border border-white/[0.05] px-2.5 py-1 rounded-md uppercase tracking-wider">
-                  Products Submitted: <span className="text-white font-semibold">{products.length}</span>
+                  Products Submitted: <span className="text-white font-semibold">{visibleProducts.length}</span>
                 </span>
               </div>
 
@@ -2303,7 +2323,7 @@ export default function ArenaClient({
                           <a
                             href={website}
                             target="_blank"
-                            rel="noopener"
+                            rel={productLinkRel(item)}
                             className="text-[10px] font-mono text-zinc-500 hover:text-white inline-flex items-center gap-1"
                           >
                             Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-650" />
@@ -2332,7 +2352,7 @@ export default function ArenaClient({
         </section>
 
         <FairDiscoverySection
-          products={products}
+          products={visibleProducts}
           renderLogo={renderLogo}
           onAdvance={handleDiscoveryAdvance}
         />
@@ -2597,7 +2617,7 @@ export default function ArenaClient({
                                 <a
                                   href={publicHttpUrl(duel.productA?.url)}
                                   target="_blank"
-                                  rel="noopener"
+                                  rel={productLinkRel(duel.productA!)}
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -2655,7 +2675,7 @@ export default function ArenaClient({
                                 <a
                                   href={publicHttpUrl(duel.productB?.url)}
                                   target="_blank"
-                                  rel="noopener"
+                                  rel={productLinkRel(duel.productB!)}
                                   className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
                                   onClick={(e) => e.stopPropagation()}
                                 >
@@ -2922,7 +2942,7 @@ export default function ArenaClient({
                       <a
                         href={publicHttpUrl(c.url)}
                         target="_blank"
-                        rel="noopener"
+                        rel={productLinkRel(c)}
                         className="text-[10px] uppercase font-mono underline text-white hover:text-zinc-300 transition-colors"
                       >
                         DEMO
@@ -3394,6 +3414,8 @@ export default function ArenaClient({
                 </div>
               </div>
 
+              <ScreenshotInput value={newScreenshot} onChange={setNewScreenshot} onBusy={setPreparingScreenshot} disabled={isSubmittingProduct} />
+
               <div className="sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-white/[0.1] bg-[#0b0b0d] py-4">
                 <button
                   type="button"
@@ -3405,10 +3427,10 @@ export default function ArenaClient({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingProduct}
+                  disabled={isSubmittingProduct || preparingScreenshot}
                   className="min-w-28 px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer disabled:cursor-wait disabled:bg-zinc-400 disabled:text-zinc-700"
                 >
-                  {isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : (editingProduct ? "Save Changes" : "Submit Project")}
+                  {preparingScreenshot ? "Preparing image…" : isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : (editingProduct ? "Save Changes" : "Submit Project")}
                 </button>
               </div>
             </form>
@@ -3999,7 +4021,7 @@ export default function ArenaClient({
               <a 
                 href={publicHttpUrl(activeCardProduct.url)}
                 target="_blank" 
-                rel="noopener"
+                rel={productLinkRel(activeCardProduct)}
                 onClick={() => synthClick(400, "sine", 0.08)}
                 className="text-amber-400 hover:text-amber-300 font-semibold transition-colors flex items-center gap-1 group text-[11px] border-b border-amber-400/30 hover:border-amber-300"
               >

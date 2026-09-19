@@ -6,6 +6,7 @@ import { getPublicProducts } from "@/lib/server/publicSeoData";
 import { categoryLabel } from "@/lib/productTaxonomy";
 import { compareFairDiscovery, hasActiveDiscoveryBoost } from "@/lib/discoveryRanking";
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
+import { productLinkRel } from "@/lib/productSafety";
 
 export const revalidate = 60;
 
@@ -104,7 +105,7 @@ export default async function UnderratedPage() {
                     <div className="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-4 text-xs text-zinc-500"><span>By {product.makerName}</span><span>Needs more eyes</span></div>
                     <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold">
                       <span aria-hidden="true" className="inline-flex min-h-11 items-center text-zinc-300">View product →</span>
-                      {website ? <a href={website} target="_blank" rel="noopener" className="card-secondary-link px-3 py-2 text-[#ffbe18]">Visit website ↗</a> : null}
+                      {website ? <a href={website} target="_blank" rel={productLinkRel(product)} className="card-secondary-link px-3 py-2 text-[#ffbe18]">Visit website ↗</a> : null}
                     </div>
                   </article>
                 );

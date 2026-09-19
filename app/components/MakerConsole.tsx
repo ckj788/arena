@@ -8,6 +8,7 @@ import { compareArenaQueue, hasActiveDiscoveryBoost } from "@/lib/discoveryRanki
 import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
 import useSurfaceMotion from "./useSurfaceMotion";
 import { supabase } from "@/lib/supabaseClient";
+import ModerationLink from "./ModerationLink";
 
 interface MakerConsoleProps {
   isOpen: boolean;
@@ -117,6 +118,7 @@ export default function MakerConsole({
           <p className="text-zinc-400 text-[10px] mt-1.5 font-mono uppercase tracking-wider">
             {ownershipStatus === "reauth" ? "Sign in to view your products" : <>Connected account: <span className="text-white font-bold">{userTwitter || "Indie Mode"}</span></>}
           </p>
+          <ModerationLink userId={userSubId} />
         </div>
       </div>
 
@@ -182,6 +184,8 @@ export default function MakerConsole({
                           ) : null}
                         </div>
                         <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{p.tagline}</p>
+                        {p.moderationStatus === "restricted" && <p className="mt-2 text-xs text-red-300">Restricted from discovery. Edit the profile and contact support to request a review.</p>}
+                        {p.moderationStatus === "unreviewed" && <p className="mt-2 text-xs text-zinc-500">Live · community-submitted link</p>}
                         <p className="mt-2 text-xs text-zinc-400">Recorded discovery views: <strong className="text-zinc-200">{typeof p.qualifiedImpressions === "number" ? p.qualifiedImpressions.toLocaleString() : "—"}</strong> · Community votes: {p.votesCount || 0}</p>
                       </div>
                     </div>
@@ -195,13 +199,13 @@ export default function MakerConsole({
                           ✎ Edit Profile
                         </button>
                       )}
-                      <Link
+                      {p.moderationStatus !== "restricted" && <Link
                         href={`/products/${encodeURIComponent(p.id)}`}
                         className="py-1.5 px-3 border border-white/[0.08] hover:bg-white/[0.04] hover:border-white/[0.15] text-zinc-350 hover:text-white font-semibold text-[10px] rounded transition duration-150 cursor-pointer font-mono flex items-center gap-1.5"
                       >
                         View profile →
-                      </Link>
-                      <ShareProductButton url={absoluteUrl(`/products/${encodeURIComponent(p.id)}`)} />
+                      </Link>}
+                      {p.moderationStatus !== "restricted" && <ShareProductButton url={absoluteUrl(`/products/${encodeURIComponent(p.id)}`)} />}
                       {onExportCsv && (p.queueStatus === "active" || p.queueStatus === "completed") && (
                         <button
                           onClick={() => onExportCsv(p)}
@@ -210,7 +214,7 @@ export default function MakerConsole({
                           📥 Export CSV
                         </button>
                       )}
-                      {p.queueStatus === "active" ? (
+                      {p.moderationStatus === "restricted" ? <span className="text-xs text-red-300">Restricted</span> : p.queueStatus === "active" ? (
                         <span className="px-3 py-1 border border-amber-500/30 bg-amber-500/10 text-amber-400 font-mono text-[10px] uppercase tracking-wider rounded font-bold animate-pulse">
                           Live Duel ⚔️
                         </span>

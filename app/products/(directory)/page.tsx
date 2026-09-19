@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "@/app/components/NavigationLink";
 import PublicSiteHeader from "@/app/components/PublicSiteHeader";
 import type { Product } from "@/lib/mockData";
+import { productLinkRel } from "@/lib/productSafety";
 import { getPublicProducts } from "@/lib/server/publicSeoData";
 import {
   absoluteUrl,
@@ -145,7 +146,7 @@ export default async function ProductsPage() {
                     <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
                       <span aria-hidden="true" className="inline-flex min-h-11 items-center text-zinc-300">View product →</span>
                       {website ? (
-                        <a href={website} target="_blank" rel="noopener" className="card-secondary-link rounded-lg px-3 py-2 text-[#ffbe18] transition hover:bg-[#ffbe18]/10">
+                        <a href={website} target="_blank" rel={productLinkRel(product)} className="card-secondary-link rounded-lg px-3 py-2 text-[#ffbe18] transition hover:bg-[#ffbe18]/10">
                           Visit {product.title} official website ↗
                         </a>
                       ) : null}

@@ -5,6 +5,7 @@ import { unstable_cache } from "next/cache";
 import { fetchCloudProducts, fromDbProduct } from "@/lib/arenaStore";
 import { Product, SEED_PRODUCTS } from "@/lib/mockData";
 import { DB_PREFIX, publicArenaTable, supabase } from "@/lib/supabaseClient";
+import { isVisibleProduct } from "@/lib/productSafety";
 
 const SAFE_ID = /^[a-z0-9][a-z0-9_-]{0,99}$/i;
 
@@ -78,7 +79,8 @@ const loadPublicProducts = unstable_cache(async () => {
   tags: ["arena-public"],
 });
 
-export const getPublicProducts = cache(loadPublicProducts);
+export const getArenaProducts = cache(loadPublicProducts);
+export const getPublicProducts = cache(async () => (await getArenaProducts()).filter(isVisibleProduct));
 
 function stringValue(row: DatabaseRow, key: string) {
   const value = row[key];
@@ -284,7 +286,7 @@ const loadVersusSeoData = unstable_cache(async (rawSlug: string): Promise<Versus
   );
   const productA = products.get(match.productAId);
   const productB = products.get(match.productBId);
-  if (!productA || !productB) return null;
+  if (!productA || !productB || !isVisibleProduct(productA) || !isVisibleProduct(productB)) return null;
 
   return {
     canonicalSlug: matchSlug(match),
@@ -345,10 +347,11 @@ async function loadSitemapRecords(): Promise<{
     if (!data || data.length < pageSize) break;
   }
 
+  const visibleIds = new Set(productRows.filter(row => row[`${DB_PREFIX}moderation_status`] !== "restricted").map(row => stringValue(row, `${DB_PREFIX}id`)));
   return {
     products: productRows.flatMap((row): SitemapProduct[] => {
       const id = stringValue(row, `${DB_PREFIX}id`);
-      if (!id || !SAFE_ID.test(id)) return [];
+      if (!id || !SAFE_ID.test(id) || !visibleIds.has(id)) return [];
       return [{
         id,
         submittedAt: stringValue(row, `${DB_PREFIX}submitted_at`) || undefined,
@@ -357,7 +360,7 @@ async function loadSitemapRecords(): Promise<{
       }];
     }),
     matches: matchRows.map(mapMatch).filter((match) =>
-      Boolean(match.id && SAFE_ID.test(match.productAId) && SAFE_ID.test(match.productBId)),
+      Boolean(match.id && SAFE_ID.test(match.productAId) && SAFE_ID.test(match.productBId) && visibleIds.has(match.productAId) && visibleIds.has(match.productBId)),
     ),
   };
 }

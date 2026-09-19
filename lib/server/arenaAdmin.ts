@@ -19,10 +19,17 @@ import type { Bracket, Match, Product } from "@/lib/mockData";
 import { DB_PREFIX } from "@/lib/supabaseClient";
 import { getMillisecondsToNextNYMidnight, getRoundEndAtIso, getRoundRemainingMs } from "@/lib/timeHelpers";
 import { getAdminClient, HttpError } from "./auth";
+import { productDomainKey } from "@/lib/productSafety";
 
 type DbRow = Record<string, unknown>;
 
 function databaseError(context: string, error: { message: string; code?: string } | null): never {
+  if (error?.code === "23505" && error.message.includes("domain")) {
+    throw new HttpError(409, "This website already has a product profile. Edit the existing profile instead.");
+  }
+  if (error?.code === "42703" && /domain_key|screenshot|moderation_status|link_trust/.test(error.message)) {
+    throw new HttpError(503, "The product safety update is not installed yet. Please contact the site administrator.");
+  }
   console.error(`[ARENA ADMIN] ${context}:`, error?.message || "Unknown database error");
   throw new HttpError(500, "The arena database operation failed.");
 }
@@ -71,6 +78,8 @@ export interface NewProductInput {
   makerName: string;
   makerTwitter: string;
   logo: string;
+  screenshot: string;
+  screenshots?: string[];
   description: string;
   category?: Product["category"];
   pricingModel: NonNullable<Product["pricingModel"]>;
@@ -80,8 +89,25 @@ export interface NewProductInput {
   feedbackRequest: string;
 }
 
+async function assertUniqueProductDomain(client: SupabaseClient, url: string, exceptId?: string): Promise<void> {
+  const host = productDomainKey(url);
+  if (!host) throw new HttpError(400, "Product URL must contain a valid public domain.");
+  const { data, error } = await client
+    .from(`${DB_PREFIX}products`)
+    .select(`${DB_PREFIX}id`)
+    .eq(`${DB_PREFIX}domain_key`, host)
+    .limit(1);
+  if (error) databaseError("checking product domain", error);
+  const duplicate = ((data ?? []) as unknown as DbRow[]).find((row) => String(row[`${DB_PREFIX}id`] || "") !== exceptId);
+  if (duplicate) {
+    const id = String(duplicate[`${DB_PREFIX}id`] || "");
+    throw new HttpError(409, `This website already has a profile on Indie Clash${id ? ` (/products/${id})` : ""}.`);
+  }
+}
+
 export async function createProductForUser(user: User, input: NewProductInput): Promise<Product> {
   const client = getAdminClient();
+  await assertUniqueProductDomain(client, input.url);
   const id = await uniqueProductSlug(client, normalizeSlug(input.url, input.title));
   const username = String(
     user.user_metadata?.preferred_username ||
@@ -104,6 +130,8 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     makerTwitter: input.makerTwitter,
     makerAvatar,
     logo: input.logo,
+    screenshot: input.screenshot || undefined,
+    screenshots: input.screenshots,
     submittedAt: new Date().toISOString(),
     queueStatus: "waiting",
     votesCount: 0,
@@ -121,6 +149,8 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     updatedAt: new Date().toISOString(),
     qualifiedImpressions: 0,
     exposureStatus: "new",
+    moderationStatus: "unreviewed",
+    linkTrust: "ugc",
   };
 
   const { data, error } = await client
@@ -136,13 +166,16 @@ export async function updateOwnedProduct(user: User, productId: string, input: N
   const client = getAdminClient();
   const { data: existing, error: fetchError } = await client
     .from(`${DB_PREFIX}products`)
-    .select(`${DB_PREFIX}id,${DB_PREFIX}creator_uid`)
+    .select(`${DB_PREFIX}id,${DB_PREFIX}creator_uid,${DB_PREFIX}url`)
     .eq(`${DB_PREFIX}id`, productId)
     .maybeSingle();
   if (fetchError) databaseError("loading product for profile update", fetchError);
   if (!existing) throw new HttpError(404, "Product not found.");
   const existingRow = existing as unknown as DbRow;
   if (existingRow[`${DB_PREFIX}creator_uid`] !== user.id) throw new HttpError(403, "You do not own this product.");
+  if (productDomainKey(String(existingRow[`${DB_PREFIX}url`])) !== productDomainKey(input.url)) {
+    await assertUniqueProductDomain(client, input.url, productId);
+  }
 
   const { data, error } = await client
     .from(`${DB_PREFIX}products`)
@@ -154,6 +187,8 @@ export async function updateOwnedProduct(user: User, productId: string, input: N
       [`${DB_PREFIX}maker_name`]: input.makerName,
       [`${DB_PREFIX}maker_twitter`]: input.makerTwitter,
       [`${DB_PREFIX}logo`]: input.logo,
+      [`${DB_PREFIX}screenshot`]: input.screenshot || null,
+      ...(input.screenshots !== undefined ? { [`${DB_PREFIX}screenshots`]: input.screenshots } : {}),
       [`${DB_PREFIX}description`]: input.description,
       [`${DB_PREFIX}category`]: input.category || null,
       [`${DB_PREFIX}pricing_model`]: input.pricingModel,
@@ -194,6 +229,7 @@ export async function enqueueOwnedProduct(user: User, productId: string): Promis
   if (fetchError) databaseError("loading product", fetchError);
   if (!product) throw new HttpError(404, "Product not found.");
   const productRow = product as unknown as DbRow;
+  if (productRow[`${DB_PREFIX}moderation_status`] === "restricted") throw new HttpError(409, "This product is restricted. Contact support before joining the Arena.");
   if (productRow[`${DB_PREFIX}creator_uid`] !== user.id) {
     throw new HttpError(403, "You do not own this product.");
   }

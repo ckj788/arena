@@ -5,6 +5,9 @@ import { notFound, permanentRedirect } from "next/navigation";
 import CopyLink from "@/app/components/CopyLink";
 import { getProductSeoData, getPublicProducts, matchSlug } from "@/lib/server/publicSeoData";
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
+import { productLinkRel } from "@/lib/productSafety";
+import ReportProduct from "@/app/components/ReportProduct";
+import ProductGallery from "@/app/components/ProductGallery";
 import { categoryLabel, pricingLabel } from "@/lib/productTaxonomy";
 
 interface Props {
@@ -206,7 +209,7 @@ export default async function ProductPage({ params }: Props) {
 
             <div className="mt-6 flex flex-wrap gap-3">
               {productWebsite ? (
-                <a href={productWebsite} target="_blank" rel="noopener" className="rounded-xl bg-[#ffbe18] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e0a612]">
+                <a href={productWebsite} target="_blank" rel={productLinkRel(product)} className="rounded-xl bg-[#ffbe18] px-5 py-3 text-sm font-semibold text-black transition hover:bg-[#e0a612]">
                   Visit {product.title} official website ↗
                 </a>
               ) : null}
@@ -228,9 +231,11 @@ export default async function ProductPage({ params }: Props) {
                   <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Product overview</p>
                   <h2 id="about-heading" className="mt-1 text-2xl font-semibold">About {product.title}</h2>
                 </div>
+                <ProductGallery title={product.title} images={(product.screenshots ?? (product.screenshot ? [product.screenshot] : [])).map(trustedProductImageUrl).filter((src): src is string => Boolean(src)).slice(0, 5)} />
                 <p className="whitespace-pre-line text-base leading-8 text-zinc-300">
                   {product.description || <><strong>{product.title}</strong> is an independent product created by {product.makerName}. {product.tagline}{validPublishedDate ? ` It was listed on Indie Clash on ${validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "long", day: "numeric" })}.` : ""}</>}
                 </p>
+                <ReportProduct productId={product.id} />
                 {product.targetAudience ? (
                   <div className="mt-6 rounded-xl border border-white/[0.07] bg-[#121215]/60 p-5">
                     <span className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">Built for</span>

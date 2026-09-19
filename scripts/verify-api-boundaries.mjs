@@ -7,6 +7,7 @@ for (const [path, method] of [
   ['/api/arena/products', 'POST'], ['/api/arena/products/safety-not-real', 'PATCH'],
   ['/api/arena/products/safety-not-real/queue', 'POST'], ['/api/arena/products/mine', 'GET'],
   ['/api/arena/vote', 'POST'], ['/api/arena/logo', 'POST'],
+  ['/api/arena/reports', 'POST'], ['/api/arena/moderation', 'GET'], ['/api/arena/moderation', 'POST'],
   ['/api/arena/settle', 'POST'], ['/api/arena/reset-round3', 'POST'], ['/api/cron/settle', 'GET'],
 ]) {
   const response = await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'GET' ? undefined : '{}', signal: AbortSignal.timeout(10000) });

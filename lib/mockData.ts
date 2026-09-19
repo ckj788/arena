@@ -10,6 +10,8 @@ export interface Product {
   makerTwitter: string;
   makerAvatar: string;
   logo: string;
+  screenshot?: string;
+  screenshots?: string[];
   submittedAt: string;
   queueStatus: "waiting" | "active" | "completed";
   votesCount: number;
@@ -30,6 +32,8 @@ export interface Product {
   lastExposedAt?: string;
   exposureStatus?: "new" | "legacy_catchup" | "needs_more_eyes" | "evergreen";
   discoveryBoostUntil?: string;
+  moderationStatus?: "unreviewed" | "approved" | "restricted";
+  linkTrust?: "ugc" | "trusted";
 }
 
 export interface Match {

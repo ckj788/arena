@@ -38,15 +38,28 @@ export async function POST(request: Request) {
 
     const contentType = request.headers.get("content-type")?.split(";", 1)[0].trim().toLowerCase();
     if (!contentType || !(contentType in IMAGE_TYPES)) {
-      throw new HttpError(415, "Logo must be a PNG, JPEG, or WebP image.");
+      throw new HttpError(415, "Image must be a PNG, JPEG, or WebP file.");
     }
 
     const declaredLength = Number(request.headers.get("content-length") || 0);
-    if (declaredLength > 1_000_000) throw new HttpError(413, "Logo must be smaller than 1 MB.");
+    if (declaredLength > 1_000_000) throw new HttpError(413, "Image must be smaller than 1 MB after resizing.");
 
-    const bytes = new Uint8Array(await request.arrayBuffer());
+    if (!request.body) throw new HttpError(400, "An image is required.");
+    const reader = request.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let length = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      length += value.byteLength;
+      if (length > 1_000_000) { await reader.cancel(); throw new HttpError(413, "Image must be smaller than 1 MB."); }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(length);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
     if (bytes.byteLength === 0 || bytes.byteLength > 1_000_000) {
-      throw new HttpError(413, "Logo must be between 1 byte and 1 MB.");
+      throw new HttpError(413, "Image must be between 1 byte and 1 MB.");
     }
     if (!hasValidSignature(bytes, contentType as keyof typeof IMAGE_TYPES)) {
       throw new HttpError(400, "The uploaded file does not match its image type.");
@@ -64,7 +77,7 @@ export async function POST(request: Request) {
       });
     if (uploadError) {
       console.error("[ARENA LOGO] Storage upload failed:", uploadError.message);
-      throw new HttpError(500, "Unable to store the product logo.");
+      throw new HttpError(500, "Unable to store the product image.");
     }
 
     const { data } = admin.storage.from(PRODUCT_LOGO_BUCKET).getPublicUrl(objectPath);

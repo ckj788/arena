@@ -20,7 +20,7 @@ export function isPublicImageUrl(value: string | undefined) {
 
 export function trustedProductImageUrl(value: string | undefined) {
   if (!value) return undefined;
-  if (value.startsWith("/")) return value;
+  if (value.startsWith("/") && !value.startsWith("//") && !value.includes("\\")) return value;
 
   // Products submitted before the Storage upload route was introduced keep a
   // small raster logo as a data URI in the database. These are public product
@@ -40,7 +40,8 @@ export function trustedProductImageUrl(value: string | undefined) {
     const expectedPrefix = `/storage/v1/object/public/${PRODUCT_LOGO_BUCKET}/`;
     if (
       imageUrl.protocol === "https:" &&
-      imageUrl.hostname === supabaseUrl.hostname &&
+      imageUrl.origin === supabaseUrl.origin &&
+      !imageUrl.username && !imageUrl.password &&
       imageUrl.pathname.startsWith(expectedPrefix)
     ) {
       return imageUrl.toString();
@@ -66,6 +67,9 @@ export function publicHttpUrl(value: string | undefined) {
       url.hostname &&
       url.hostname.includes(".") &&
       !url.username && !url.password &&
+      !/^(?:\d+\.){3}\d+$/.test(url.hostname) &&
+      !url.hostname.startsWith("[") &&
+      !/\.(?:local|localhost|internal|test|invalid)$/i.test(url.hostname) &&
       !url.hostname.includes("%20") &&
       !url.hostname.includes(" ")
     ) {

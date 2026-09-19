@@ -47,7 +47,7 @@ async function renewedAccessToken(rejectedToken: string): Promise<string> {
   return refreshed.data.session.access_token;
 }
 
-async function authenticatedJson<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
+export async function authenticatedJson<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
   if (!supabase) {
     throw new Error("Cloud mode is not configured.");
   }
@@ -89,6 +89,8 @@ export interface ProductSubmission {
   makerTwitter: string;
   makerAvatar: string;
   logo: string;
+  screenshot?: string;
+  screenshots?: string[];
   description: string;
   category?: Product["category"];
   pricingModel: NonNullable<Product["pricingModel"]>;
@@ -101,14 +103,14 @@ export interface ProductSubmission {
 function imageDataUrlToBlob(value: string): Blob {
   const match = value.match(/^data:(image\/(?:png|jpeg|webp));base64,([a-z0-9+/=]+)$/i);
   if (!match?.[1] || !match[2]) {
-    throw new Error("Logo must be a PNG, JPEG, or WebP image.");
+    throw new Error("Image must be a PNG, JPEG, or WebP file.");
   }
 
   let binary: string;
   try {
     binary = atob(match[2]);
   } catch {
-    throw new Error("The selected logo could not be decoded. Please choose the image again.");
+    throw new Error("The selected image could not be decoded. Please choose it again.");
   }
 
   const bytes = new Uint8Array(binary.length);
@@ -130,7 +132,7 @@ export async function uploadArenaLogo(logo: string): Promise<string> {
   // Decode locally instead of fetching the data: URL. A strict connect-src CSP
   // correctly blocks data: network requests even though img-src permits preview.
   const blob = imageDataUrlToBlob(logo);
-  if (blob.size > 1_000_000) throw new Error("Logo must be smaller than 1 MB after resizing.");
+  if (blob.size > 1_000_000) throw new Error("Image must be smaller than 1 MB after resizing.");
 
   const upload = (token: string) => fetchJsonWithDeadline<{ url?: string; error?: string }>(
     "/api/arena/logo",
@@ -150,7 +152,7 @@ export async function uploadArenaLogo(logo: string): Promise<string> {
     if (uploadResponse.status === 401) return expireLocalSession();
   }
   if (!uploadResponse.ok || !payload?.url) {
-    throw new Error(payload?.error || "Unable to upload the product logo.");
+    throw new Error(payload?.error || "Unable to upload the product image.");
   }
   return payload.url;
 }

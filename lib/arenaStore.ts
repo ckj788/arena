@@ -368,6 +368,8 @@ export function toDbProduct(p: Product) {
     [`${DB_PREFIX}maker_twitter`]: p.makerTwitter,
     [`${DB_PREFIX}maker_avatar`]: p.makerAvatar,
     [`${DB_PREFIX}logo`]: p.logo,
+    [`${DB_PREFIX}screenshot`]: p.screenshot || null,
+    [`${DB_PREFIX}screenshots`]: p.screenshots ?? (p.screenshot ? [p.screenshot] : []),
     [`${DB_PREFIX}submitted_at`]: p.submittedAt,
     [`${DB_PREFIX}queue_status`]: p.queueStatus,
     [`${DB_PREFIX}votes_count`]: p.votesCount,
@@ -387,7 +389,9 @@ export function toDbProduct(p: Product) {
     [`${DB_PREFIX}qualified_impressions`]: p.qualifiedImpressions || 0,
     [`${DB_PREFIX}last_exposed_at`]: p.lastExposedAt || null,
     [`${DB_PREFIX}exposure_status`]: p.exposureStatus || "new",
-    [`${DB_PREFIX}discovery_boost_until`]: p.discoveryBoostUntil || null
+    [`${DB_PREFIX}discovery_boost_until`]: p.discoveryBoostUntil || null,
+    [`${DB_PREFIX}moderation_status`]: p.moderationStatus || "approved",
+    [`${DB_PREFIX}link_trust`]: p.linkTrust || "trusted"
   };
 }
 
@@ -411,6 +415,8 @@ export function fromDbProduct(row: DatabaseRow): Product {
     makerTwitter: databaseString(row, `${DB_PREFIX}maker_twitter`),
     makerAvatar,
     logo: databaseString(row, `${DB_PREFIX}logo`, "🚀"),
+    screenshot: databaseString(row, `${DB_PREFIX}screenshot`) || undefined,
+    screenshots: Array.isArray(row[`${DB_PREFIX}screenshots`]) ? (row[`${DB_PREFIX}screenshots`] as unknown[]).filter((value): value is string => typeof value === "string").slice(0, 5) : undefined,
     submittedAt: databaseString(row, `${DB_PREFIX}submitted_at`, new Date(0).toISOString()),
     queueStatus: queueStatus === "active" || queueStatus === "completed" ? queueStatus : "waiting",
     votesCount: databaseNumber(row, `${DB_PREFIX}votes_count`),
@@ -438,7 +444,11 @@ export function fromDbProduct(row: DatabaseRow): Product {
       : undefined,
     lastExposedAt: databaseString(row, `${DB_PREFIX}last_exposed_at`) || undefined,
     exposureStatus: exposureStatus === "legacy_catchup" || exposureStatus === "needs_more_eyes" || exposureStatus === "evergreen" ? exposureStatus : "new",
-    discoveryBoostUntil: databaseString(row, `${DB_PREFIX}discovery_boost_until`) || undefined
+    discoveryBoostUntil: databaseString(row, `${DB_PREFIX}discovery_boost_until`) || undefined,
+    moderationStatus: (["unreviewed", "approved", "restricted"].includes(databaseString(row, `${DB_PREFIX}moderation_status`))
+      ? databaseString(row, `${DB_PREFIX}moderation_status`)
+      : "approved") as Product["moderationStatus"],
+    linkTrust: databaseString(row, `${DB_PREFIX}link_trust`) === "ugc" ? "ugc" : "trusted"
   };
 }
 
