@@ -50,20 +50,20 @@ export default function CopyLink({ value }: CopyLinkProps) {
         readOnly
         value={value}
         onClick={(e) => (e.target as HTMLInputElement).select()}
-        className="w-full h-10 bg-zinc-950 border border-white/[0.08] rounded-md pl-3 pr-24 text-[10px] font-mono text-zinc-400 focus:outline-none focus:border-zinc-400 select-all leading-normal"
+        className="w-full h-10 bg-zinc-50 border border-zinc-200 rounded-md pl-3 pr-24 text-[10px] font-mono text-zinc-600 focus:outline-none focus:border-zinc-400 select-all leading-normal"
       />
       <button
         type="button"
         onClick={handleCopy}
         className={`absolute right-1 top-1 bottom-1 px-3.5 rounded-[4px] flex items-center justify-center gap-1 transition-all duration-150 cursor-pointer font-mono text-[9px] uppercase tracking-wider font-bold ${
           copied 
-            ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400' 
-            : 'bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-zinc-300 hover:text-white'
+            ? 'bg-emerald-50 border border-emerald-300/80 text-emerald-700' 
+            : 'bg-white border border-zinc-200/90 shadow-2xs hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950'
         }`}
       >
         {copied ? (
           <>
-            <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
+            <CheckIcon className="w-3.5 h-3.5 text-emerald-600" />
             <span>COPIED</span>
           </>
         ) : (
@@ -73,7 +73,7 @@ export default function CopyLink({ value }: CopyLinkProps) {
           </>
         )}
       </button>
-      <span role="status" className={failed ? "absolute top-full mt-1 text-xs text-zinc-300" : "sr-only"}>{failed ? "Select and copy the link manually." : copied ? "Link copied." : ""}</span>
+      <span role="status" className={failed ? "absolute top-full mt-1 text-xs text-zinc-600" : "sr-only"}>{failed ? "Select and copy the link manually." : copied ? "Link copied." : ""}</span>
     </div>
   );
 }

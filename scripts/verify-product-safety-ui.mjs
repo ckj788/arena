@@ -45,7 +45,7 @@ try {
   assert((await page.$eval('[aria-label="Safety Fixture 0 image viewer"] img',el=>el.src)).endsWith('image-3.png'));
   await page.keyboard.press('Escape');
   await page.waitForSelector('[aria-label="Safety Fixture 0 image viewer"]',{hidden:true});
-  assert(await page.$eval('a[href="https://product-0.example.com/"]',el=>el.rel.includes('ugc')&&el.rel.includes('nofollow')));
+  assert(await page.$eval('a[href="https://product-0.example.com/"]',el=>el.rel==='noopener noreferrer'));
   await click('Report this product');await page.waitForSelector('form select');
   await page.screenshot({path:path.join(output,'product-report.png')});
   await click('Send report');await page.waitForFunction(()=>document.body.innerText.includes('Please sign in again'));

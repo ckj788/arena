@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 function ProductMark({ product }: { product: Product }) {
   const image = trustedProductImageUrl(product.logo);
-  if (image) return <img src={image} alt={`${product.title} logo`} className="h-9 w-9 rounded-md object-contain" />;
+  if (image) return <img src={image} alt={`${product.title} logo`} className="h-9 w-9 rounded-md object-contain bg-white" />;
   return <span className="text-2xl" aria-hidden="true">{product.logo && product.logo.length <= 8 ? product.logo : "🚀"}</span>;
 }
 
@@ -51,13 +51,32 @@ function ProductGrid({ products }: { products: Product[] }) {
       {products.map((product) => {
         const website = publicHttpUrl(product.url);
         return (
-          <article key={product.id} className="flex flex-col rounded-xl border border-white/[0.07] bg-[#121215]/75 p-5 transition hover:-translate-y-0.5 hover:border-white/[0.15]">
+          <article key={product.id} className="flex flex-col rounded-xl border border-zinc-200/80 bg-white p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-sm">
             <div className="flex items-start gap-4">
-              <Link href={`/products/${encodeURIComponent(product.id)}`} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-white/[0.06] bg-black/30"><ProductMark product={product} /></Link>
-              <div className="min-w-0"><h3 className="font-semibold"><Link href={`/products/${encodeURIComponent(product.id)}`} className="hover:text-[#ffbe18]">{product.title}</Link></h3><p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-400">{product.tagline}</p></div>
+              <Link href={`/products/${encodeURIComponent(product.id)}`} className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg border border-zinc-200/80 bg-white shadow-2xs">
+                <ProductMark product={product} />
+              </Link>
+              <div className="min-w-0">
+                <h3 className="font-bold text-zinc-950">
+                  <Link href={`/products/${encodeURIComponent(product.id)}`} className="hover:text-amber-600 transition">{product.title}</Link>
+                </h3>
+                <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-600">{product.tagline}</p>
+              </div>
             </div>
-            <div className="mt-5 flex items-center justify-between border-t border-white/[0.06] pt-4 text-xs text-zinc-500"><span>By {product.makerName}</span><span>{product.votesCount} votes</span></div>
-            <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold"><Link href={`/products/${encodeURIComponent(product.id)}`} className="rounded-md border border-white/[0.1] px-3 py-2 hover:bg-white/[0.05]">View profile</Link>{website ? <a href={website} target="_blank" rel={productLinkRel(product)} className="px-3 py-2 text-[#ffbe18]">Visit website ↗</a> : null}</div>
+            <div className="mt-5 flex items-center justify-between border-t border-zinc-100 pt-4 text-xs text-zinc-500">
+              <span>By {product.makerName}</span>
+              <span className="font-mono">{product.votesCount} votes</span>
+            </div>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
+              <Link href={`/products/${encodeURIComponent(product.id)}`} className="rounded-md border border-zinc-200 bg-white px-3 py-2 text-zinc-700 shadow-2xs transition hover:bg-zinc-50">
+                View profile
+              </Link>
+              {website ? (
+                <a href={website} target="_blank" rel={productLinkRel(product)} className="px-3 py-2 text-amber-600 hover:text-amber-700 font-semibold transition">
+                  Visit website ↗
+                </a>
+              ) : null}
+            </div>
           </article>
         );
       })}
@@ -77,14 +96,51 @@ export default async function CategoryPage({ params }: Props) {
   const jsonLd = { "@context": "https://schema.org", "@type": "CollectionPage", "@id": canonicalUrl, name: `${category.label} Built by Indie Makers`, url: canonicalUrl, mainEntity: { "@type": "ItemList", numberOfItems: products.length, itemListElement: latest.map((product, index) => ({ "@type": "ListItem", position: index + 1, name: product.title, url: absoluteUrl(`/products/${product.id}`) })) } };
 
   return (
-    <div className="min-h-screen bg-[#0B0B0C] text-white antialiased selection:bg-white selection:text-black">
+    <div className="min-h-screen bg-[#fafafa] text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
-      <header className="sticky top-0 z-50 border-b border-white/[0.06] bg-black/80 py-4 backdrop-blur-md"><div className="mx-auto flex max-w-6xl items-center justify-between px-4"><Link href="/" className="text-xl font-semibold tracking-tight">INDIE CLASH</Link><Link href="/categories" className="text-xs text-zinc-400 hover:text-white">All categories</Link></div></header>
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-100/40 via-[#fafafa] to-[#fafafa]" />
+      <header className="sticky top-0 z-50 border-b border-zinc-200/80 bg-white/80 py-4 backdrop-blur-md">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4">
+          <Link href="/" className="text-xl font-bold tracking-tight text-zinc-950">INDIE CLASH</Link>
+          <Link href="/categories" className="text-xs text-zinc-500 hover:text-zinc-900">All categories</Link>
+        </div>
+      </header>
       <main className="relative mx-auto max-w-6xl px-4 py-12 sm:py-16">
-        <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2 font-mono text-xs text-zinc-500"><Link href="/">Indie Clash</Link><span>/</span><Link href="/categories">Categories</Link><span>/</span><span className="text-zinc-300">{category.label}</span></nav>
-        <section className="mb-14 max-w-4xl"><p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#A78BFA]">Indie category</p><h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">{category.label} built by indie makers</h1><p className="mt-5 max-w-3xl text-base leading-7 text-zinc-300">{category.description} Discover recent launches and overlooked products that deserve more attention. Rankings never depend on payment.</p><span className="mt-6 inline-block rounded-full border border-white/[0.08] px-3 py-1.5 text-xs text-zinc-400">{products.length} products</span></section>
-        {products.length ? <div className="space-y-16"><section><div className="mb-5 border-b border-white/[0.08] pb-4"><p className="font-mono text-[10px] uppercase tracking-wider text-zinc-500">Recently launched</p><h2 className="mt-1 text-2xl font-semibold">New {category.label}</h2></div><ProductGrid products={latest} /></section><section><div className="mb-5 border-b border-white/[0.08] pb-4"><p className="font-mono text-[10px] uppercase tracking-wider text-[#A78BFA]">Fair discovery</p><h2 className="mt-1 text-2xl font-semibold">Underrated {category.label}</h2></div><ProductGrid products={unseen} /></section></div> : <section className="rounded-xl border border-dashed border-white/[0.1] p-10 text-center text-zinc-500">No products have selected this category yet. The page will become indexable after it has enough useful content.</section>}
+        <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2 font-mono text-xs text-zinc-500">
+          <Link href="/" className="transition hover:text-zinc-900">Indie Clash</Link>
+          <span className="text-zinc-300">/</span>
+          <Link href="/categories" className="transition hover:text-zinc-900">Categories</Link>
+          <span className="text-zinc-300">/</span>
+          <span className="text-zinc-700 font-medium">{category.label}</span>
+        </nav>
+        <section className="mb-14 max-w-4xl">
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-violet-700 font-medium">Indie category</p>
+          <h1 className="mt-3 text-4xl font-bold tracking-tight text-zinc-950 sm:text-6xl">{category.label} built by indie makers</h1>
+          <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600">{category.description} Discover recent launches and overlooked products that deserve more attention. Rankings never depend on payment.</p>
+          <span className="mt-6 inline-block rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1.5 font-mono text-xs text-zinc-600 shadow-2xs">{products.length} products</span>
+        </section>
+        {products.length ? (
+          <div className="space-y-16">
+            <section>
+              <div className="mb-5 border-b border-zinc-200/80 pb-4">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-zinc-500 font-medium">Recently launched</p>
+                <h2 className="mt-1 text-2xl font-bold text-zinc-950">New {category.label}</h2>
+              </div>
+              <ProductGrid products={latest} />
+            </section>
+            <section>
+              <div className="mb-5 border-b border-zinc-200/80 pb-4">
+                <p className="font-mono text-[10px] uppercase tracking-wider text-violet-700 font-medium">Fair discovery</p>
+                <h2 className="mt-1 text-2xl font-bold text-zinc-950">Underrated {category.label}</h2>
+              </div>
+              <ProductGrid products={unseen} />
+            </section>
+          </div>
+        ) : (
+          <section className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-10 text-center text-zinc-500">
+            No products have selected this category yet. The page will become indexable after it has enough useful content.
+          </section>
+        )}
       </main>
     </div>
   );

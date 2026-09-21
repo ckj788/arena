@@ -36,7 +36,8 @@ assert.equal(site.publicHttpUrl('https://HTTPS://mistol.ai'),'https://mistol.ai/
 assert.equal(safety.productDomainKey('https://WWW.Example.com.:443/path'),'example.com');
 assert.notEqual(safety.productDomainKey('https://a.vercel.app'),safety.productDomainKey('https://b.vercel.app'));
 assert.notEqual(safety.productDomainKey('https://github.com/owner/a'),safety.productDomainKey('https://github.com/owner/b'));
-assert.match(safety.productLinkRel({moderationStatus:'unreviewed',linkTrust:'ugc'}),/ugc nofollow/);
+assert.equal(safety.productLinkRel({moderationStatus:'unreviewed',linkTrust:'ugc'}),'noopener noreferrer');
+assert.match(safety.productLinkRel({moderationStatus:'restricted',linkTrust:'trusted'}),/ugc nofollow/);
 assert(!safety.productLinkRel({moderationStatus:'approved',linkTrust:'trusted'}).includes('nofollow'));
 assert(!safety.isVisibleProduct({moderationStatus:'restricted'}));
 const robots = load('app/robots.ts',{'@/lib/site':site}).default();

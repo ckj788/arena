@@ -180,20 +180,20 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
   };
 
   return (
-    <section ref={sectionRef} id="new-and-unseen-section" data-home-reveal="discovery" className="border-t border-white/[0.05] py-12 md:py-16">
+    <section ref={sectionRef} id="new-and-unseen-section" data-home-reveal="discovery" className="border-t border-zinc-200/80 py-12 md:py-16">
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-2xl">
-          <h2 className="border-l-2 border-[#A78BFA] pl-4 text-xl font-bold uppercase tracking-tight text-white">WORTH A CLOSER LOOK</h2>
-          <p className="mt-3 text-sm leading-6 text-zinc-400">
+          <h2 className="border-l-2 border-[#7C3AED] pl-4 text-xl font-bold uppercase tracking-tight text-zinc-950">WORTH A CLOSER LOOK</h2>
+          <p className="mt-3 text-sm leading-6 text-zinc-600">
             Products with fewer recorded views, shown first.
           </p>
         </div>
         <div className="flex shrink-0 flex-col items-start gap-2 sm:items-end">
-          <Link href="/underrated" prefetch className="inline-flex min-h-11 items-center text-sm text-zinc-300 hover:text-white">Explore all {products.length} products →</Link>
+          <Link href="/underrated" prefetch className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-600 hover:text-zinc-950">Explore all {products.length} products →</Link>
           {batchCount > 1 && <div className="flex items-center gap-4">
-            <span className="text-xs tabular-nums text-zinc-400">{seenCount} of {products.length} explored</span>
+            <span className="text-xs tabular-nums text-zinc-500">{seenCount} of {products.length} explored</span>
             <button type="button" onClick={showNext} disabled={isTransitioning} aria-controls="discovery-grid" aria-busy={isTransitioning}
-              className="min-h-11 min-w-36 rounded-md border border-[#A78BFA]/30 bg-[#A78BFA]/[0.07] px-4 text-sm text-[#c4b5fd] transition-colors hover:bg-[#A78BFA]/[0.14] disabled:cursor-wait">
+              className="min-h-11 min-w-36 rounded-md border border-violet-200 bg-violet-50/80 px-4 text-sm font-medium text-violet-700 shadow-2xs transition-colors hover:bg-violet-100 disabled:cursor-wait">
               {isTransitioning ? "Changing products…" : activeBatchIndex >= batchCount - 1 ? "Explore again ↻" : `Next ${Math.min(BATCH_SIZE, products.length - ((activeBatchIndex + 1) * BATCH_SIZE))} products →`}
             </button>
           </div>}
@@ -205,7 +205,7 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
           id="discovery-grid"
           ref={gridRef}
           style={{ minHeight: gridHeight }}
-          className="grid gap-px overflow-hidden rounded-md border border-white/[0.06] bg-white/[0.06] md:grid-cols-2 lg:grid-cols-3"
+          className="grid gap-px overflow-hidden rounded-xl border border-zinc-200/90 bg-zinc-200/60 shadow-xs md:grid-cols-2 lg:grid-cols-3"
           aria-label="Products to discover"
         >
           {visibleProducts.map((product) => (
@@ -213,29 +213,29 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
               key={product.id}
               data-qualified-exposure-id={product.id}
               data-discovery-card
-              className="product-card group relative flex h-80 flex-col bg-[#08080a] p-5 transition-colors duration-150 hover:bg-[#0c0c0f]"
+              className="product-card group relative flex h-80 flex-col bg-white p-5 transition-colors duration-150 hover:bg-zinc-50/90"
             >
               <div className="flex items-start justify-between gap-4">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-white/[0.06] bg-black/40">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-zinc-200/80 bg-white shadow-2xs">
                   {renderLogo(product.logo, "w-7 h-7")}
                 </span>
-                {hasActiveDiscoveryBoost(product) && <span className="text-xs text-[#c4b5fd]">Peer contributor</span>}
+                {hasActiveDiscoveryBoost(product) && <span className="rounded border border-violet-200/80 bg-violet-50 px-2 py-0.5 text-xs font-medium text-violet-700">Peer contributor</span>}
               </div>
               <div className="mt-5 flex-1">
-                <Link href={`/products/${encodeURIComponent(product.id)}`} prefetch className="card-primary-link line-clamp-2 text-lg font-semibold text-white transition-colors group-hover:text-[#ffbe18]">
+                <Link href={`/products/${encodeURIComponent(product.id)}`} prefetch className="card-primary-link line-clamp-2 text-lg font-semibold text-zinc-950 transition-colors group-hover:text-amber-600">
                   {product.title}
                 </Link>
-                <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-400">{product.tagline}</p>
+                <p className="mt-2 line-clamp-3 text-sm leading-6 text-zinc-600">{product.tagline}</p>
               </div>
-              <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/[0.06] pt-4 text-xs text-zinc-400">
+              <div className="mt-5 flex items-center justify-between gap-3 border-t border-zinc-100 pt-4 text-xs text-zinc-500">
                 <span className="min-w-0 truncate">By {product.makerName}</span>
-                <span className="shrink-0 text-zinc-300" aria-hidden="true">View product ↗</span>
+                <span className="shrink-0 font-medium text-zinc-700 transition-colors group-hover:text-zinc-950" aria-hidden="true">View product ↗</span>
               </div>
             </article>
           ))}
         </div>
       ) : (
-        <div className="rounded-md border border-dashed border-white/[0.08] p-10 text-center font-mono text-xs text-zinc-600">
+        <div className="rounded-md border border-dashed border-zinc-300 p-10 text-center font-mono text-xs text-zinc-500">
           [ Discovery queue is waiting for its first launch. ]
         </div>
       )}
@@ -246,7 +246,7 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
             sectionRef.current?.scrollIntoView({ block: "start", behavior: "auto" });
             sectionRef.current?.querySelector<HTMLButtonElement>("button[aria-controls='discovery-grid']")?.focus({ preventScroll: true });
           }}
-          className="min-h-11 rounded-md border border-[#A78BFA]/30 px-5 text-sm text-[#c4b5fd]">
+          className="min-h-11 rounded-md border border-violet-200 bg-violet-50 px-5 text-sm font-medium text-violet-700">
           {isTransitioning ? "Changing products…" : activeBatchIndex >= batchCount - 1 ? "Explore again ↑" : "See the next products ↑"}
         </button>
       </div>}

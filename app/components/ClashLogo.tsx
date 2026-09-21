@@ -23,10 +23,10 @@ export default function ClashLogo({ className = "", size = "md" }: ClashLogoProp
       className={`relative group select-none flex items-center justify-center cursor-pointer transition-transform duration-300 hover:scale-105 ${containerClass} ${className}`}
     >
       {/* Soft glowing background aura */}
-      <div className="absolute inset-0 bg-gradient-to-tr from-[#06B6D4] via-[#6366F1] to-[#8B5CF6] rounded-lg blur-md opacity-40 group-hover:opacity-100 transition-opacity duration-300 animate-pulse" />
+      <div className="absolute -inset-0.5 bg-gradient-to-tr from-[#06B6D4]/35 via-[#6366F1]/25 to-[#8B5CF6]/35 rounded-xl blur-[3px] opacity-40 group-hover:opacity-90 transition-opacity duration-300" />
       
-      {/* Obsidian background logo container */}
-      <div className="relative w-full h-full rounded-lg bg-[#121215] border border-white/[0.12] flex items-center justify-center overflow-hidden">
+      {/* Obsidian black logo container */}
+      <div className="relative w-full h-full rounded-lg bg-[#111114] border border-zinc-800/80 shadow-xs flex items-center justify-center overflow-hidden">
         <svg 
           viewBox="0 0 100 100" 
           className="w-2/3 h-2/3" 
@@ -42,19 +42,19 @@ export default function ClashLogo({ className = "", size = "md" }: ClashLogoProp
             
             {/* Flowing purple gradient wing on the right */}
             <linearGradient id="logo-purple" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#A78BFA" />
+              <stop offset="0%" stopColor="#C084FC" />
               <stop offset="100%" stopColor="#7C3AED" />
             </linearGradient>
             
             {/* Core energy gold gradient */}
             <linearGradient id="logo-gold" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FBBF24" />
+              <stop offset="0%" stopColor="#FDE047" />
               <stop offset="100%" stopColor="#D97706" />
             </linearGradient>
           </defs>
 
           {/* Left collision wing (Cyan Wing) */}
-          <path d="M45 15 L20 40 L45 65 Z" fill="url(#logo-cyan)" opacity="0.85" />
+          <path d="M45 15 L20 40 L45 65 Z" fill="url(#logo-cyan)" opacity="0.95" />
           
           {/* Right collision wing (Purple Wing) */}
           <path d="M55 35 L80 60 L55 85 Z" fill="url(#logo-purple)" opacity="0.95" />
@@ -70,7 +70,7 @@ export default function ClashLogo({ className = "", size = "md" }: ClashLogoProp
           <circle 
             cx="50" 
             cy="45" 
-            r="4" 
+            r="3.5" 
             fill="#FFFFFF" 
             className="animate-ping" 
             style={{ animationDuration: '2.5s' }} 

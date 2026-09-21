@@ -9,13 +9,13 @@ export default function ScreenshotInput({ value, onChange, onBusy, disabled = fa
   useEffect(() => { const token = task; return () => { token.current++; onBusy(false); }; }, [onBusy]);
   const uploadDisabled = disabled || busy || value.length >= 5;
   return <div className="space-y-3">
-    <div className="block text-xs font-semibold uppercase tracking-wider text-zinc-300">Product images (optional) · {value.length}/5
-      <span className="block mt-1 text-xs normal-case font-normal text-zinc-400">Up to 5 images · 5 MB each · Product detail page only</span>
-      <div className={`mt-2 flex min-h-14 items-center gap-3 rounded-lg border border-white/10 p-3 normal-case ${uploadDisabled ? "opacity-50" : ""}`}>
-        <label htmlFor="product-images-input" className={`rounded-md bg-white/10 px-3 py-2 text-xs font-semibold text-zinc-200 transition-colors ${uploadDisabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-white/15"}`}>
+    <div className="block text-xs font-semibold uppercase tracking-wider text-zinc-700">Product images (optional) · {value.length}/5
+      <span className="block mt-1 text-xs normal-case font-normal text-zinc-500">Up to 5 images · 5 MB each · Product detail page only</span>
+      <div className={`mt-2 flex min-h-14 items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50/50 p-3 normal-case ${uploadDisabled ? "opacity-50" : ""}`}>
+        <label htmlFor="product-images-input" className={`rounded-md bg-white border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-800 shadow-2xs transition-colors ${uploadDisabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-zinc-50"}`}>
           {busy ? "Preparing images…" : "Choose images"}
         </label>
-        <span className="text-xs font-normal text-zinc-400" aria-live="polite">
+        <span className="text-xs font-normal text-zinc-500" aria-live="polite">
           {value.length === 0 ? "No images selected" : `${value.length} of 5 images selected`}
         </span>
       </div>
@@ -33,7 +33,7 @@ export default function ScreenshotInput({ value, onChange, onBusy, disabled = fa
           const ratio = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
           const canvas = document.createElement("canvas"); canvas.width = Math.max(1, Math.round(bitmap.width * ratio)); canvas.height = Math.max(1, Math.round(bitmap.height * ratio));
           const ctx = canvas.getContext("2d"); if (!ctx) throw new Error("Unable to prepare image.");
-          ctx.fillStyle = "#111114"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
           let result = canvas.toDataURL("image/jpeg", 0.85);
           if (result.length > 1_300_000) result = canvas.toDataURL("image/jpeg", 0.65);
           if (result.length > 1_300_000) throw new Error("Image is too detailed. Choose a smaller screenshot.");
@@ -46,14 +46,14 @@ export default function ScreenshotInput({ value, onChange, onBusy, disabled = fa
         finally { bitmap?.close(); if (id === task.current) { onBusy(false); setBusy(false); } }
       }} />
     </div>
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{value.map((src, index) => <div key={`${index}-${src.slice(-32)}`} className="min-w-0 rounded-lg border border-white/10 p-2">
-      <img src={src.startsWith("data:image/jpeg;base64,") ? src : trustedProductImageUrl(src)} alt={`Product image ${index + 1} preview`} className="aspect-video w-full rounded object-contain" />
-      <div className="mt-2 flex justify-between text-xs text-zinc-300">
-        <button type="button" disabled={disabled || busy || index === 0} aria-label={`Move image ${index + 1} earlier`} onClick={() => { const next = [...value]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="p-2 disabled:opacity-25">←</button>
-        <button type="button" disabled={disabled || busy} aria-label={`Remove image ${index + 1}`} onClick={() => { onChange(value.filter((_, i) => i !== index)); setError(""); }} className="p-2">Remove</button>
-        <button type="button" disabled={disabled || busy || index === value.length - 1} aria-label={`Move image ${index + 1} later`} onClick={() => { const next = [...value]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; onChange(next); }} className="p-2 disabled:opacity-25">→</button>
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{value.map((src, index) => <div key={`${index}-${src.slice(-32)}`} className="min-w-0 rounded-lg border border-zinc-200 bg-white p-2 shadow-2xs">
+      <img src={src.startsWith("data:image/jpeg;base64,") ? src : trustedProductImageUrl(src)} alt={`Product image ${index + 1} preview`} className="aspect-video w-full rounded object-contain bg-zinc-50" />
+      <div className="mt-2 flex justify-between text-xs text-zinc-600">
+        <button type="button" disabled={disabled || busy || index === 0} aria-label={`Move image ${index + 1} earlier`} onClick={() => { const next = [...value]; [next[index - 1], next[index]] = [next[index], next[index - 1]]; onChange(next); }} className="p-2 disabled:opacity-25 hover:text-zinc-950">←</button>
+        <button type="button" disabled={disabled || busy} aria-label={`Remove image ${index + 1}`} onClick={() => { onChange(value.filter((_, i) => i !== index)); setError(""); }} className="p-2 hover:text-red-600">Remove</button>
+        <button type="button" disabled={disabled || busy || index === value.length - 1} aria-label={`Move image ${index + 1} later`} onClick={() => { const next = [...value]; [next[index + 1], next[index]] = [next[index], next[index + 1]]; onChange(next); }} className="p-2 disabled:opacity-25 hover:text-zinc-950">→</button>
       </div>
     </div>)}</div>
-    {error && <p role="alert" className="text-xs text-red-300">{error}</p>}
+    {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
   </div>;
 }

@@ -68,11 +68,26 @@ export interface SitemapProduct {
 
 const loadPublicProducts = unstable_cache(async () => {
   if (!supabase) return fetchCloudProducts();
-  const { data, error } = await supabase.from(publicArenaTable("products"))
-    .select("*").order(`${DB_PREFIX}submitted_at`, { ascending: true }).abortSignal(AbortSignal.timeout(15_000));
+  let data: DatabaseRow[] | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const response = await supabase.from(publicArenaTable("products"))
+        .select("*").order(`${DB_PREFIX}submitted_at`, { ascending: true })
+        .abortSignal(AbortSignal.timeout(8_000));
+      if (response.error) {
+        const transient = /fetch failed|timeout|aborted|network/i.test(response.error.message);
+        if (attempt === 0 && transient) continue;
+        throw new Error(`Public products are temporarily unavailable: ${response.error.message}`);
+      }
+      data = response.data as unknown as DatabaseRow[] | null;
+      break;
+    } catch (error) {
+      if (attempt === 1 || !/fetch failed|timeout|aborted|network/i.test(String(error))) throw error;
+    }
+  }
   // Do not persist an offline fallback as a successful empty catalogue. An
   // unsuccessful revalidation must preserve the last successful cached value.
-  if (error || !data) throw new Error("Public products are temporarily unavailable.");
+  if (!data) throw new Error("Public products are temporarily unavailable.");
   return data.map(fromDbProduct);
 }, ["arena-public-products-v2"], {
   revalidate: 60,
@@ -158,30 +173,41 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
     `${DB_PREFIX}winner_id`,
   ].join(",");
 
-  const [products, { data: matchRows, error: matchError }] = await Promise.all([
-    getPublicProducts(),
-    supabase
-      .from(publicArenaTable("matches"))
-      .select(matchFields)
-      .or(`${DB_PREFIX}product_a_id.eq.${slug},${DB_PREFIX}product_b_id.eq.${slug}`)
-      .limit(50).abortSignal(AbortSignal.timeout(15_000)),
-  ]);
-
-  if (matchError) throw new Error(`Unable to load product matchups: ${matchError.message}`);
+  const products = await getPublicProducts();
   const product = products.find((item) => item.id.toLowerCase() === slug);
   if (!product) return null;
 
-  const matches = ((matchRows ?? []) as unknown as DatabaseRow[]).map(mapMatch);
-  const { data: critiqueRows, error: critiqueError } = matches.length
-    ? await supabase
+  // Arena history is supplemental. A temporary failure there must not hide a
+  // published product, its website link, or its canonical metadata.
+  let matchRows: DatabaseRow[] = [];
+  try {
+    const { data, error } = await supabase
+      .from(publicArenaTable("matches"))
+      .select(matchFields)
+      .or(`${DB_PREFIX}product_a_id.eq.${slug},${DB_PREFIX}product_b_id.eq.${slug}`)
+      .limit(50).abortSignal(AbortSignal.timeout(5_000));
+    if (error) throw error;
+    matchRows = (data ?? []) as unknown as DatabaseRow[];
+  } catch (error) {
+    console.warn(`[INDIE CLASH] Product matchups temporarily unavailable for ${slug}:`, error);
+  }
+
+  const matches = matchRows.map(mapMatch);
+  let critiqueRows: DatabaseRow[] = [];
+  if (matches.length) {
+    try {
+      const { data, error } = await supabase
         .from(publicArenaTable("votes"))
         .select("*")
         .in(`${DB_PREFIX}match_id`, matches.map((match) => match.id))
         .order(`${DB_PREFIX}created_at`, { ascending: false })
-        .limit(50).abortSignal(AbortSignal.timeout(15_000))
-    : { data: [], error: null };
-
-  if (critiqueError) throw new Error(`Unable to load critiques: ${critiqueError.message}`);
+        .limit(50).abortSignal(AbortSignal.timeout(5_000));
+      if (error) throw error;
+      critiqueRows = (data ?? []) as unknown as DatabaseRow[];
+    } catch (error) {
+      console.warn(`[INDIE CLASH] Product critiques temporarily unavailable for ${slug}:`, error);
+    }
+  }
 
   const opponents = new Map(
     products.map((item) => [item.id, item] as const),
@@ -191,7 +217,7 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
     .slice(0, 6);
 
-  const critiques = ((critiqueRows ?? []) as DatabaseRow[]).flatMap((row): PublicCritique[] => {
+  const critiques = critiqueRows.flatMap((row): PublicCritique[] => {
     const votedProductId = stringValue(row, `${DB_PREFIX}voted_product_id`);
     const supported = votedProductId === product.id;
     const body = stringValue(
@@ -220,7 +246,7 @@ const loadProductSeoData = unstable_cache(async (rawSlug: string): Promise<Produ
     relatedProducts,
     wins: matches.filter((match) => match.winnerId === product.id).length,
   };
-}, ["arena-product-seo-v2"], { revalidate: 1800, tags: ["arena-public"] });
+}, ["arena-product-seo-v3"], { revalidate: 60, tags: ["arena-public"] });
 
 export const getProductSeoData = cache(loadProductSeoData);
 

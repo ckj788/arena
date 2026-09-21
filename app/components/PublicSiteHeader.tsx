@@ -9,23 +9,23 @@ export default function PublicSiteHeader({ actionHref = "/?submit=1", actionLabe
   actionLabel?: string;
 }) {
   return (
-    <header className="site-glass-nav sticky top-0 z-50 border-b border-white/[0.06]">
+    <header className="site-glass-nav sticky top-0 z-50 border-b border-zinc-200/80">
       <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:px-6 lg:px-8">
         <div className="flex min-w-0 items-center gap-6">
           <Link href="/" aria-label="Indie Clash home" className="flex min-h-11 items-center gap-2">
             <ClashLogo size="md" className="max-sm:w-7 max-sm:h-7" />
-            <span className="whitespace-nowrap text-sm font-bold tracking-tight text-white sm:text-xl">Indie-Clash</span>
+            <span className="whitespace-nowrap text-sm font-bold tracking-tight text-zinc-950 sm:text-xl">Indie-Clash</span>
           </Link>
           <PrimaryNavigation className="hidden lg:flex" />
         </div>
         <div className="flex shrink-0 items-center gap-1">
         <PublicAccountLink />
-        <Link href={actionHref} className="inline-flex min-h-10 shrink-0 items-center rounded-md bg-white px-2 text-[11px] font-semibold text-black transition-colors hover:bg-zinc-200 sm:px-3 sm:text-xs">
+        <Link href={actionHref} className="inline-flex min-h-10 shrink-0 items-center rounded-md bg-zinc-900 px-2 text-[11px] font-semibold text-white shadow-xs transition-all hover:bg-zinc-800 active:scale-[0.99] sm:px-3 sm:text-xs">
           {actionLabel}
         </Link>
         </div>
       </div>
-      <PrimaryNavigation className="flex border-t border-white/[0.06] px-3 lg:hidden" />
+      <PrimaryNavigation className="flex border-t border-zinc-200/80 px-3 lg:hidden" />
     </header>
   );
 }

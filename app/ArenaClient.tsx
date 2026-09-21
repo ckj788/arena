@@ -542,7 +542,7 @@ export default function ArenaClient({
             result.error.message?.toLowerCase().includes("refresh token") ||
             (result.error as { code?: string })?.code === "refresh_token_not_found";
           if (isStaleToken && !isCallback) {
-            await authClient.auth.signOut().catch(() => {});
+            await authClient.auth.signOut({ scope: "local" }).catch(() => {});
             return;
           }
           throw result.error;
@@ -563,7 +563,7 @@ export default function ArenaClient({
           typeof (error as { message?: unknown }).message === "string" &&
           ((error as { message: string }).message.toLowerCase().includes("refresh token"));
         if (isStaleToken && !isCallback) {
-          await authClient.auth.signOut().catch(() => {});
+          await authClient.auth.signOut({ scope: "local" }).catch(() => {});
         } else {
           failureCode = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "sign_in_failed";
           if (active && isCallback) setAuthError(oauthFailureMessage(error));
@@ -1702,7 +1702,7 @@ export default function ArenaClient({
     const localPreview = !supabase && logoStr?.startsWith("data:image") ? logoStr : undefined;
     if (trustedImage || localPreview) {
       return (
-        <span className={`${className} relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md`}>
+        <span className={`${className} relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-md border border-zinc-200/80 bg-white shadow-2xs`}>
           <span aria-hidden="true" className="text-base leading-none">🚀</span>
           <img
             key={trustedImage || localPreview}
@@ -1711,7 +1711,7 @@ export default function ArenaClient({
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
-            className="absolute inset-0 h-full w-full bg-[#0b0b0d] object-contain"
+            className="absolute inset-0 h-full w-full bg-white object-contain p-0.5"
             onError={(event) => {
               // React owns this node. Removing it here crashes a later list /
               // matchup update with removeChild; reveal the fallback instead.
@@ -2048,7 +2048,7 @@ export default function ArenaClient({
   }, [isSwordsClashing]);
 
   return (
-    <div ref={arenaRootRef} data-main-page={page} className={`arena-app min-h-screen bg-[#030303] text-[#E4E4E7] font-sans selection:bg-[#E4E4E7] selection:text-black antialiased relative overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
+    <div ref={arenaRootRef} data-main-page={page} className={`arena-app min-h-screen bg-[#fafafa] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white antialiased relative overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
       
       {/* HIGH PERFORMANCE DYNAMIC CANVAS BACKGROUND */}
       <InteractiveGrid />
@@ -2058,10 +2058,10 @@ export default function ArenaClient({
         {toasts.map(t => (
           <div
             key={t.id}
-            className="bg-[#0b0b0c] border border-white/[0.08] text-xs font-mono text-zinc-100 p-4 rounded-md flex items-center justify-between pointer-events-auto animate-fade-in-blur"
+            className="bg-white border border-zinc-200 text-xs font-mono text-zinc-900 shadow-lg p-4 rounded-md flex items-center justify-between pointer-events-auto animate-fade-in-blur"
           >
             <div className="flex items-center gap-2">
-              <span className={`w-1.5 h-1.5 rounded-full ${t.type === 'success' ? 'bg-emerald-400' : 'bg-cyan-400'}`} />
+              <span className={`w-1.5 h-1.5 rounded-full ${t.type === 'success' ? 'bg-emerald-500' : 'bg-cyan-500'}`} />
               <span>{t.message}</span>
             </div>
           </div>
@@ -2069,7 +2069,7 @@ export default function ArenaClient({
       </div>
 
       {/* Sticky Header Navbar */}
-      <header className="site-glass-nav sticky top-0 z-50 w-full border-b border-white/[0.06]">
+      <header className="site-glass-nav sticky top-0 z-50 w-full border-b border-zinc-200/80">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 min-h-16 flex items-center justify-between gap-2">
           
           <div className="flex min-w-0 items-center gap-6">
@@ -2077,7 +2077,7 @@ export default function ArenaClient({
               className="flex min-h-11 items-center gap-2 cursor-pointer"
             >
               <ClashLogo size="md" className="max-sm:w-7 max-sm:h-7" />
-              <span className="whitespace-nowrap font-bold text-white tracking-tight text-sm sm:text-xl font-sans">
+              <span className="whitespace-nowrap font-bold text-zinc-950 tracking-tight text-sm sm:text-xl font-sans">
                 Indie-Clash
               </span>
             </Link>
@@ -2097,21 +2097,21 @@ export default function ArenaClient({
                     setCurrentView("console");
                   }
                 }}
-                className="hidden sm:block py-1.5 px-3 bg-zinc-900 text-white border border-white/[0.1] hover:bg-white/[0.04] text-[10px] font-mono uppercase tracking-wider rounded-md cursor-pointer transition mr-2"
+                className="hidden sm:block py-1.5 px-3 bg-white text-zinc-800 border border-zinc-200 hover:bg-zinc-50 shadow-2xs text-[10px] font-mono uppercase tracking-wider rounded-md cursor-pointer transition mr-2"
               >
                 {currentView === 'console' ? "Return to Arena ➔" : "My Console"}
               </button>
             )}
 
             {userLoggedIn ? (
-              <div className="hidden lg:flex items-center gap-3 text-xs px-3 py-1.5 text-white">
+              <div className="hidden lg:flex items-center gap-3 text-xs px-3 py-1.5 text-zinc-900">
                 <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block animate-pulse"></span>
-                <span className="hidden xl:inline text-zinc-400 text-[10px] font-mono">
-                  CONNECTED: <span className="text-white font-sans font-bold">{mockUserTwitter}</span>
+                <span className="hidden xl:inline text-zinc-500 text-[10px] font-mono">
+                  CONNECTED: <span className="text-zinc-950 font-sans font-bold">{mockUserTwitter}</span>
                 </span>
                 <button 
                   onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut}
-                  className="px-2 py-0.5 text-xs text-zinc-400 hover:text-white transition-colors"
+                  className="px-2 py-0.5 text-xs text-zinc-500 hover:text-zinc-950 transition-colors"
                 >
                   {isLoggingOut ? "Signing out…" : "Sign out"}
                 </button>
@@ -2121,7 +2121,7 @@ export default function ArenaClient({
                 disabled={!authReady}
                 aria-busy={!authReady}
                 onClick={() => setIsAuthOpen(true)}
-                className="whitespace-nowrap bg-[#121215] text-white border border-white/[0.1] hover:bg-white/[0.04] text-[11px] sm:text-xs font-semibold px-2 sm:px-3 py-2 rounded-md transition-all cursor-pointer"
+                className="whitespace-nowrap bg-white text-zinc-800 border border-zinc-200 hover:bg-zinc-50 shadow-2xs text-[11px] sm:text-xs font-semibold px-2 sm:px-3 py-2 rounded-md transition-all cursor-pointer"
               >
                 {authReady ? "Sign in" : "Checking sign-in…"}
               </button>
@@ -2135,7 +2135,7 @@ export default function ArenaClient({
                   synthClick(420, "sine", 0.08, 0.04);
                   openSubmitModal('home');
                 }}
-                className="whitespace-nowrap bg-white hover:bg-zinc-200 text-black py-2 px-2 sm:px-3 rounded-md text-[11px] sm:text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
+                className="whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs py-2 px-2 sm:px-3 rounded-md text-[11px] sm:text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
               >
                 Submit Product
               </button>
@@ -2144,16 +2144,16 @@ export default function ArenaClient({
           </div>
 
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-x-2 border-t border-white/[0.06] px-3 lg:hidden">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 border-t border-zinc-200/80 px-3 lg:hidden">
           <PrimaryNavigation activePage={currentView === "home" ? page : undefined} className="flex" />
           {userLoggedIn && <div className="flex items-center gap-3 px-3">
-            <button type="button" onClick={() => currentView === "console" ? showHomeSection("arena-section") : setCurrentView("console")} className="min-h-11 whitespace-nowrap text-xs text-[#A78BFA] sm:hidden">{currentView === "console" ? "Back to Arena" : "My Console"}</button>
-            <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut} className="min-h-11 whitespace-nowrap text-xs text-zinc-400">{isLoggingOut ? "Signing out…" : "Sign out"}</button>
+            <button type="button" onClick={() => currentView === "console" ? showHomeSection("arena-section") : setCurrentView("console")} className="min-h-11 whitespace-nowrap text-xs text-violet-700 sm:hidden">{currentView === "console" ? "Back to Arena" : "My Console"}</button>
+            <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut} className="min-h-11 whitespace-nowrap text-xs text-zinc-500">{isLoggingOut ? "Signing out…" : "Sign out"}</button>
           </div>}
         </div>
       </header>
 
-      {authError && !isSubmitOpen && !isAuthOpen && !votingMatch && <div role="alert" data-auth-error className="mx-auto mt-4 max-w-4xl rounded-md border border-red-400/25 bg-red-950/30 px-5 py-4 text-sm leading-6 text-red-200">
+      {authError && !isSubmitOpen && !isAuthOpen && !votingMatch && <div role="alert" data-auth-error className="mx-auto mt-4 max-w-4xl rounded-md border border-red-200 bg-red-50 px-5 py-4 text-sm leading-6 text-red-700">
         {authError}
       </div>}
 
@@ -2181,27 +2181,27 @@ export default function ArenaClient({
       <div>
           {/* Hero Banner */}
           {page === "discover" && (
-          <section className="py-14 sm:py-16 border-b border-white/[0.05] relative overflow-hidden bg-gradient-to-b from-white/[0.01] to-transparent">
+          <section className="py-14 sm:py-16 relative overflow-hidden">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
               
               {/* Micro monospace badge on top */}
-              <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.15] px-3 py-1 rounded-md mb-5 hero-badge">
+              <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-violet-700 bg-violet-50 border border-violet-200/80 shadow-2xs px-3 py-1 rounded-md mb-5 hero-badge">
                 FREE PRODUCT DISCOVERY &amp; LAUNCH PLATFORM
               </div>
 
               {/* Extreme large title font bold tracking tight */}
-              <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-white uppercase mb-6 leading-none hero-title">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-zinc-950 uppercase mb-6 leading-none hero-title">
                 Every Indie Product<br />
-                <span className="text-zinc-300 font-mono font-medium">DESERVES TO BE SEEN</span>
+                <span className="text-zinc-600 font-mono font-medium">DESERVES TO BE SEEN</span>
               </h1>
 
               {/* Centered brief description, restricted width */}
-              <p className="max-w-[780px] mx-auto text-sm sm:text-base text-zinc-300 leading-relaxed font-sans tracking-wide hero-desc">
+              <p className="max-w-[780px] mx-auto text-sm sm:text-base text-zinc-600 leading-relaxed font-sans tracking-wide hero-desc">
                 Launch for free. Discover overlooked indie products. Join optional Arena battles for honest feedback.
               </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-zinc-400 hero-stats">
-                <span className="bg-[#0b0b0c] border border-white/[0.05] px-2.5 py-1 rounded-md uppercase tracking-wider">
-                  Products Submitted: <span className="text-white font-semibold">{visibleProducts.length}</span>
+              <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-zinc-500 hero-stats">
+                <span className="bg-white border border-zinc-200 shadow-2xs px-2.5 py-1 rounded-md uppercase tracking-wider">
+                  Products Submitted: <span className="text-zinc-950 font-semibold">{visibleProducts.length}</span>
                 </span>
               </div>
 
@@ -2221,15 +2221,15 @@ export default function ArenaClient({
           <div data-home-reveal="launches-heading" className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="text-left space-y-2">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
+                <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-zinc-950 border-l-2 border-zinc-900 pl-4 font-sans">
                   LATEST LAUNCHES
                 </h2>
-                <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full animate-pulse flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
-                  <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
+                <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full animate-pulse flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                   Newest 50: Rolling
                 </span>
               </div>
-              <p className="text-sm text-zinc-400 mt-2">
+              <p className="text-sm text-zinc-500 mt-2">
                 Freshly launched by indie makers.
               </p>
             </div>
@@ -2240,14 +2240,14 @@ export default function ArenaClient({
             tabIndex={0}
             aria-label="Latest products. Focus to pause scrolling."
             onPointerDown={(event) => event.currentTarget.focus({ preventScroll: true })}
-            className="release-feed border border-white/[0.05] bg-[#070709]/40 rounded-md overflow-hidden h-[440px] sm:h-[520px] relative"
+            className="release-feed border border-zinc-200/90 bg-white shadow-xs rounded-xl overflow-hidden h-[440px] sm:h-[520px] relative"
             style={{
               maskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
               WebkitMaskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
             }}
           >
             {showcaseProducts.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center text-zinc-650 font-mono text-xs">
+              <div className="absolute inset-0 flex items-center justify-center text-zinc-400 font-mono text-xs">
                 [ No waitlist submissions enqueued in waiting room. ]
               </div>
             ) : (
@@ -2270,16 +2270,16 @@ export default function ArenaClient({
                       data-feed-duplicate={index >= showcaseProducts.length || undefined}
                       aria-hidden={index >= showcaseProducts.length || undefined}
                       inert={index >= showcaseProducts.length || undefined}
-                      className="px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-[#0c0c0e]/80 transition duration-150 border-b border-white/[0.03] h-auto sm:min-h-[80px] box-border"
+                      className="px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-zinc-50/90 transition duration-150 border-b border-zinc-100 h-auto sm:min-h-[80px] box-border"
                     >
                       {/* Left segment */}
                       <div className="flex items-center gap-3 shrink-0">
                         {!(item.arenaEnqueued ?? (!item.makerAvatar || !item.makerAvatar.includes("pushed=false"))) ? (
-                          <span className="text-[10px] font-mono text-zinc-500 bg-zinc-950 px-2 py-0.5 rounded border border-white/[0.06] uppercase tracking-wider">
+                          <span className="text-[10px] font-mono text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200 uppercase tracking-wider">
                             showcase
                           </span>
                         ) : (
-                          <span className="text-[10px] font-mono text-[#A78BFA] bg-[#A78BFA]/[0.05] px-2 py-0.5 rounded border border-[#A78BFA]/[0.15] uppercase tracking-wider">
+                          <span className="text-[10px] font-mono text-violet-700 bg-violet-50 px-2 py-0.5 rounded border border-violet-200 uppercase tracking-wider">
                             queued
                           </span>
                         )}
@@ -2293,17 +2293,17 @@ export default function ArenaClient({
                         <div className="flex flex-wrap items-center gap-2">
                           <Link
                             href={`/products/${encodeURIComponent(item.id)}`}
-                            className="font-bold text-white text-sm hover:underline hover:text-[#ffbe18] transition relative z-10 cursor-pointer"
+                            className="font-bold text-zinc-950 text-sm hover:underline hover:text-amber-600 transition relative z-10 cursor-pointer"
                           >
                             {item.title}
                           </Link>
-                          <span className="text-[10px] font-mono text-zinc-550">
+                          <span className="text-[10px] font-mono text-zinc-500">
                             by{" "}
                             <a 
                               href={`https://x.com/${item.makerTwitter ? item.makerTwitter.replace(/^@/, "") : ""}`}
                               target="_blank"
                               rel="ugc noopener noreferrer"
-                              className="hover:underline hover:text-white transition duration-150 relative z-10 cursor-pointer"
+                              className="hover:underline hover:text-zinc-950 transition duration-150 relative z-10 cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
                               }}
@@ -2312,7 +2312,7 @@ export default function ArenaClient({
                             </a>
                           </span>
                         </div>
-                        <p className="text-xs text-zinc-400 truncate mt-0.5 max-w-xl">
+                        <p className="text-xs text-zinc-600 truncate mt-0.5 max-w-xl">
                           {item.tagline}
                         </p>
                       </div>
@@ -2324,9 +2324,9 @@ export default function ArenaClient({
                             href={website}
                             target="_blank"
                             rel={productLinkRel(item)}
-                            className="text-[10px] font-mono text-zinc-500 hover:text-white inline-flex items-center gap-1"
+                            className="text-[10px] font-mono text-zinc-500 hover:text-zinc-950 inline-flex items-center gap-1"
                           >
-                            Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-650" />
+                            Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-400" />
                           </a>
                         ) : null}
 
@@ -2343,7 +2343,7 @@ export default function ArenaClient({
           <div className="mt-6 text-center">
             <Link
               href="/products"
-              className="inline-flex items-center gap-2 text-xs font-mono text-zinc-500 hover:text-white transition"
+              className="inline-flex items-center gap-2 text-xs font-mono text-zinc-500 hover:text-zinc-950 transition"
               onClick={() => synthClick(280, "sine", 0.05)}
             >
               Browse all products →
@@ -2357,21 +2357,21 @@ export default function ArenaClient({
           onAdvance={handleDiscoveryAdvance}
         />
 
-        <section id="arena-preview" aria-labelledby="arena-preview-title" className="border-t border-white/[0.06] py-10 md:py-14">
-          <div data-home-reveal="arena-preview" className="glass-panel flex flex-col gap-6 rounded-xl p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
+        <section id="arena-preview" aria-labelledby="arena-preview-title" className="border-t border-zinc-200/80 py-10 md:py-14">
+          <div data-home-reveal="arena-preview" className="glass-panel flex flex-col gap-6 rounded-2xl bg-white border border-zinc-200/90 shadow-xs p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
             <div className="max-w-xl">
-              <p className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-[#A78BFA]">
-                <span className={`h-1.5 w-1.5 rounded-full ${bracket?.status === "active" ? "bg-emerald-400" : "bg-[#A78BFA]"}`} />
+              <p className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-violet-700">
+                <span className={`h-1.5 w-1.5 rounded-full ${bracket?.status === "active" ? "bg-emerald-500" : "bg-violet-600"}`} />
                 {bracket?.status === "active" ? "Live in the Arena" : "The Arena"}
               </p>
-              <h2 id="arena-preview-title" className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
+              <h2 id="arena-preview-title" className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
                 {bracket?.status === "active" && activeMatch?.productA && activeMatch?.productB
                   ? `${activeMatch.productA.title} vs ${activeMatch.productB.title}`
                   : "Two products. Honest feedback."}
               </h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-400">Meet the makers, compare their products, and help them improve.</p>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">Meet the makers, compare their products, and help them improve.</p>
             </div>
-            <Link href="/arena" prefetch className="inline-flex min-h-11 shrink-0 items-center justify-center gap-3 self-start rounded-lg border border-[#A78BFA]/25 bg-[#A78BFA]/[0.06] px-5 text-sm font-semibold text-zinc-100 transition hover:border-[#A78BFA]/50 hover:bg-[#A78BFA]/10 md:self-center">
+            <Link href="/arena" prefetch className="inline-flex min-h-11 shrink-0 items-center justify-center gap-3 self-start rounded-lg border border-violet-200 bg-violet-50/80 px-5 text-sm font-semibold text-violet-700 shadow-2xs transition hover:border-violet-300 hover:bg-violet-100 md:self-center">
               Explore the Arena <span aria-hidden="true">→</span>
             </Link>
           </div>
@@ -2382,74 +2382,74 @@ export default function ArenaClient({
           
           <div data-home-reveal="arena-heading" data-route-enter="left" className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
-              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-white font-sans">
+              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-zinc-950 font-sans">
                 ARENA · PRODUCT BATTLES
               </h1>
-              <p className="text-sm text-zinc-400 mt-3">
+              <p className="text-sm text-zinc-600 mt-3">
                 Two products. Honest feedback. Your vote.
               </p>
-              <Link href="/champions#how-it-works-section" className="mt-4 inline-flex min-h-8 items-center gap-2 text-xs text-[#A78BFA] hover:text-white">How it works <span aria-hidden="true">↗</span></Link>
+              <Link href="/champions#how-it-works-section" className="mt-4 inline-flex min-h-8 items-center gap-2 text-xs font-medium text-violet-700 hover:text-violet-900">How it works <span aria-hidden="true">↗</span></Link>
             </div>
             {bracket && bracket.status === "active" && (
               <div className="flex shrink-0">
-                <span className="bg-[#0b0b0c] border border-white/[0.08] px-3.5 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                <span className="bg-white border border-zinc-200/90 shadow-2xs px-3.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider text-zinc-600 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#ffbe18] animate-pulse inline-block" />
-                  Round Closes In: <span className="text-white font-semibold">{formatToHMS(activeRoundRemainingMs)}</span>
+                  Round Closes In: <span className="text-zinc-950 font-semibold">{formatToHMS(activeRoundRemainingMs)}</span>
                 </span>
               </div>
             )}
           </div>
 
           {/* Arena Queue Status Bar */}
-          <div data-home-reveal="arena-status" data-route-enter="up" style={{ "--route-delay": "70ms" } as React.CSSProperties} className="mb-8 bg-[#0b0b0d] border border-white/[0.06] rounded-md px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+          <div data-home-reveal="arena-status" data-route-enter="up" style={{ "--route-delay": "70ms" } as React.CSSProperties} className="mb-8 bg-white border border-zinc-200/80 shadow-xs rounded-xl px-5 py-3 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4">
               <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                {bracket && activeBracketSize < 16 ? "Adaptive Run" : <>Season <span className="text-white font-bold">{currentSeasonStr}</span></>}
+                {bracket && activeBracketSize < 16 ? "Adaptive Run" : <>Season <span className="text-zinc-950 font-bold">{currentSeasonStr}</span></>}
               </span>
               {bracket ? (
                 <>
-                  <span className="text-white/10">|</span>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#A78BFA]">{getArenaFormatName(activeBracketSize)}</span>
+                  <span className="text-zinc-300">|</span>
+                  <span className="text-[10px] font-mono uppercase tracking-wider text-violet-700 font-semibold">{getArenaFormatName(activeBracketSize)}</span>
                 </>
               ) : null}
-              <span className="text-white/10">|</span>
+              <span className="text-zinc-300">|</span>
               {bracket && (bracket.status === "active" || bracket.status === "preparing") ? (
-                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" />
-                  <span className="text-amber-400 font-bold">LIVE</span>
+                <span className="text-[10px] font-mono text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block" />
+                  LIVE
                 </span>
               ) : (
-                <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-600 inline-block" />
+                <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 inline-block" />
                   Accepting entries
                 </span>
               )}
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                Queue: <span className="text-white font-bold">{queuedProducts.length}</span>
+                Queue: <span className="text-zinc-950 font-bold">{queuedProducts.length}</span>
                 {!bracket && queuedProducts.length >= 16 ? (
-                  <> <span className="text-zinc-700">|</span> <span className="font-bold text-emerald-400">Locking championship</span></>
+                  <> <span className="text-zinc-300">|</span> <span className="font-bold text-emerald-700">Locking championship</span></>
                 ) : !bracket && fallbackBracketSize ? (
-                  <> <span className="text-zinc-700">|</span> Daily auto-run: <span className="font-bold text-[#A78BFA]">{fallbackBracketSize} players</span> <span className="font-bold text-zinc-300"><DailyArenaRunCountdown /></span></>
+                  <> <span className="text-zinc-300">|</span> Daily auto-run: <span className="font-bold text-violet-700">{fallbackBracketSize} players</span> <span className="font-bold text-zinc-700"><DailyArenaRunCountdown /></span></>
                 ) : !bracket ? (
-                  <> <span className="text-zinc-700">|</span> Daily minimum: <span className="font-bold text-zinc-300">2 players</span></>
+                  <> <span className="text-zinc-300">|</span> Daily minimum: <span className="font-bold text-zinc-700">2 players</span></>
                 ) : (
-                  <> <span className="text-zinc-700">|</span> Next full run starts at <span className="font-bold text-zinc-300">16</span></>
+                  <> <span className="text-zinc-300">|</span> Next full run starts at <span className="font-bold text-zinc-700">16</span></>
                 )}
                 {!bracket && queuedProducts.length > rosterTarget && (
                   <>
-                    {" "}<span className="text-zinc-600">|</span>{" "}
-                    FIFO carryover: <span className="text-[#ffbe18] font-bold">+{queuedProducts.length - rosterTarget}</span> first in the next run
+                    {" "}<span className="text-zinc-300">|</span>{" "}
+                    FIFO carryover: <span className="text-amber-700 font-bold">+{queuedProducts.length - rosterTarget}</span> first in the next run
                   </>
                 )}
               </span>
-              <div className="w-20 h-1.5 bg-white/[0.04] rounded-full overflow-hidden shrink-0">
+              <div className="w-20 h-1.5 bg-zinc-100 border border-zinc-200/60 rounded-full overflow-hidden shrink-0">
                 <div 
                   className="h-full rounded-full transition-all duration-500 ease-out"
                   style={{ 
                     width: `${Math.min((queuedProducts.length / (bracket ? 16 : rosterTarget)) * 100, 100)}%`,
-                    backgroundColor: queuedProducts.length >= (bracket ? 16 : rosterTarget) ? '#34d399' : '#a78bfa'
+                    backgroundColor: queuedProducts.length >= (bracket ? 16 : rosterTarget) ? '#059669' : '#7c3aed'
                   }}
                 />
               </div>
@@ -2461,15 +2461,15 @@ export default function ArenaClient({
               
               {/* Left Column: Matchup Slate (Grid of matches) */}
               <div data-home-reveal="arena-slate" data-route-enter="left" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="lg:col-span-5 space-y-4">
-                <div className="bg-[#0b0b0d] border border-white/[0.05] p-4 rounded-md">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500">
+                <div className="bg-white border border-zinc-200/80 shadow-xs p-4 rounded-xl">
+                  <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">
                     MATCH SLATE // ROUND STATUS
                   </span>
                   <div className="flex justify-between items-center mt-1.5">
-                    <span className="text-xs font-mono font-bold text-white uppercase">
+                    <span className="text-xs font-mono font-bold text-zinc-950 uppercase">
                       {activeRoundNum === 1 ? "Round of 16" : activeRoundNum === 2 ? "Quarterfinals" : activeRoundNum === 3 ? "Semifinals" : "Grand Finals"}
                     </span>
-                    <span className="text-[10px] font-mono text-zinc-400">
+                    <span className="text-[10px] font-mono text-zinc-500">
                       {currentRoundMatches.filter(m => !m.winnerId).length} Active Duels
                     </span>
                   </div>
@@ -2492,19 +2492,19 @@ export default function ArenaClient({
                           setActiveMatch(duel);
                           pushToast(`Inspecting matchup: ${duel.productA.title} vs ${duel.productB.title}`, "info");
                         }}
-                        className={`p-4 bg-[#0a0a0c]/80 border rounded-md cursor-pointer transition-[background-color,border-color,box-shadow,translate] duration-200 text-left hover:border-white/[0.15] hover:bg-[#0e0e11]/80 hover:-translate-y-0.5 match-card-item ${
-                          isSelected ? "border-white/[0.2] bg-[#121215]/90 shadow-[0_0_15px_rgba(255,255,255,0.02)]" : "border-white/[0.05]"
+                        className={`p-4 bg-white border rounded-xl cursor-pointer transition-[background-color,border-color,box-shadow,translate] duration-200 text-left hover:border-zinc-300 hover:bg-zinc-50/80 hover:-translate-y-0.5 match-card-item ${
+                          isSelected ? "border-zinc-900 bg-zinc-50/90 shadow-xs ring-1 ring-zinc-900/10" : "border-zinc-200/80 shadow-2xs"
                         }`}
                       >
                         <div className="flex items-center justify-between mb-3 text-[9px] font-mono text-zinc-500">
                           <span>MATCH ID: {duel.id.slice(0, 8)}</span>
                           {isDuelActive ? (
-                            <span className="text-emerald-400 bg-emerald-400/[0.05] border border-emerald-400/[0.15] px-1.5 py-0.2 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
-                              <span className="w-1 h-1 rounded-full bg-emerald-400 animate-pulse" />
+                            <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
+                              <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse" />
                               Active
                             </span>
                           ) : (
-                            <span className="text-zinc-500 bg-white/[0.03] border border-white/[0.06] px-1.5 py-0.2 rounded uppercase tracking-wider">
+                            <span className="text-zinc-600 bg-zinc-100 border border-zinc-200 px-1.5 py-0.2 rounded uppercase tracking-wider font-medium">
                               {awaitingSettlement ? "Awaiting settlement" : "Concluded"}
                             </span>
                           )}
@@ -2514,15 +2514,15 @@ export default function ArenaClient({
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex-1 min-w-0 flex items-center gap-2">
                             <span className="text-base shrink-0">{renderLogo(duel.productA?.logo, "w-5 h-5")}</span>
-                            <span className={`text-xs font-bold truncate ${isSelected ? "text-white" : "text-zinc-350"}`}>
+                            <span className={`text-xs truncate ${isSelected ? "text-zinc-950 font-bold" : "text-zinc-800 font-semibold"}`}>
                               {duel.productA?.title || "Pending"}
                             </span>
                           </div>
                           
-                          <span className="text-[10px] font-mono font-medium text-zinc-650 shrink-0 px-2">VS</span>
+                          <span className="text-[10px] font-mono font-semibold text-zinc-400 shrink-0 px-2">VS</span>
 
                           <div className="flex-1 min-w-0 flex items-center justify-end gap-2 text-right">
-                            <span className={`text-xs font-bold truncate ${isSelected ? "text-white" : "text-zinc-350"}`}>
+                            <span className={`text-xs truncate ${isSelected ? "text-zinc-950 font-bold" : "text-zinc-800 font-semibold"}`}>
                               {duel.productB?.title || "Pending"}
                             </span>
                             <span className="text-base shrink-0">{renderLogo(duel.productB?.logo, "w-5 h-5")}</span>
@@ -2535,15 +2535,15 @@ export default function ArenaClient({
                             <span>{ratioA}% ({duel.votesA}v)</span>
                             <span>{duel.votesB}v ({ratioB}%)</span>
                           </div>
-                          <div className="h-1 bg-zinc-900 w-full rounded-full overflow-hidden flex">
-                            <div className="bg-white h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
-                            <div className="bg-zinc-800 h-full flex-1" />
+                          <div className="h-1 bg-zinc-100 border border-zinc-200/60 w-full rounded-full overflow-hidden flex">
+                            <div className="bg-zinc-900 h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
+                            <div className="bg-zinc-200 h-full flex-1" />
                           </div>
                         </div>
 
                         {/* Winner stamp if concluded */}
                         {!isDuelActive && duel.winnerId && (
-                          <div className="mt-2 text-[9px] font-mono text-center text-[#A78BFA] bg-[#A78BFA]/[0.05] border border-[#A78BFA]/[0.12] py-0.5 rounded uppercase tracking-wider font-semibold">
+                          <div className="mt-2 text-[9px] font-mono text-center text-violet-700 bg-violet-50 border border-violet-200/80 py-0.5 rounded uppercase tracking-wider font-semibold">
                             Winner: {duel.winnerId === duel.productA?.id ? (duel.productA?.title || "Pending") : (duel.productB?.title || "Pending")}
                           </div>
                         )}
@@ -2566,12 +2566,12 @@ export default function ArenaClient({
                     
 
                     return (
-                      <div className="bg-[#0a0a0c]/80 border border-white/[0.08] rounded-md overflow-hidden premium-glass p-6 md:p-8 space-y-6 inspector-panel">
+                      <div className="bg-white border border-zinc-200/90 rounded-2xl overflow-hidden shadow-xs p-6 md:p-8 space-y-6 inspector-panel">
                         
                         {/* Title Bar */}
-                        <div className="flex items-center justify-between border-b border-white/[0.04] pb-4 inspector-title">
+                        <div className="flex items-center justify-between border-b border-zinc-200/80 pb-4 inspector-title">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono text-[9px] uppercase tracking-wider font-semibold bg-white/[0.04] border border-white/[0.08] px-2 py-0.5 rounded text-zinc-300">
+                            <span className="font-mono text-[9px] uppercase tracking-wider font-semibold bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded text-zinc-700">
                               ROUND {activeRoundNum} {"//"} BATTLE INSPECTOR
                             </span>
                           </div>
@@ -2579,18 +2579,18 @@ export default function ArenaClient({
                             {duel.productA && duel.productB ? (
                               <a
                                 href={`/versus/${duel.productA.id}-vs-${duel.productB.id}`}
-                                className="font-mono text-[9px] uppercase tracking-wider text-zinc-500 transition hover:text-white"
+                                className="font-mono text-[9px] uppercase tracking-wider text-zinc-500 transition hover:text-zinc-950 font-medium"
                               >
                                 Public matchup ↗
                               </a>
                             ) : null}
                             {isDuelActive ? (
-                              <span className="text-[9px] font-mono text-emerald-400 bg-emerald-400/[0.05] border border-emerald-400/[0.15] px-2 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              <span className="text-[9px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
                                 DECISION OPEN
                               </span>
                             ) : (
-                              <span className="text-[9px] font-mono text-zinc-500 bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded uppercase tracking-wider">
+                              <span className="text-[9px] font-mono text-zinc-600 bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded uppercase tracking-wider font-medium">
                                 {awaitingSettlement ? "AWAITING SETTLEMENT" : "CONCLUDED"}
                               </span>
                             )}
@@ -2601,16 +2601,16 @@ export default function ArenaClient({
                         <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
                           
                           {/* Product A block */}
-                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px] inspector-card-a">
+                          <div className="md:col-span-3 p-4 bg-zinc-50/70 border border-zinc-200/80 rounded-xl text-left flex flex-col justify-between min-h-[160px] inspector-card-a">
                             <div>
                               <div className="flex justify-between items-center mb-2">
                                 <span className="text-base">{renderLogo(duel.productA?.logo, "w-6 h-6")}</span>
                                 <span className="text-[9px] font-mono text-zinc-500">{duel.productA?.makerTwitter}</span>
                               </div>
-                              <h3 className="truncate text-base font-bold text-white">
-                                {duel.productA ? <a href={`/products/${duel.productA.id}`} className="transition hover:text-[#ffbe18]">{duel.productA.title}</a> : "Pending"}
+                              <h3 className="truncate text-base font-bold text-zinc-950">
+                                {duel.productA ? <a href={`/products/${duel.productA.id}`} className="transition hover:text-violet-700">{duel.productA.title}</a> : "Pending"}
                               </h3>
-                              <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productA?.tagline}</p>
+                              <p className="text-[11px] text-zinc-600 line-clamp-2 mt-1 leading-relaxed">{duel.productA?.tagline}</p>
                             </div>
                             <div className="mt-4 space-y-2">
                               {publicHttpUrl(duel.productA?.url) && (
@@ -2618,7 +2618,7 @@ export default function ArenaClient({
                                   href={publicHttpUrl(duel.productA?.url)}
                                   target="_blank"
                                   rel={productLinkRel(duel.productA!)}
-                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
+                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer shadow-2xs"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   Visit Demo 🔗
@@ -2633,14 +2633,14 @@ export default function ArenaClient({
                                   setVoteError("");
                                 }}
                                 disabled={!isDuelActive || !duel.productA}
-                                className={`w-full py-2 px-3 text-[10px] font-bold rounded transition-all cursor-pointer uppercase tracking-wider ${
+                                className={`w-full py-2 px-3 text-[10px] font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider ${
                                   !isDuelActive
                                   ? duel.winnerId === duel.productA?.id 
-                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-not-allowed" 
-                                    : "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed" 
+                                    : "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
                                   : !duel.productA
-                                    ? "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
-                                    : "bg-white text-black hover:bg-zinc-200"
+                                    ? "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
+                                    : "bg-zinc-900 text-white hover:bg-zinc-800 shadow-xs active:scale-[0.99]"
                                 }`}
                               >
                                 {duel.winnerId === duel.productA?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR A" : awaitingSettlement ? "VOTING CLOSED" : "DEFEATED"}
@@ -2650,25 +2650,25 @@ export default function ArenaClient({
 
                           {/* VS center block */}
                           <div className="md:col-span-1 flex flex-col items-center justify-center py-2 inspector-vs">
-                            <span className="text-zinc-700 font-mono tracking-widest text-[9px] uppercase">VS</span>
+                            <span className="text-zinc-400 font-mono tracking-widest text-[9px] uppercase font-bold">VS</span>
                             <div className="flex flex-col items-center mt-2 leading-tight">
-                              <span className="font-mono font-bold text-lg text-white">{ratioA}%</span>
+                              <span className="font-mono font-bold text-lg text-zinc-950">{ratioA}%</span>
                               <span className="font-mono font-semibold text-zinc-500 text-[10px]">{ratioB}%</span>
                             </div>
                             <span className="text-[8px] font-mono text-zinc-500 mt-2 uppercase tracking-widest">{sumVotes} Voted</span>
                           </div>
 
                           {/* Product B block */}
-                          <div className="md:col-span-3 p-4 bg-zinc-950/40 border border-white/[0.03] rounded-md text-left flex flex-col justify-between min-h-[160px] inspector-card-b">
+                          <div className="md:col-span-3 p-4 bg-zinc-50/70 border border-zinc-200/80 rounded-xl text-left flex flex-col justify-between min-h-[160px] inspector-card-b">
                             <div>
                               <div className="flex justify-between items-center mb-2">
                                 <span className="text-base">{renderLogo(duel.productB?.logo, "w-6 h-6")}</span>
                                 <span className="text-[9px] font-mono text-zinc-500">{duel.productB?.makerTwitter}</span>
                               </div>
-                              <h3 className="truncate text-base font-bold text-white">
-                                {duel.productB ? <a href={`/products/${duel.productB.id}`} className="transition hover:text-[#ffbe18]">{duel.productB.title}</a> : "Pending"}
+                              <h3 className="truncate text-base font-bold text-zinc-950">
+                                {duel.productB ? <a href={`/products/${duel.productB.id}`} className="transition hover:text-violet-700">{duel.productB.title}</a> : "Pending"}
                               </h3>
-                              <p className="text-[11px] text-zinc-400 line-clamp-2 mt-1 leading-relaxed">{duel.productB?.tagline}</p>
+                              <p className="text-[11px] text-zinc-600 line-clamp-2 mt-1 leading-relaxed">{duel.productB?.tagline}</p>
                             </div>
                             <div className="mt-4 space-y-2">
                               {publicHttpUrl(duel.productB?.url) && (
@@ -2676,7 +2676,7 @@ export default function ArenaClient({
                                   href={publicHttpUrl(duel.productB?.url)}
                                   target="_blank"
                                   rel={productLinkRel(duel.productB!)}
-                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded border border-white/[0.08] bg-zinc-950 hover:bg-white/[0.03] text-zinc-300 hover:text-white transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer"
+                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer shadow-2xs"
                                   onClick={(e) => e.stopPropagation()}
                                 >
                                   Visit Demo 🔗
@@ -2691,14 +2691,14 @@ export default function ArenaClient({
                                   setVoteError("");
                                 }}
                                 disabled={!isDuelActive || !duel.productB}
-                                className={`w-full py-2 px-3 text-[10px] font-bold rounded transition-all cursor-pointer uppercase tracking-wider ${
+                                className={`w-full py-2 px-3 text-[10px] font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider ${
                                   !isDuelActive
                                   ? duel.winnerId === duel.productB?.id 
-                                    ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 cursor-not-allowed" 
-                                    : "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
+                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed" 
+                                    : "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
                                   : !duel.productB
-                                    ? "bg-zinc-950 text-zinc-650 border border-white/[0.02] cursor-not-allowed"
-                                    : "bg-white text-black hover:bg-zinc-200"
+                                    ? "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
+                                    : "bg-zinc-900 text-white hover:bg-zinc-800 shadow-xs active:scale-[0.99]"
                                 }`}
                               >
                                 {duel.winnerId === duel.productB?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR B" : awaitingSettlement ? "VOTING CLOSED" : "DEFEATED"}
@@ -2710,18 +2710,16 @@ export default function ArenaClient({
 
                         {/* Symmetrical Tug of War Slider bar */}
                         <div className="space-y-1.5">
-                          <div className="h-1.5 bg-zinc-900 w-full rounded-full overflow-hidden flex">
-                            <div className="bg-white h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
-                            <div className="bg-zinc-800 h-full flex-1" />
+                          <div className="h-1.5 bg-zinc-100 border border-zinc-200/60 w-full rounded-full overflow-hidden flex">
+                            <div className="bg-zinc-900 h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
+                            <div className="bg-zinc-200 h-full flex-1" />
                           </div>
                         </div>
 
-
-
                         {/* Peer Critiques chronicles */}
-                        <div className="pt-4 border-t border-white/[0.04] space-y-4">
-                          <div className="flex items-center justify-between border-b border-white/[0.03] pb-2">
-                            <h4 className="text-[9px] font-mono uppercase tracking-widest text-zinc-400">
+                        <div className="pt-4 border-t border-zinc-200/80 space-y-4">
+                          <div className="flex items-center justify-between border-b border-zinc-200/60 pb-2">
+                            <h4 className="text-[9px] font-mono uppercase tracking-widest text-zinc-600 font-semibold">
                               PEER CRITIQUE CHRONICLES ({activeMatchCritiques.length})
                             </h4>
                             <span className="text-[8px] font-mono text-zinc-500 uppercase">
@@ -2729,31 +2727,29 @@ export default function ArenaClient({
                             </span>
                           </div>
 
-
-
                           {/* Comments list inside inspector */}
                           <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
                             {activeMatchCritiques.map((c) => {
                               const isProductA = c.role.includes(duel.productA.title) || c.text.toLowerCase().includes(duel.productA.title.toLowerCase());
                               const badgeColor = isProductA
-                                ? "bg-white/[0.04] text-white border border-white/[0.08]"
-                                : "bg-zinc-950 text-zinc-400 border border-white/[0.04]";
+                                ? "bg-zinc-900 text-white border border-zinc-900"
+                                : "bg-white text-zinc-700 border border-zinc-200 shadow-2xs";
                               const auditedName = isProductA ? duel.productA.title : duel.productB.title;
                               return (
                                 <div
                                   key={c.id}
-                                  className="p-3 bg-zinc-950/20 border border-white/[0.03] hover:border-white/[0.08] transition duration-150 rounded text-left space-y-1"
+                                  className="p-3 bg-zinc-50 border border-zinc-200/80 hover:border-zinc-300 transition duration-150 rounded-xl text-left space-y-1"
                                 >
                                   <div className="flex items-center justify-between gap-4">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-[11px] font-mono font-bold text-white">{c.voter}</span>
+                                      <span className="text-[11px] font-mono font-bold text-zinc-950">{c.voter}</span>
                                       <span className={`text-[8px] font-mono uppercase px-1.5 py-0.2 rounded ${badgeColor}`}>
                                         audited {auditedName}
                                       </span>
                                     </div>
-                                    <span className="text-[9px] text-zinc-600 font-mono">{c.date}</span>
+                                    <span className="text-[9px] text-zinc-400 font-mono">{c.date}</span>
                                   </div>
-                                  <p className="text-[11px] text-zinc-450 leading-relaxed pl-1">
+                                  <p className="text-[11px] text-zinc-600 leading-relaxed pl-1">
                                     {c.text}
                                   </p>
                                 </div>
@@ -2761,7 +2757,7 @@ export default function ArenaClient({
                             })}
 
                             {activeMatchCritiques.length === 0 && (
-                              <div className="p-6 text-center text-zinc-650 font-mono text-[10px] border border-dashed border-white/[0.04] rounded">
+                              <div className="p-6 text-center text-zinc-500 font-mono text-[10px] border border-dashed border-zinc-200 rounded-xl">
                                 [ No verified peer critiques enqueued for this matchup. ]
                               </div>
                             )}
@@ -2772,7 +2768,7 @@ export default function ArenaClient({
                     );
                   })()
                 ) : (
-                  <div className="bg-[#0a0a0c]/80 border border-white/[0.05] rounded-md p-12 text-center text-zinc-500 font-mono text-xs">
+                  <div className="bg-white border border-zinc-200/80 rounded-2xl p-12 text-center text-zinc-500 font-mono text-xs shadow-xs">
                     [ SELECT A MATCHUP FROM THE LEFT SLATE TO INSPECT ]
                   </div>
                 )}
@@ -2783,14 +2779,14 @@ export default function ArenaClient({
             /* ========================================================
                 WAITLIST QUEUE PREPARING SCREEN
                ======================================================== */
-            <div data-home-reveal="arena-queue" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-[#121215] border border-white/[0.06] p-8 sm:p-12 text-white text-center max-w-2xl mx-auto rounded-lg">
+            <div data-home-reveal="arena-queue" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 shadow-sm p-8 sm:p-12 text-zinc-950 text-center max-w-2xl mx-auto rounded-2xl">
               
               {/* Sleek countdown timer pill */}
               {lineupProducts.length >= 16 && (
                 <div className="flex justify-center mb-6">
-                  <span className="bg-[#0b0b0c] border border-white/[0.08] px-3.5 py-1.5 rounded-md text-[10px] font-mono uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
+                  <span className="bg-zinc-50 border border-zinc-200/90 px-3.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider text-zinc-600 flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                    Cycle Closes: <span className="text-white font-semibold">{formatToHMS(countdownToMidnightMs)}</span>
+                    Cycle Closes: <span className="text-zinc-950 font-semibold">{formatToHMS(countdownToMidnightMs)}</span>
                   </span>
                 </div>
               )}
@@ -2801,7 +2797,7 @@ export default function ArenaClient({
                     cx="72" 
                     cy="72" 
                     r="62" 
-                    stroke="rgba(255,255,255,0.04)" 
+                    stroke="#f4f4f5" 
                     strokeWidth="6" 
                     fill="transparent" 
                   />
@@ -2809,7 +2805,7 @@ export default function ArenaClient({
                     cx="72" 
                     cy="72" 
                     r="62" 
-                    stroke="#ffffff" 
+                    stroke="#18181b" 
                     strokeWidth="6" 
                     fill="transparent" 
                     strokeDasharray={390}
@@ -2820,31 +2816,31 @@ export default function ArenaClient({
                 <div className="absolute inset-0 flex flex-col justify-center items-center">
                   {bracket?.status === "preparing" ? (
                     <>
-                      <span className="text-xl font-bold text-white font-mono tracking-tight">{formatToHMS(countdownToMidnightMs)}</span>
+                      <span className="text-xl font-bold text-zinc-950 font-mono tracking-tight">{formatToHMS(countdownToMidnightMs)}</span>
                       <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Starts In</span>
                     </>
                   ) : (
                     <>
-                      <span className="text-2xl font-semibold text-white">{Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget}</span>
+                      <span className="text-2xl font-bold text-zinc-950">{Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget}</span>
                       <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Ready</span>
                     </>
                   )}
                 </div>
               </div>
 
-              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-white">
+              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-zinc-950">
                 {bracket?.status === "preparing" ? `${getArenaFormatName(activeBracketSize)} Ready` : "Assembling Next Arena"}
               </h2>
-              <p className="text-xs text-zinc-400 max-w-md mx-auto leading-relaxed">
+              <p className="text-xs text-zinc-600 max-w-md mx-auto leading-relaxed">
                 Sixteen products lock a Championship roster immediately, with voting opening at the next New York midnight. The daily cutoff also starts the largest ready 8, 4, or 2-product run automatically.
               </p>
-              <p className="mt-3 text-[9px] font-mono uppercase tracking-wider text-zinc-600">
+              <p className="mt-3 text-[9px] font-mono uppercase tracking-wider text-zinc-500">
                 Tie rule: the higher verified vote total wins, and every vote contains two critiques. A tied count advances the earlier submission; exact timestamp ties use a stable product-ID decision. Zero-vote matches still advance.
               </p>
 
               {/* Roster Slots Grid (Street Fighter style character select) */}
-              <div className="mt-8 pt-6 border-t border-white/[0.05] max-w-md mx-auto">
-                <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-4">
+              <div className="mt-8 pt-6 border-t border-zinc-200/80 max-w-md mx-auto">
+                <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-4 font-semibold">
                   Roster Lineup ({Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget})
                 </span>
                 <div className={`grid gap-2.5 justify-center ${rosterTarget >= 8 ? "grid-cols-[repeat(4,2.75rem)] sm:grid-cols-[repeat(8,2.75rem)]" : rosterTarget === 4 ? "grid-cols-[repeat(4,2.75rem)]" : "grid-cols-[repeat(2,2.75rem)]"}`}>
@@ -2859,7 +2855,7 @@ export default function ArenaClient({
                             synthClick(300, "sine", 0.05);
                             setActiveCardProduct(prod);
                           }}
-                          className="w-11 h-11 rounded-lg flex items-center justify-center text-lg select-none border transition-all duration-300 bg-[#141417] border-white/[0.12] text-white shadow-md shadow-black/40 hover:scale-105 cursor-pointer hover:border-amber-400/50 hover:shadow-[0_0_8px_rgba(245,158,11,0.15)]"
+                          className="w-11 h-11 rounded-xl flex items-center justify-center text-lg select-none border transition-all duration-300 bg-white border-zinc-200/90 text-zinc-900 shadow-2xs hover:scale-105 cursor-pointer hover:border-violet-400 hover:shadow-xs"
                           title={prod.title}
                         >
                           {renderLogo(prod.logo, "w-7 h-7 object-contain")}
@@ -2869,10 +2865,10 @@ export default function ArenaClient({
                     return (
                       <div 
                         key={idx} 
-                        className="w-11 h-11 rounded-lg flex items-center justify-center text-lg select-none border transition-all duration-300 bg-black/40 border-dashed border-white/[0.06] text-zinc-700"
+                        className="w-11 h-11 rounded-xl flex items-center justify-center text-lg select-none border transition-all duration-300 bg-zinc-50 border-dashed border-zinc-200 text-zinc-400"
                         title="Empty Slot"
                       >
-                        <span className="text-[10px] font-mono font-light opacity-30">?</span>
+                        <span className="text-[10px] font-mono font-light opacity-50">?</span>
                       </div>
                     );
                   })}
@@ -2887,15 +2883,15 @@ export default function ArenaClient({
         <section id="champions-section" className="scroll-mt-32 py-10 md:py-14">
           <div data-home-reveal="champions-heading" data-route-enter="left" className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="text-left">
-              <p className="mb-3 font-mono text-[10px] uppercase tracking-widest text-[#A78BFA]">Hall of Valor</p>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white font-sans">
+              <p className="mb-3 font-mono text-[10px] uppercase tracking-widest text-violet-700 font-semibold">Hall of Valor</p>
+              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 font-sans">
                 Champions
               </h1>
-              <p className="text-sm text-zinc-400 mt-3">
+              <p className="text-sm text-zinc-600 mt-3">
                 Meet the products that won their Arena runs.
               </p>
             </div>
-            <Link href="/arena" className="inline-flex min-h-11 items-center gap-2 text-sm text-[#A78BFA] hover:text-white">Explore the Arena <span aria-hidden="true">→</span></Link>
+            <Link href="/arena" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-violet-700 hover:text-violet-900">Explore the Arena <span aria-hidden="true">→</span></Link>
           </div>
 
           {pastChampions && pastChampions.length > 0 ? (
@@ -2906,34 +2902,34 @@ export default function ArenaClient({
                   data-home-reveal={`champion-${c.id}`}
                   data-route-enter="up"
                   style={{ "--route-delay": `${140 + (idx % 4) * 70}ms` } as React.CSSProperties}
-                  className="p-5 border border-white/[0.06] bg-[#09090b]/80 rounded-md hover:border-white/[0.15] hover:-translate-y-1 hover:bg-[#0c0c0f]/95 hover:shadow-[0_4px_20px_rgba(255,255,255,0.02)] transition-[background-color,border-color,box-shadow,translate] duration-300 flex flex-col justify-between"
+                  className="p-5 border border-zinc-200/90 bg-white rounded-2xl hover:border-zinc-300 hover:-translate-y-1 hover:bg-zinc-50/70 shadow-xs hover:shadow-md transition-[background-color,border-color,box-shadow,translate] duration-300 flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-2xl flex items-center justify-center">
                         {renderLogo(c.logo, "w-8 h-8")}
                       </span>
-                      <span className="border border-white/[0.08] text-[9px] font-mono px-2 py-0.5 uppercase bg-white/[0.04] text-zinc-300 rounded tracking-wider">
+                      <span className="border border-zinc-200 text-[9px] font-mono px-2 py-0.5 uppercase bg-zinc-100 text-zinc-700 rounded tracking-wider font-semibold">
                         SEASON {String(idx + 1).padStart(2, "0")}
                       </span>
                     </div>
                     <Link
                       href={`/products/${encodeURIComponent(c.id)}`}
-                      className="font-sans text-xs hover:underline uppercase block mb-1 text-white font-semibold tracking-wide hover:text-[#ffbe18] transition"
+                      className="font-sans text-xs hover:underline uppercase block mb-1 text-zinc-950 font-bold tracking-wide hover:text-violet-700 transition"
                     >
                       {c.title}
                     </Link>
-                    <p className="text-[10px] leading-relaxed line-clamp-2 mb-4 text-zinc-400 font-sans">{c.tagline}</p>
+                    <p className="text-[10px] leading-relaxed line-clamp-2 mb-4 text-zinc-600 font-sans">{c.tagline}</p>
                   </div>
                   
-                  <div className="flex items-center justify-between border-t border-white/[0.06] pt-3.5 text-[10px] font-mono text-zinc-400">
+                  <div className="flex items-center justify-between border-t border-zinc-200/80 pt-3.5 text-[10px] font-mono text-zinc-500">
                     <div className="flex items-center space-x-2">
-                      <img src={c.makerAvatar} alt="Maker" className="w-5 h-5 border border-white/[0.08] rounded-md shrink-0" />
+                      <img src={c.makerAvatar} alt="Maker" className="w-5 h-5 border border-zinc-200 rounded-md shrink-0 object-cover" />
                       <a 
                         href={`https://x.com/${c.makerTwitter.replace(/^@/, "")}`}
                         target="_blank"
                         rel="ugc noopener noreferrer"
-                        className="hover:underline font-semibold text-zinc-400 hover:text-white"
+                        className="hover:underline font-semibold text-zinc-600 hover:text-zinc-950"
                       >
                         {c.makerTwitter}
                       </a>
@@ -2943,7 +2939,7 @@ export default function ArenaClient({
                         href={publicHttpUrl(c.url)}
                         target="_blank"
                         rel={productLinkRel(c)}
-                        className="text-[10px] uppercase font-mono underline text-white hover:text-zinc-300 transition-colors"
+                        className="text-[10px] uppercase font-mono underline text-zinc-900 hover:text-violet-700 font-semibold transition-colors"
                       >
                         DEMO
                       </a>
@@ -2953,8 +2949,8 @@ export default function ArenaClient({
               ))}
             </div>
           ) : (
-            <div data-home-reveal="champions-empty" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="border border-dashed border-white/[0.06] bg-[#070709]/30 rounded-md p-16 text-center text-zinc-500 font-mono text-xs max-w-xl mx-auto flex flex-col items-center justify-center space-y-3">
-              <svg className="w-8 h-8 text-zinc-650 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <div data-home-reveal="champions-empty" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="border border-dashed border-zinc-200 bg-zinc-50/50 rounded-2xl p-16 text-center text-zinc-500 font-mono text-xs max-w-xl mx-auto flex flex-col items-center justify-center space-y-3">
+              <svg className="w-8 h-8 text-zinc-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
               </svg>
               <span>[ NO CHAMPION HAS CONQUERED THE ARENA YET ]</span>
@@ -2964,12 +2960,12 @@ export default function ArenaClient({
         </section>
 
         {/* HOW IT WORKS SECTION */}
-        <section id="how-it-works-section" className="scroll-mt-32 py-12 md:py-16 border-t border-white/[0.05]">
+        <section id="how-it-works-section" className="scroll-mt-32 py-12 md:py-16 border-t border-zinc-200/80">
           <div data-home-reveal="how-heading" data-route-enter="left" className="mb-12">
-            <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-white border-l-2 border-white pl-4 font-sans">
+            <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-zinc-950 border-l-2 border-zinc-950 pl-4 font-sans">
               HOW IT WORKS
             </h2>
-            <p className="text-xs text-zinc-500 mt-2 font-sans">
+            <p className="text-xs text-zinc-600 mt-2 font-sans">
               Free to launch. Fair discovery. Optional battles for useful feedback.
             </p>
           </div>
@@ -2977,58 +2973,58 @@ export default function ArenaClient({
           <div data-home-reveal="how-steps" className="grid grid-cols-1 md:grid-cols-3 gap-6">
             
             {/* Step 1 */}
-            <div data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-colors duration-200">
+            <div data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-300 shadow-xs transition-colors duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-zinc-700">01</span>
-                  <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_01</span>
+                  <span className="text-4xl font-extrabold font-mono text-zinc-300">01</span>
+                  <span className="text-[9px] font-mono text-zinc-400 tracking-wider">STEP_01</span>
                 </div>
-                <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-950 mb-3 font-semibold">
                   PUBLISH YOUR PRODUCT
                 </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
+                <p className="text-xs text-zinc-600 leading-relaxed font-sans font-medium">
                   Submit for free and get a permanent product page. Latest Launches highlights new arrivals; fair discovery gives overlooked products another chance to be seen.
                 </p>
               </div>
-              <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
+              <div className="mt-8 pt-4 border-t border-zinc-100 text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
                 [ STAGE_1 : $0 FEE ]
               </div>
             </div>
 
             {/* Step 2 */}
-            <div data-route-enter="up" style={{ "--route-delay": "210ms" } as React.CSSProperties} className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-colors duration-200">
+            <div data-route-enter="up" style={{ "--route-delay": "210ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-300 shadow-xs transition-colors duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-zinc-700">02</span>
-                  <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_02</span>
+                  <span className="text-4xl font-extrabold font-mono text-zinc-300">02</span>
+                  <span className="text-[9px] font-mono text-zinc-400 tracking-wider">STEP_02</span>
                 </div>
-                <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-950 mb-3 font-semibold">
                   JOIN THE ARENA
                 </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
+                <p className="text-xs text-zinc-600 leading-relaxed font-sans font-medium">
                   Opt in from My Console. Sixteen products lock a Championship roster; otherwise the daily cutoff starts the largest ready 8, 4, or 2-product run. Earlier queue entries go first.
                 </p>
               </div>
-              <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-emerald-400 uppercase tracking-widest">
+              <div className="mt-8 pt-4 border-t border-zinc-100 text-[9px] font-mono text-emerald-700 uppercase tracking-widest font-semibold">
                 [ OPTIONAL · FREE TO ENTER ]
               </div>
             </div>
 
             {/* Step 3 */}
-            <div data-route-enter="up" style={{ "--route-delay": "280ms" } as React.CSSProperties} className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-6 flex flex-col justify-between hover:border-white/[0.12] transition-colors duration-200">
+            <div data-route-enter="up" style={{ "--route-delay": "280ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-300 shadow-xs transition-colors duration-200">
               <div>
                 <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-zinc-700">03</span>
-                  <span className="text-[9px] font-mono text-zinc-500 tracking-wider">STEP_03</span>
+                  <span className="text-4xl font-extrabold font-mono text-zinc-300">03</span>
+                  <span className="text-[9px] font-mono text-zinc-400 tracking-wider">STEP_03</span>
                 </div>
-                <h3 className="text-xs font-mono uppercase tracking-wider text-white mb-3 font-semibold">
+                <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-950 mb-3 font-semibold">
                   LEARN FROM EVERY MATCH
                 </h3>
-                <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
+                <p className="text-xs text-zinc-600 leading-relaxed font-sans font-medium">
                   Sign in and leave feedback for both products before voting. Winners advance, and every maker keeps their product page and the feedback they received.
                 </p>
               </div>
-              <div className="mt-8 pt-4 border-t border-white/[0.03] text-[9px] font-mono text-cyan-400 uppercase tracking-widest">
+              <div className="mt-8 pt-4 border-t border-zinc-100 text-[9px] font-mono text-violet-700 uppercase tracking-widest font-semibold">
                 [ DUAL CRITIQUE FEEDBACK ]
               </div>
             </div>
@@ -3039,7 +3035,7 @@ export default function ArenaClient({
 
       </main>
 
-      <footer className="border-t border-white/[0.05] bg-[#070709]/40 py-10 mt-6">
+      <footer className="border-t border-zinc-200/80 bg-zinc-50/70 py-10 mt-6">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-zinc-500 text-xs">
           <div className="flex items-center space-x-1.5 font-mono">
             <span>© {new Date().getFullYear()} Indie Clash.</span>
@@ -3048,29 +3044,29 @@ export default function ArenaClient({
               href="https://x.com/MaberFate" 
               target="_blank" 
               rel="noreferrer" 
-              className="text-white hover:underline hover:text-amber-400 transition"
+              className="text-zinc-950 font-medium hover:underline hover:text-violet-700 transition"
             >
               Vesper
             </a>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 font-medium">
-            <Link href="/products" className="hover:text-white transition">All products</Link>
-            <Link href="/champions#how-it-works-section" className="hover:text-white transition">How it works</Link>
+            <Link href="/products" className="text-zinc-600 hover:text-zinc-950 transition">All products</Link>
+            <Link href="/champions#how-it-works-section" className="text-zinc-600 hover:text-zinc-950 transition">How it works</Link>
             <Link
               href="/privacy"
-              className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
+              className="hover:text-zinc-950 transition cursor-pointer bg-transparent border-none p-0 text-zinc-600 text-xs font-medium"
             >
               Privacy Policy
             </Link>
             <Link
               href="/terms"
-              className="hover:text-white transition cursor-pointer bg-transparent border-none p-0 text-zinc-550 hover:text-white text-xs font-medium"
+              className="hover:text-zinc-950 transition cursor-pointer bg-transparent border-none p-0 text-zinc-600 text-xs font-medium"
             >
               Terms of Use
             </Link>
             <a 
               href="mailto:support@maber.xyz" 
-              className="hover:text-white transition"
+              className="text-zinc-600 hover:text-zinc-950 transition"
             >
               Contact Support
             </a>
@@ -3089,23 +3085,23 @@ export default function ArenaClient({
             className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={closeSubmitModal}
           />
-          <div ref={submitDialogRef} role="dialog" aria-modal="true" aria-labelledby="product-form-title" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-md border border-white/[0.12] bg-[#0b0b0d] p-4 sm:p-6 text-sm text-[#E4E4E7] relative z-10 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
-              <h3 id="product-form-title" className="text-base font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
-                <PlusIcon className="w-4 h-4 text-[#A78BFA]" /> {editingProduct ? "EDIT PRODUCT PROFILE" : "SUBMIT PROJECT"}
+          <div ref={submitDialogRef} role="dialog" aria-modal="true" aria-labelledby="product-form-title" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-zinc-200/90 bg-white p-4 sm:p-6 text-sm text-zinc-900 shadow-xl relative z-10 space-y-4">
+            <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3">
+              <h3 id="product-form-title" className="text-base font-semibold text-zinc-950 tracking-tight font-sans flex items-center gap-2 uppercase">
+                <PlusIcon className="w-4 h-4 text-violet-700" /> {editingProduct ? "EDIT PRODUCT PROFILE" : "SUBMIT PROJECT"}
               </h3>
               <button 
                 type="button"
                 onClick={closeSubmitModal}
                 disabled={isSubmittingProduct}
-                className="text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                className="text-zinc-500 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 p-1.5 rounded-lg border border-zinc-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                 aria-label={editingProduct ? "Close product editor" : "Close product submission"}
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
             </div>
 
-            <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+            <p className="text-zinc-600 font-sans text-[11px] leading-relaxed">
               {editingProduct
                 ? "Complete this permanent profile without changing its URL, submission date, votes, or Arena history."
                 : "Publish a permanent product profile first. Arena participation is optional and can be enabled from your console after submission."}
@@ -3113,19 +3109,19 @@ export default function ArenaClient({
 
             {/* Auth Status Segment */}
             {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
-            <div className="p-4 bg-[#141417] border border-white/[0.06] rounded-md flex flex-col gap-3 text-left">
+            <div className="p-4 bg-zinc-50/80 border border-zinc-200/80 rounded-xl flex flex-col gap-3 text-left">
               <div className="flex items-center space-x-3">
-                <span className="w-8 h-8 bg-[#0b0b0d] border border-white/[0.06] flex items-center justify-center text-sm rounded-md">
+                <span className="w-8 h-8 bg-white border border-zinc-200 shadow-2xs flex items-center justify-center text-sm rounded-lg">
                   {userAuthType === "github" ? "🐙" : "🔑"}
                 </span>
                 <div>
                   <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block">ACCOUNT</span>
                   {userLoggedIn ? (
-                    <span className="text-xs font-semibold text-white">
+                    <span className="text-xs font-semibold text-zinc-950">
                       {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                     </span>
                   ) : (
-                    <span className="text-xs text-zinc-300 font-bold uppercase">{authReady ? "Sign in to publish" : "Checking sign-in…"}</span>
+                    <span className="text-xs text-zinc-950 font-bold uppercase">{authReady ? "Sign in to publish" : "Checking sign-in…"}</span>
                   )}
                 </div>
               </div>
@@ -3138,7 +3134,7 @@ export default function ArenaClient({
                 <button
                   type="button"
                   onClick={handleLogout} disabled={isLoggingOut || isSubmittingProduct}
-                  className="text-zinc-400 hover:text-stone-200 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
+                  className="text-zinc-500 hover:text-zinc-950 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
                 >
                   Disconnect
                 </button>
@@ -3149,7 +3145,7 @@ export default function ArenaClient({
               <div
                 role="alert"
                 aria-live="polite"
-                className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[11px] leading-relaxed text-red-300"
+                className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[11px] leading-relaxed text-red-700"
               >
                 {submitError}
               </div>
@@ -3170,7 +3166,7 @@ export default function ArenaClient({
                   id="product-title"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                  className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                 />
               </div>
 
@@ -3183,7 +3179,7 @@ export default function ArenaClient({
                   id="product-tagline"
                   value={newTagline}
                   onChange={(e) => setNewTagline(e.target.value)}
-                  className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                  className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                 />
               </div>
 
@@ -3198,14 +3194,14 @@ export default function ArenaClient({
                   id="product-url"
                   value={newUrl}
                   onChange={(e) => setNewUrl(e.target.value)}
-                  className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                  className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                 />
               </div>
 
               <div className="flex flex-col gap-1">
                 <div className="flex items-center justify-between gap-3">
                   <label htmlFor="product-description" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Description *</label>
-                  <span className="font-mono text-[9px] text-zinc-600">{newDescription.length}/2000</span>
+                  <span className="font-mono text-[9px] text-zinc-500">{newDescription.length}/2000</span>
                 </div>
                 <textarea
                   required
@@ -3216,25 +3212,25 @@ export default function ArenaClient({
                   id="product-description"
                   value={newDescription}
                   onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full resize-y rounded-md border border-white/[0.08] bg-black p-2.5 text-xs leading-5 text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-white/[0.2]"
+                  className="w-full resize-y rounded-lg border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs leading-5 text-zinc-900 outline-none placeholder:text-zinc-400 focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 />
-                <p className="text-[10px] leading-4 text-zinc-600">80–2,000 characters. Describe a real use case.</p>
+                <p className="text-[10px] leading-4 text-zinc-500">80–2,000 characters. Describe a real use case.</p>
               </div>
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <label htmlFor="product-category" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Primary category <span className="normal-case tracking-normal text-zinc-600">(optional)</span></label>
+                <label htmlFor="product-category" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Primary category <span className="normal-case tracking-normal text-zinc-500">(optional)</span></label>
                 <select
                   id="product-category"
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as ProductCategory | "")}
                   aria-describedby="product-category-hint"
-                  className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none focus:border-white/[0.2]"
+                  className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
                   <option value="">Not sure yet</option>
                   {PRODUCT_CATEGORIES.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
                 </select>
-                <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-600">Choose the main use. Not displayed publicly yet.</p>
+                <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-500">Choose the main use. Not displayed publicly yet.</p>
               </div>
               <div className="flex flex-col gap-1">
                 <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing</label>
@@ -3242,7 +3238,7 @@ export default function ArenaClient({
                   id="product-pricing"
                   value={newPricingModel}
                   onChange={(e) => setNewPricingModel(e.target.value as PricingModel)}
-                  className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none focus:border-white/[0.2]"
+                  className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
                   {PRICING_MODELS.map((pricing) => <option key={pricing.value} value={pricing.value}>{pricing.label}</option>)}
                 </select>
@@ -3259,7 +3255,7 @@ export default function ArenaClient({
                     id="product-audience"
                   value={newTargetAudience}
                     onChange={(e) => setNewTargetAudience(e.target.value)}
-                    className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-800 focus:border-white/[0.2]"
+                    className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none placeholder:text-zinc-400 focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -3271,13 +3267,13 @@ export default function ArenaClient({
                     id="product-platforms"
                   value={newPlatforms}
                     onChange={(e) => setNewPlatforms(e.target.value)}
-                    className="h-9 w-full rounded-md border border-white/[0.08] bg-black p-2 text-xs text-zinc-100 outline-none placeholder:text-zinc-800 focus:border-white/[0.2]"
+                    className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none placeholder:text-zinc-400 focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                   />
                 </div>
               </div>
 
-              <details className="rounded-md border border-white/[0.07] bg-white/[0.02] p-3">
-                <summary className="cursor-pointer select-none text-[10px] font-semibold uppercase tracking-wider text-zinc-400">Tell the maker story (optional)</summary>
+              <details className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-3">
+                <summary className="cursor-pointer select-none text-[10px] font-semibold uppercase tracking-wider text-zinc-700">Tell the maker story (optional)</summary>
                 <div className="mt-3 space-y-3">
                   <div className="flex flex-col gap-1">
                     <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest" htmlFor="product-story">Why did you build it?</label>
@@ -3287,7 +3283,7 @@ export default function ArenaClient({
                       placeholder="The problem, moment, or personal experience behind the product."
                       id="product-story" value={newMakerStory}
                       onChange={(e) => setNewMakerStory(e.target.value)}
-                      className="w-full resize-y rounded-md border border-white/[0.08] bg-black p-2.5 text-xs leading-5 text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-white/[0.2]"
+                      className="w-full resize-y rounded-lg border border-zinc-200 bg-white p-2.5 text-xs leading-5 text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -3298,7 +3294,7 @@ export default function ArenaClient({
                       placeholder="e.g. Is the onboarding clear? Would this workflow save you time?"
                       id="product-feedback" value={newFeedbackRequest}
                       onChange={(e) => setNewFeedbackRequest(e.target.value)}
-                      className="w-full resize-y rounded-md border border-white/[0.08] bg-black p-2.5 text-xs leading-5 text-zinc-100 outline-none placeholder:text-zinc-700 focus:border-white/[0.2]"
+                      className="w-full resize-y rounded-lg border border-zinc-200 bg-white p-2.5 text-xs leading-5 text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                     />
                   </div>
                 </div>
@@ -3313,7 +3309,7 @@ export default function ArenaClient({
                     id="product-maker"
                   value={newMaker}
                     onChange={(e) => setNewMaker(e.target.value)}
-                    className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                    className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                   />
                 </div>
                 <div className="flex flex-col gap-1">
@@ -3324,7 +3320,7 @@ export default function ArenaClient({
                     id="product-twitter"
                   value={newTwitter}
                     onChange={(e) => setNewTwitter(e.target.value)}
-                    className="w-full bg-black border border-white/[0.08] text-zinc-100 placeholder:text-zinc-800 p-2 text-xs rounded-md focus:border-white/[0.2] outline-none h-9"
+                    className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                   />
                 </div>
               </div>
@@ -3334,7 +3330,7 @@ export default function ArenaClient({
                 <div className="flex items-center space-x-4">
                   <label 
                     htmlFor="logo-upload" 
-                    className="cursor-pointer flex flex-col items-center justify-center border border-dashed border-white/[0.08] hover:border-white/[0.15] bg-black w-16 h-16 rounded-md transition-all relative overflow-hidden group select-none"
+                    className="cursor-pointer flex flex-col items-center justify-center border border-dashed border-zinc-300 hover:border-zinc-400 bg-zinc-50 w-16 h-16 rounded-xl transition-all relative overflow-hidden group select-none shadow-2xs"
                   >
                     {newLogo ? (
                       newLogo.startsWith("data:image") || newLogo.startsWith("http") ? (
@@ -3343,11 +3339,11 @@ export default function ArenaClient({
                         <span className="text-xl animate-pixel-bounce">{newLogo}</span>
                       )
                     ) : (
-                      <span className="text-xl text-stone-600">＋</span>
+                      <span className="text-xl text-zinc-400">＋</span>
                     )}
                     
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                      <span className="text-[9px] uppercase text-zinc-400">Upload</span>
+                    <div className="absolute inset-0 bg-zinc-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
+                      <span className="text-[9px] uppercase font-medium">Upload</span>
                     </div>
                   </label>
                   
@@ -3416,19 +3412,19 @@ export default function ArenaClient({
 
               <ScreenshotInput value={newScreenshot} onChange={setNewScreenshot} onBusy={setPreparingScreenshot} disabled={isSubmittingProduct} />
 
-              <div className="sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-white/[0.1] bg-[#0b0b0d] py-4">
+              <div className="sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-zinc-200/80 bg-white py-4">
                 <button
                   type="button"
                   onClick={closeSubmitModal}
                   disabled={isSubmittingProduct}
-                  className="px-4 py-2 border border-white/[0.08] hover:bg-white/[0.02] text-zinc-400 rounded-md text-xs transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                  className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 rounded-lg text-xs font-medium shadow-2xs transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingProduct || preparingScreenshot}
-                  className="min-w-28 px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer disabled:cursor-wait disabled:bg-zinc-400 disabled:text-zinc-700"
+                  className="min-w-28 px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg text-xs shadow-xs transition duration-150 cursor-pointer disabled:cursor-wait disabled:bg-zinc-200 disabled:text-zinc-500"
                 >
                   {preparingScreenshot ? "Preparing image…" : isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : (editingProduct ? "Save Changes" : "Submit Project")}
                 </button>
@@ -3454,10 +3450,10 @@ export default function ArenaClient({
               setVoteError("");
             }}
           />
-          <div ref={voteDialogRef} role="dialog" aria-modal="true" aria-label="Vote and give feedback" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-sm space-y-4 text-[#E4E4E7]">
-            <div className="flex items-center justify-between border-b border-white/[0.05] pb-3">
-              <h3 className="text-sm font-semibold text-white tracking-tight font-sans flex items-center gap-2 uppercase">
-                <GitCommitIcon className="w-4 h-4 text-cyan-400" /> DUELING VOTE BOX
+          <div ref={voteDialogRef} role="dialog" aria-modal="true" aria-label="Vote and give feedback" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain bg-white border border-zinc-200/90 rounded-2xl p-6 w-full max-w-md relative z-10 text-sm space-y-4 text-zinc-900 shadow-xl">
+            <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3">
+              <h3 className="text-sm font-semibold text-zinc-950 tracking-tight font-sans flex items-center gap-2 uppercase">
+                <GitCommitIcon className="w-4 h-4 text-violet-700" /> DUELING VOTE BOX
               </h3>
               <button 
                 disabled={isVoting} aria-label="Close voting" onClick={() => {
@@ -3467,7 +3463,7 @@ export default function ArenaClient({
                   setVoteLoserFeedback("");
                   setVoteError("");
                 }}
-                className="text-zinc-500 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
+                className="text-zinc-500 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 p-1.5 rounded-lg border border-zinc-200 cursor-pointer"
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -3475,10 +3471,10 @@ export default function ArenaClient({
 
             <div>
               <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-widest">VOTING FOR</span>
-              <div className="text-sm font-bold text-white uppercase mt-0.5">{votingTarget.title}</div>
+              <div className="text-sm font-bold text-zinc-950 uppercase mt-0.5">{votingTarget.title}</div>
             </div>
 
-            <p className="text-zinc-400 font-sans text-[11px] leading-relaxed">
+            <p className="text-zinc-600 font-sans text-[11px] leading-relaxed">
               Tell one maker what works well and give the other a useful suggestion. Sign in to submit your vote with both pieces of feedback.
             </p>
 
@@ -3486,19 +3482,19 @@ export default function ArenaClient({
               <fieldset disabled={isVoting} className="contents">
               {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
               {/* Auth Verification Card */}
-              <div className="p-4 bg-[#141417] border border-white/[0.06] rounded-md flex flex-col gap-3">
+              <div className="p-4 bg-zinc-50/80 border border-zinc-200/80 rounded-xl flex flex-col gap-3">
                 <div className="flex items-center space-x-3">
-                  <span className="w-8 h-8 bg-[#0b0b0d] border border-white/[0.06] flex items-center justify-center text-sm rounded-md">
+                  <span className="w-8 h-8 bg-white border border-zinc-200 shadow-2xs flex items-center justify-center text-sm rounded-lg">
                     {userAuthType === "github" ? "🐙" : "🔑"}
                   </span>
                   <div>
                     <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block">AUTHORIZATION</span>
                     {userLoggedIn ? (
-                      <span className="text-xs font-semibold text-white">
+                      <span className="text-xs font-semibold text-zinc-950">
                         {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                       </span>
                     ) : (
-                      <span className="text-xs text-zinc-300 font-bold uppercase">{authReady ? "Sign in to vote" : "Checking sign-in…"}</span>
+                      <span className="text-xs text-zinc-950 font-bold uppercase">{authReady ? "Sign in to vote" : "Checking sign-in…"}</span>
                     )}
                   </div>
                 </div>
@@ -3511,7 +3507,7 @@ export default function ArenaClient({
                   <button
                     type="button"
                     onClick={handleLogout} disabled={isLoggingOut || isVoting}
-                    className="text-zinc-400 hover:text-stone-200 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
+                    className="text-zinc-500 hover:text-zinc-950 text-[10px] underline font-mono font-bold transition duration-150 cursor-pointer self-start"
                   >
                     Disconnect
                   </button>
@@ -3529,11 +3525,11 @@ export default function ArenaClient({
                   placeholder="e.g., The core user interface is incredibly fast and intuitive."
                   value={voteWinnerFeedback}
                   onChange={(e) => setVoteWinnerFeedback(e.target.value)}
-                  className="bg-black border border-white/[0.08] text-xs text-zinc-300 p-2.5 rounded-md focus:outline-none focus:border-white/[0.2] resize-none"
+                  className="bg-zinc-50/50 border border-zinc-200 text-xs text-zinc-900 placeholder:text-zinc-400 p-2.5 rounded-lg focus:outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 resize-none"
                 />
                 <div className="flex justify-between text-[9px] font-mono text-zinc-500">
                   <span>Chars: {voteWinnerFeedback.length}</span>
-                  <span className={voteWinnerFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-zinc-500"}>
+                  <span className={voteWinnerFeedback.length >= 10 ? "text-emerald-600 font-semibold" : "text-zinc-500"}>
                     {voteWinnerFeedback.length >= 10 ? "✓ Ready" : `Need ${Math.max(0, 10 - voteWinnerFeedback.length)} more`}
                   </span>
                 </div>
@@ -3550,23 +3546,23 @@ export default function ArenaClient({
                   placeholder="e.g., The tagline needs more clarity; should clarify if it exports in SVG."
                   value={voteLoserFeedback}
                   onChange={(e) => setVoteLoserFeedback(e.target.value)}
-                  className="bg-black border border-white/[0.08] text-xs text-zinc-300 p-2.5 rounded-md focus:outline-none focus:border-white/[0.2] resize-none"
+                  className="bg-zinc-50/50 border border-zinc-200 text-xs text-zinc-900 placeholder:text-zinc-400 p-2.5 rounded-lg focus:outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 resize-none"
                 />
                 <div className="flex justify-between text-[9px] font-mono text-zinc-500">
                   <span>Chars: {voteLoserFeedback.length}</span>
-                  <span className={voteLoserFeedback.length >= 10 ? "text-emerald-500 font-semibold" : "text-zinc-500"}>
+                  <span className={voteLoserFeedback.length >= 10 ? "text-emerald-600 font-semibold" : "text-zinc-500"}>
                     {voteLoserFeedback.length >= 10 ? "✓ Ready" : `Need ${Math.max(0, 10 - voteLoserFeedback.length)} more`}
                   </span>
                 </div>
               </div>
 
               {voteError && (
-                <div className="p-2.5 bg-red-950/20 text-red-400 text-[10px] border border-red-900/30 font-mono rounded-md">
+                <div className="p-2.5 bg-red-50 text-red-700 text-[10px] border border-red-200 font-mono rounded-lg">
                   [ERROR]: {voteError}
                 </div>
               )}
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-white/[0.05]">
+              <div className="flex justify-end gap-3 pt-3 border-t border-zinc-200/80">
                 <button
                   type="button"
                   onClick={() => {
@@ -3576,13 +3572,13 @@ export default function ArenaClient({
                     setVoteLoserFeedback("");
                     setVoteError("");
                   }}
-                  className="px-4 py-2 border border-white/[0.08] hover:bg-white/[0.02] text-zinc-400 rounded-md text-xs transition duration-150 cursor-pointer"
+                  className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 rounded-lg text-xs font-medium shadow-2xs transition duration-150 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-white hover:bg-zinc-200 text-black font-semibold rounded-md text-xs transition duration-150 cursor-pointer"
+                  className="px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg text-xs shadow-xs transition duration-150 cursor-pointer"
                 >
                   {isVoting ? "Submitting vote…" : "Submit Dual Vote"}
                 </button>
@@ -3597,9 +3593,9 @@ export default function ArenaClient({
           Developer testing console (PM control panel)
          ======================================================== */}
       {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-4 right-4 z-40 bg-[#0b0b0d]/98 border border-white/[0.12] rounded-md p-4 max-w-xs transition-all text-white text-xs space-y-3" style={{ willChange: "transform" }}>
-          <div className="flex justify-between items-center pb-2 border-b border-white/[0.05]">
-            <span className="font-mono text-[9px] text-zinc-500 uppercase tracking-widest">
+        <div className="fixed bottom-4 right-4 z-40 bg-white/95 backdrop-blur-md border border-zinc-200/90 shadow-lg rounded-xl p-4 max-w-xs transition-all text-zinc-900 text-xs space-y-3" style={{ willChange: "transform" }}>
+          <div className="flex justify-between items-center pb-2 border-b border-zinc-200/80">
+            <span className="font-mono text-[9px] text-zinc-500 uppercase tracking-widest font-semibold">
               DEV_CONSOLE
             </span>
             <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></span>
@@ -3608,21 +3604,21 @@ export default function ArenaClient({
             {!bracket || bracket.status === "preparing" ? (
               <>
                 {bracket && (
-                  <div className="p-2 bg-white/[0.02] border border-white/[0.06] text-[10px] font-mono space-y-1 text-zinc-400 rounded mb-2">
-                    <div>STATUS: <strong className="text-emerald-400">{bracket.status}</strong></div>
-                    <div>STAGE: <strong className="text-white">WAITLIST</strong></div>
+                  <div className="p-2 bg-zinc-50 border border-zinc-200/80 text-[10px] font-mono space-y-1 text-zinc-600 rounded-lg mb-2">
+                    <div>STATUS: <strong className="text-emerald-700">{bracket.status}</strong></div>
+                    <div>STAGE: <strong className="text-zinc-950">WAITLIST</strong></div>
                   </div>
                 )}
                 <button 
                   onClick={handleInject16}
-                  className="w-full text-left px-2.5 py-1.5 bg-white text-black hover:bg-zinc-200 transition-all rounded-md font-semibold flex justify-between items-center p-2 cursor-pointer mb-2"
+                  className="w-full text-left px-2.5 py-1.5 bg-zinc-900 text-white hover:bg-zinc-800 transition-all rounded-lg font-semibold flex justify-between items-center p-2 cursor-pointer mb-2 shadow-xs"
                 >
                   <span>🚀 Inject 16 Arena Competitors</span>
                   <span className="font-mono">➔</span>
                 </button>
                 <button 
                   onClick={handleInject20}
-                  className="w-full text-left px-2.5 py-1.5 border border-white/[0.08] hover:bg-white/[0.02] transition-all rounded-md font-mono flex justify-between items-center text-[#ffbe18] p-2 cursor-pointer mb-2"
+                  className="w-full text-left px-2.5 py-1.5 border border-zinc-200 bg-white hover:bg-zinc-50 transition-all rounded-lg font-mono flex justify-between items-center text-amber-700 p-2 cursor-pointer mb-2 shadow-2xs font-semibold"
                 >
                   <span>＋ Inject 20 Showcase Products</span>
                   <span className="font-mono">⚡</span>
@@ -3630,7 +3626,7 @@ export default function ArenaClient({
                 {bracket && (
                   <button
                     onClick={handleAdvanceRound}
-                    className="w-full text-left px-2.5 py-1.5 bg-white text-black hover:bg-zinc-200 transition-all rounded-md font-semibold flex justify-between items-center p-2 cursor-pointer"
+                    className="w-full text-left px-2.5 py-1.5 bg-zinc-900 text-white hover:bg-zinc-800 transition-all rounded-lg font-semibold flex justify-between items-center p-2 cursor-pointer shadow-xs"
                   >
                     <span>⚡ Force Start (Skip Midnight)</span>
                     <span className="font-mono">➔</span>
@@ -3639,9 +3635,9 @@ export default function ArenaClient({
               </>
             ) : (
               <>
-                <div className="p-2 bg-white/[0.02] border border-white/[0.06] text-[10px] font-mono space-y-1 text-zinc-400 rounded">
-                  <div>STATUS: <strong className="text-emerald-400">{bracket.status}</strong></div>
-                  <div>STAGE: <strong className="text-white">{
+                <div className="p-2 bg-zinc-50 border border-zinc-200/80 text-[10px] font-mono space-y-1 text-zinc-600 rounded-lg">
+                  <div>STATUS: <strong className="text-emerald-700">{bracket.status}</strong></div>
+                  <div>STAGE: <strong className="text-zinc-950">{
                     bracket.status === "completed" ? "COMPLETED" : 
                     activeRoundNum === 1 ? "ROUND_16" : 
                     activeRoundNum === 2 ? "QUARTERS" : 
@@ -3651,7 +3647,7 @@ export default function ArenaClient({
                 {bracket.status === "completed" ? (
                   <button
                     onClick={handleReset}
-                    className="w-full text-left px-2.5 py-1.5 bg-[#121215] border border-white/[0.1] text-zinc-350 hover:bg-white/[0.04] transition-all rounded-md font-mono flex justify-between items-center p-2 cursor-pointer"
+                    className="w-full text-left px-2.5 py-1.5 bg-zinc-100 border border-zinc-200 text-zinc-700 hover:bg-zinc-200 transition-all rounded-lg font-mono flex justify-between items-center p-2 cursor-pointer"
                   >
                     <span>🔄 Start New Season (Reset)</span>
                     <span className="font-mono">➔</span>
@@ -3659,7 +3655,7 @@ export default function ArenaClient({
                 ) : (
                   <button
                     onClick={handleAdvanceRound}
-                    className="w-full text-left px-2.5 py-1.5 bg-white text-black hover:bg-zinc-200 transition-all rounded-md font-semibold flex justify-between items-center p-2 cursor-pointer"
+                    className="w-full text-left px-2.5 py-1.5 bg-zinc-900 text-white hover:bg-zinc-800 transition-all rounded-lg font-semibold flex justify-between items-center p-2 cursor-pointer shadow-xs"
                   >
                     <span>🏆 Settle & Advance Round</span>
                     <span className="font-mono">➔</span>
@@ -3669,7 +3665,7 @@ export default function ArenaClient({
             )}
             <button 
               onClick={handleReset}
-              className="w-full text-center py-1.5 bg-red-950/20 border border-red-900/30 text-red-400 hover:bg-red-950/40 transition-all font-mono rounded-md text-[10px] cursor-pointer"
+              className="w-full text-center py-1.5 bg-red-50 border border-red-200 text-red-700 hover:bg-red-100 transition-all font-mono rounded-lg text-[10px] cursor-pointer font-semibold"
             >
               🔄 Reset Arena
             </button>
@@ -3686,15 +3682,15 @@ export default function ArenaClient({
             className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={closeAuthDialog}
           />
-          <div ref={authDialogRef} role="dialog" aria-modal="true" aria-label="Sign in" tabIndex={-1} className="product-form-dialog auth-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto p-8 w-full max-w-sm relative z-10 text-sm text-[#E4E4E7]">
+          <div ref={authDialogRef} role="dialog" aria-modal="true" aria-label="Sign in" tabIndex={-1} className="product-form-dialog auth-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto p-8 w-full max-w-sm relative z-10 text-sm text-zinc-900 rounded-2xl border border-zinc-200/90 bg-white shadow-xl">
             <div className="flex flex-col items-center text-center">
               <ClashLogo size="md" />
-              <h3 className="mt-5 text-2xl font-semibold text-white tracking-tight">
+              <h3 className="mt-5 text-2xl font-semibold text-zinc-950 tracking-tight">
                 <span>Welcome back.</span>
               </h3>
               <button 
                 aria-label="Close sign in" onClick={closeAuthDialog}
-                className="auth-close absolute right-3 top-3 flex w-11 items-center justify-center rounded-full text-zinc-400 hover:bg-white/[0.06] hover:text-white"
+                className="auth-close absolute right-3 top-3 flex w-8 h-8 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 transition"
               >
                 <XIcon className="w-3.5 h-3.5" />
               </button>
@@ -3720,13 +3716,13 @@ export default function ArenaClient({
             className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => setIsSuccessOpen(false)}
           />
-          <div ref={successDialogRef} role="dialog" aria-modal="true" aria-label="Confirmation" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-md relative z-10 text-sm space-y-4 text-center text-[#E4E4E7]">
+          <div ref={successDialogRef} role="dialog" aria-modal="true" aria-label="Confirmation" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white border border-zinc-200/90 rounded-2xl p-6 w-full max-w-md relative z-10 text-sm space-y-4 text-center text-zinc-900 shadow-xl">
             
-            <div className="w-10 h-10 bg-white/[0.02] border border-white/[0.06] rounded-md mx-auto flex items-center justify-center text-xl font-mono">
+            <div className="w-10 h-10 bg-zinc-50 border border-zinc-200 rounded-xl mx-auto flex items-center justify-center text-xl font-mono shadow-2xs">
               🛡️
             </div>
             
-            <h3 className="text-sm font-semibold text-white uppercase tracking-tight font-sans">
+            <h3 className="text-sm font-semibold text-zinc-950 uppercase tracking-tight font-sans">
               {successModalTitle}
             </h3>
             
@@ -3734,7 +3730,7 @@ export default function ArenaClient({
               Submission Confirmed
             </span>
 
-            <div className="bg-white/[0.02] border border-white/[0.06] p-4 text-left font-mono text-[10px] text-zinc-400 leading-relaxed whitespace-pre-line rounded-md">
+            <div className="bg-zinc-50 border border-zinc-200/80 p-4 text-left font-mono text-[10px] text-zinc-600 leading-relaxed whitespace-pre-line rounded-xl">
               {successModalText}
             </div>
 
@@ -3744,7 +3740,7 @@ export default function ArenaClient({
                   setIsSuccessOpen(false);
                   setCurrentView('console');
                 }}
-                className="w-full py-2.5 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
+                className="w-full py-2.5 bg-zinc-900 text-white hover:bg-zinc-800 text-xs font-semibold rounded-lg shadow-xs transition duration-150 cursor-pointer"
               >
                 ENTER THE CONSOLE ➔
               </button>
@@ -3759,7 +3755,7 @@ export default function ArenaClient({
                     }
                   }, 100);
                 }}
-                className="w-full py-2.5 bg-white text-black hover:bg-zinc-200 text-xs font-semibold rounded-md transition duration-150 cursor-pointer"
+                className="w-full py-2.5 bg-zinc-900 text-white hover:bg-zinc-800 text-xs font-semibold rounded-lg shadow-xs transition duration-150 cursor-pointer"
               >
                 ENTER THE ARENA ➔
               </button>
@@ -3779,53 +3775,53 @@ export default function ArenaClient({
             className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => setIsPrivacyOpen(false)}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 text-[#E4E4E7]">
+          <div className="bg-white border border-zinc-200/90 rounded-2xl p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 text-zinc-900 shadow-xl">
             <button 
               onClick={() => setIsPrivacyOpen(false)}
-              className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
+              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 p-1.5 rounded-lg border border-zinc-200 cursor-pointer"
             >
               <XIcon className="w-3.5 h-3.5" />
             </button>
-            <div className="flex items-center space-x-3 mb-2 border-b border-white/[0.05] pb-3">
+            <div className="flex items-center space-x-3 mb-2 border-b border-zinc-200/80 pb-3">
               <div>
-                <h3 className="font-sans text-sm uppercase tracking-wider text-white font-semibold">
+                <h3 className="font-sans text-sm uppercase tracking-wider text-zinc-950 font-semibold">
                   Privacy Policy
                 </h3>
                 <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block mt-0.5">SECURE SYSTEM MATCH DATA</span>
               </div>
             </div>
             
-            <div className="max-h-[50vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-zinc-400 space-y-5 leading-relaxed text-left">
-              <div className="bg-white/[0.02] border border-white/[0.06] px-4 py-2.5 rounded-md mb-2 flex items-center justify-between">
-                <span className="text-[9px] font-mono text-zinc-450">STATUS: ACTIVE // VERIFIED</span>
+            <div className="max-h-[50vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-zinc-600 space-y-5 leading-relaxed text-left">
+              <div className="bg-zinc-50 border border-zinc-200/80 px-4 py-2.5 rounded-xl mb-2 flex items-center justify-between">
+                <span className="text-[9px] font-mono text-zinc-600 font-semibold">STATUS: ACTIVE // VERIFIED</span>
                 <span className="text-[9px] font-mono text-zinc-500 font-semibold">UPDATED: MAY 29, 2026</span>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">1. Scope & Commitment</h4>
-                <p className="text-zinc-450">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">1. Scope & Commitment</h4>
+                <p className="text-zinc-600">
                   At Indie Clash (operated by @MaberFate), we respect your privacy. This policy outlines how we handle data for our 1v1 tournament arena website. We are committed to data minimization and user security.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">2. Information We Collect</h4>
-                <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-md space-y-3">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">2. Information We Collect</h4>
+                <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-xl space-y-3">
                   <div>
-                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">OAUTH ACCOUNT METADATA</span>
-                    <p className="text-zinc-450 text-[10px] leading-relaxed">
+                    <span className="inline-block bg-zinc-900 text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">OAUTH ACCOUNT METADATA</span>
+                    <p className="text-zinc-600 text-[10px] leading-relaxed">
                       When you connect via Google or GitHub OAuth, we collect your verified email address, public profile name, avatar image URL, and auth provider details. This is necessary to verify your identity.
                     </p>
                   </div>
                   <div>
-                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">PROJECT SUBMISSION DATA</span>
-                    <p className="text-zinc-450 text-[10px] leading-relaxed">
+                    <span className="inline-block bg-zinc-900 text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">PROJECT SUBMISSION DATA</span>
+                    <p className="text-zinc-600 text-[10px] leading-relaxed">
                       If you submit an indie product, we collect the title, tagline, logo/emoji, maker Twitter/X handle, and live demo URL.
                     </p>
                   </div>
                   <div>
-                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">CRITIQUES & PUBLIC VOTES</span>
-                    <p className="text-zinc-450 text-[10px] leading-relaxed">
+                    <span className="inline-block bg-zinc-900 text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">CRITIQUES & PUBLIC VOTES</span>
+                    <p className="text-zinc-600 text-[10px] leading-relaxed">
                       To participate in the arena voting process, you must submit a constructive critique. We store and publicly display the critique texts you write, alongside your voting selection.
                     </p>
                   </div>
@@ -3833,44 +3829,44 @@ export default function ArenaClient({
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">3. How We Use Your Data</h4>
-                <ul className="space-y-2 text-zinc-450">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">3. How We Use Your Data</h4>
+                <ul className="space-y-2 text-zinc-600">
                   <li className="flex items-start space-x-2">
-                    <span className="text-zinc-600 mt-0.5 shrink-0">✔</span>
+                    <span className="text-emerald-600 mt-0.5 shrink-0">✔</span>
                     <span><strong>Spam & Vote Rigging Prevention:</strong> Connected accounts help us prevent bots, duplicate voting, and coordinated manipulation rings.</span>
                   </li>
                   <li className="flex items-start space-x-2">
-                    <span className="text-zinc-600 mt-0.5 shrink-0">✔</span>
+                    <span className="text-emerald-600 mt-0.5 shrink-0">✔</span>
                     <span><strong>Public Duel Transparency:</strong> Constructive critiques are published on the battle whiteboard. The identity linked to your account may be shown next to your feedback.</span>
                   </li>
                   <li className="flex items-start space-x-2">
-                    <span className="text-zinc-600 mt-0.5 shrink-0">✔</span>
+                    <span className="text-emerald-600 mt-0.5 shrink-0">✔</span>
                     <span><strong>Tournament Operation:</strong> We use project details for matching, voting updates, rankings, and historical champion boards.</span>
                   </li>
                 </ul>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">4. Data Sharing & Retention</h4>
-                <p className="text-zinc-450">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">4. Data Sharing & Retention</h4>
+                <p className="text-zinc-600">
                   We do not sell, rent, or lease your personal information. Your public display name, submitted critiques, and project links may be displayed as part of the core Indie Clash experience. Email addresses and account UUIDs remain in private, access-controlled Supabase tables.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">5. Contact Us</h4>
-                <p className="text-zinc-450">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">5. Contact Us</h4>
+                <p className="text-zinc-600">
                   For any privacy inquiries, data deletion requests, or support, reach out to us at:
-                  <a href="mailto:support@maber.xyz" className="text-white hover:underline font-semibold ml-1">support@maber.xyz</a>.
+                  <a href="mailto:support@maber.xyz" className="text-zinc-950 hover:underline font-semibold ml-1">support@maber.xyz</a>.
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 text-right border-t border-white/[0.05] pt-4 flex justify-between items-center">
-              <span className="text-[9px] font-mono text-zinc-500 uppercase">INDIE CLASH PROTOCOL v1.0</span>
+            <div className="mt-4 text-right border-t border-zinc-200/80 pt-4 flex justify-between items-center">
+              <span className="text-[9px] font-mono text-zinc-500 uppercase font-medium">INDIE CLASH PROTOCOL v1.0</span>
               <button
                 onClick={() => setIsPrivacyOpen(false)}
-                className="py-2.5 px-6 text-xs font-mono transition-all bg-white hover:bg-zinc-200 text-black font-semibold rounded-md cursor-pointer"
+                className="py-2.5 px-6 text-xs font-mono transition-all bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg cursor-pointer shadow-xs"
               >
                 ACCEPT & CLOSE
               </button>
@@ -3888,83 +3884,83 @@ export default function ArenaClient({
             className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={() => setIsTermsOpen(false)}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-md p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 text-[#E4E4E7]">
+          <div className="bg-white border border-zinc-200/90 rounded-2xl p-6 w-full max-w-2xl relative z-10 text-xs space-y-4 text-zinc-900 shadow-xl">
             <button 
               onClick={() => setIsTermsOpen(false)}
-              className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1 rounded-md border border-white/[0.05] cursor-pointer"
+              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 p-1.5 rounded-lg border border-zinc-200 cursor-pointer"
             >
               <XIcon className="w-3.5 h-3.5" />
             </button>
-            <div className="flex items-center space-x-3 mb-2 border-b border-white/[0.05] pb-3">
+            <div className="flex items-center space-x-3 mb-2 border-b border-zinc-200/80 pb-3">
               <div>
-                <h3 className="font-sans text-sm uppercase tracking-wider text-white font-semibold">
+                <h3 className="font-sans text-sm uppercase tracking-wider text-zinc-950 font-semibold">
                   Terms of Use
                 </h3>
                 <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest block mt-0.5">ARENA DEPLOY RULES & POLICY</span>
               </div>
             </div>
             
-            <div className="max-h-[50vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-zinc-400 space-y-5 leading-relaxed text-left">
-              <div className="bg-white/[0.02] border border-white/[0.06] px-4 py-2.5 rounded-md mb-2 flex items-center justify-between">
-                <span className="text-[9px] font-mono text-zinc-450">LICENSE AGREEMENT: PUBLIC ACCESS</span>
+            <div className="max-h-[50vh] overflow-y-auto pr-3 custom-scrollbar font-sans text-xs text-zinc-600 space-y-5 leading-relaxed text-left">
+              <div className="bg-zinc-50 border border-zinc-200/80 px-4 py-2.5 rounded-xl mb-2 flex items-center justify-between">
+                <span className="text-[9px] font-mono text-zinc-600 font-semibold">LICENSE AGREEMENT: PUBLIC ACCESS</span>
                 <span className="text-[9px] font-mono text-zinc-500 font-semibold">UPDATED: MAY 29, 2026</span>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">1. Acceptance of Terms</h4>
-                <p className="text-zinc-450">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">1. Acceptance of Terms</h4>
+                <p className="text-zinc-600">
                   By accessing and using Indie Clash (located at this website, created by @MaberFate), you agree to be bound by these Terms of Use. If you do not agree, please discontinue use immediately.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">2. Description of Service</h4>
-                <p className="text-zinc-450">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">2. Description of Service</h4>
+                <p className="text-zinc-600">
                   Indie Clash is a 1v1 product tournament bracket platform. Users submit project details, connect identity via OAuth, and participate in peer-critique voting to rank products in live battles.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">3. Battle Arena Fair Play Policy</h4>
-                <div className="bg-white/[0.02] border border-white/[0.06] p-4 rounded-md space-y-3 text-[10px] text-zinc-455 leading-relaxed">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">3. Battle Arena Fair Play Policy</h4>
+                <div className="bg-zinc-50 border border-zinc-200/80 p-4 rounded-xl space-y-3 text-[10px] text-zinc-600 leading-relaxed">
                   <div>
-                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">ZERO TOLERANCE: BOT ACTIVITY</span>
+                    <span className="inline-block bg-zinc-900 text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">ZERO TOLERANCE: BOT ACTIVITY</span>
                     <p>You may not use automated scripts, bots, or fake accounts to generate votes or project queues.</p>
                   </div>
                   <div>
-                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">ZERO TOLERANCE: COORDINATED MANIPULATION</span>
+                    <span className="inline-block bg-zinc-900 text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">ZERO TOLERANCE: COORDINATED MANIPULATION</span>
                     <p>Coordinated upvote manipulation, review exchanges, or purchasing of votes is strictly prohibited.</p>
                   </div>
                   <div>
-                    <span className="inline-block bg-white/[0.04] border border-white/[0.08] text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">REQUIRED: DUAL CRITIQUE LOCK</span>
+                    <span className="inline-block bg-zinc-900 text-white font-mono text-[9px] px-2 py-0.5 rounded-md mb-1 font-semibold">REQUIRED: DUAL CRITIQUE LOCK</span>
                     <p>You must leave a constructive critique of at least 10 characters summarizing positive points for the winner and actionable feedback for the runner-up. Low-effort or spam text will invalidate the vote.</p>
                   </div>
-                  <p className="text-zinc-450 font-medium border-t border-white/[0.06] pt-2 font-mono text-[9px] uppercase">
+                  <p className="text-zinc-500 font-medium border-t border-zinc-200/80 pt-2 font-mono text-[9px] uppercase">
                     ※ Violation results in permanent disqualification of products from current brackets & hall of valor.
                   </p>
                 </div>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">4. Intellectual Property & Submissions</h4>
-                <p className="text-zinc-450">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">4. Intellectual Property & Submissions</h4>
+                <p className="text-zinc-600">
                   You retain ownership of all intellectual property rights to the products you submit. By submitting a product, you grant Indie Clash a worldwide, non-exclusive, royalty-free license to display your product details (title, tagline, logo/emoji, screenshots, maker info, and URL) publicly in the arena.
                 </p>
               </div>
 
               <div>
-                <h4 className="font-mono text-[10px] text-white uppercase mb-1.5 border-l-2 border-white pl-2">5. Limitation of Liability</h4>
-                <p className="text-zinc-455">
+                <h4 className="font-mono text-[10px] text-zinc-950 uppercase mb-1.5 border-l-2 border-zinc-950 pl-2 font-semibold">5. Limitation of Liability</h4>
+                <p className="text-zinc-600">
                   Indie Clash is provided &quot;as is&quot; and &quot;as available&quot;. We do not guarantee uninterrupted service or error-free matchups. We reserve the right to modify, pause, or terminate tournament systems, brackets, or database values at our sole discretion without notice.
                 </p>
               </div>
             </div>
 
-            <div className="mt-4 text-right border-t border-white/[0.05] pt-4 flex justify-between items-center">
-              <span className="text-[9px] font-mono text-zinc-500 uppercase">INDIE CLASH PROTOCOL v1.0</span>
+            <div className="mt-4 text-right border-t border-zinc-200/80 pt-4 flex justify-between items-center">
+              <span className="text-[9px] font-mono text-zinc-500 uppercase font-medium">INDIE CLASH PROTOCOL v1.0</span>
               <button
                 onClick={() => setIsTermsOpen(false)}
-                className="py-2.5 px-6 text-xs font-mono transition-all bg-white hover:bg-zinc-200 text-black font-semibold rounded-md cursor-pointer"
+                className="py-2.5 px-6 text-xs font-mono transition-all bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg cursor-pointer shadow-xs"
               >
                 ACCEPT & CLOSE
               </button>
@@ -3979,69 +3975,69 @@ export default function ArenaClient({
       {activeCardProduct && (
         <div className="fixed inset-0 z-[160] flex items-center justify-center p-4" style={{ zIndex: 160 }}>
           <div 
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm animate-fade-in" 
+            className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in" 
             onClick={() => setActiveCardProduct(null)}
           />
-          <div className="bg-[#0b0b0d] border border-white/[0.12] rounded-xl p-5 w-full max-w-sm relative z-10 text-xs space-y-4 text-left text-[#E4E4E7] shadow-2xl shadow-black/80">
+          <div className="bg-white border border-zinc-200/90 rounded-2xl p-5 w-full max-w-sm relative z-10 text-xs space-y-4 text-left text-zinc-900 shadow-xl">
             {/* Top close button */}
             <button 
               onClick={() => setActiveCardProduct(null)}
-              className="absolute top-4 right-4 text-zinc-555 hover:text-white bg-zinc-950 p-1.5 rounded-md border border-white/[0.05] cursor-pointer"
+              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-950 bg-zinc-100 hover:bg-zinc-200 p-1.5 rounded-lg border border-zinc-200 cursor-pointer"
             >
               <XIcon className="w-3 h-3" />
             </button>
 
             {/* Main product display */}
-            <div className="flex items-center gap-3 pb-3 border-b border-white/[0.06]">
-              <div className="w-12 h-12 bg-white/[0.03] border border-white/[0.08] rounded-xl flex items-center justify-center text-2xl shadow-inner">
+            <div className="flex items-center gap-3 pb-3 border-b border-zinc-200/80">
+              <div className="w-12 h-12 bg-zinc-50 border border-zinc-200/80 rounded-xl flex items-center justify-center text-2xl shadow-2xs">
                 {renderLogo(activeCardProduct.logo, "w-8 h-8 object-contain")}
               </div>
               <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wide">
+                <h3 className="text-sm font-bold text-zinc-950 uppercase tracking-wide">
                   {activeCardProduct.title}
                 </h3>
               </div>
             </div>
 
             {/* Tagline */}
-            <p className="text-zinc-350 text-[11px] leading-relaxed font-sans">
+            <p className="text-zinc-600 text-[11px] leading-relaxed font-sans">
               {activeCardProduct.tagline}
             </p>
 
             {/* URL Link Section */}
-            {publicHttpUrl(activeCardProduct.url) ? <div className="bg-white/[0.02] border border-white/[0.05] p-3 rounded-lg flex items-center justify-between">
+            {publicHttpUrl(activeCardProduct.url) ? <div className="bg-zinc-50 border border-zinc-200/80 p-3 rounded-xl flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-cyan-400">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-violet-700">
                   <circle cx="12" cy="12" r="10"></circle>
                   <line x1="2" y1="12" x2="22" y2="12"></line>
                   <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
                 </svg>
-                <span className="font-mono text-[9px] text-zinc-400 uppercase tracking-wider">LIVE DEMO URL</span>
+                <span className="font-mono text-[9px] text-zinc-500 uppercase tracking-wider font-semibold">LIVE DEMO URL</span>
               </div>
               <a 
                 href={publicHttpUrl(activeCardProduct.url)}
                 target="_blank" 
                 rel={productLinkRel(activeCardProduct)}
                 onClick={() => synthClick(400, "sine", 0.08)}
-                className="text-amber-400 hover:text-amber-300 font-semibold transition-colors flex items-center gap-1 group text-[11px] border-b border-amber-400/30 hover:border-amber-300"
+                className="text-violet-700 hover:text-violet-900 font-semibold transition-colors flex items-center gap-1 group text-[11px]"
               >
                 VIEW DEMO <span className="group-hover:translate-x-0.5 transition-transform">➔</span>
               </a>
             </div> : null}
 
             {/* Maker details footer */}
-            <div className="pt-3 border-t border-dashed border-white/[0.08] flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+            <div className="pt-3 border-t border-dashed border-zinc-200 flex items-center justify-between text-[10px] text-zinc-500 font-mono">
               <div className="flex items-center gap-2">
                 {activeCardProduct.makerAvatar ? (
                   <img 
                     src={activeCardProduct.makerAvatar.split("#")[0]} 
                     alt={activeCardProduct.makerName} 
-                    className="w-5 h-5 rounded-full border border-white/[0.1] object-cover"
+                    className="w-5 h-5 rounded-full border border-zinc-200 object-cover"
                   />
                 ) : (
-                  <div className="w-5 h-5 rounded-full border border-white/[0.1] bg-white/[0.03] flex items-center justify-center text-[8px]">👤</div>
+                  <div className="w-5 h-5 rounded-full border border-zinc-200 bg-zinc-100 flex items-center justify-center text-[8px]">👤</div>
                 )}
-                <span className="text-zinc-300 hover:text-white transition-colors">
+                <span className="text-zinc-700 hover:text-zinc-950 font-medium transition-colors">
                   {activeCardProduct.makerTwitter || `@${activeCardProduct.makerName.toLowerCase().replace(/\s/g, "")}`}
                 </span>
               </div>

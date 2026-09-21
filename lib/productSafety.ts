@@ -18,7 +18,8 @@ export function isVisibleProduct(product: Product): boolean {
 }
 
 export function productLinkRel(product: Product): string {
-  // Missing fields are legacy records grandfathered by the additive migration.
-  return product.moderationStatus === "restricted" || product.linkTrust === "ugc" || product.moderationStatus === "unreviewed"
+  // Published product websites are followed immediately, including unreviewed
+  // submissions. Keep moderation metadata independent from this launch policy.
+  return product.moderationStatus === "restricted"
     ? "ugc nofollow noopener noreferrer" : "noopener noreferrer";
 }

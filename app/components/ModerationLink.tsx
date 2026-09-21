@@ -12,5 +12,5 @@ export default function ModerationLink({ userId }: { userId: string }) {
       .then(result => { if (active && result.allowed) setAdminId(userId); }).catch(() => {});
     return () => { active = false; };
   }, [userId]);
-  return userId && adminId === userId ? <Link href="/moderation" className="mt-3 inline-block text-xs text-zinc-400 hover:text-white">Moderation →</Link> : null;
+  return userId && adminId === userId ? <Link href="/moderation" className="mt-3 inline-block text-xs font-medium text-zinc-500 hover:text-zinc-950">Moderation →</Link> : null;
 }

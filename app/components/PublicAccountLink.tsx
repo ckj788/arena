@@ -15,10 +15,17 @@ export default function PublicAccountLink() {
       changed = true;
       if (active) setSignedIn(Boolean(session));
     });
-    void withDeadline(supabase.auth.getSession(), 10_000).then(({ data }) => {
-      if (active && !changed) setSignedIn(Boolean(data.session));
-    }).catch(() => {});
+    void withDeadline(supabase.auth.getSession(), 10_000).then(({ data, error }) => {
+      if (error && error.message?.toLowerCase().includes("refresh token")) {
+        void supabase?.auth.signOut({ scope: "local" }).catch(() => {});
+      }
+      if (active && !changed) setSignedIn(Boolean(data?.session));
+    }).catch((err) => {
+      if (err && typeof err === "object" && "message" in err && typeof err.message === "string" && err.message.toLowerCase().includes("refresh token")) {
+        void supabase?.auth.signOut({ scope: "local" }).catch(() => {});
+      }
+    });
     return () => { active = false; data.subscription.unsubscribe(); };
   }, []);
-  return <Link href={signedIn ? "/?view=console" : "/?signin=1"} className="inline-flex min-h-10 shrink-0 items-center px-2 text-[11px] text-zinc-300 hover:text-white sm:text-xs">{signedIn ? "My Console" : "Sign in"}</Link>;
+  return <Link href={signedIn ? "/?view=console" : "/?signin=1"} className="inline-flex min-h-10 shrink-0 items-center px-2 text-[11px] font-medium text-zinc-600 hover:text-zinc-950 sm:text-xs">{signedIn ? "My Console" : "Sign in"}</Link>;
 }

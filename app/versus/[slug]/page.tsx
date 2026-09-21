@@ -53,7 +53,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 function ProductLogo({ logo, title }: { logo: string; title: string }) {
   const image = trustedProductImageUrl(logo);
-  if (image) return <img src={image} alt={`${title} logo`} className="h-12 w-12 rounded-lg object-contain" />;
+  if (image) return <img src={image} alt={`${title} logo`} className="h-12 w-12 rounded-lg object-contain bg-white" />;
   const compactSymbol = logo && logo.length <= 8 && !logo.includes(":") && !logo.includes("/") ? logo : "🚀";
   return <span className="text-5xl" aria-hidden="true">{compactSymbol}</span>;
 }
@@ -137,62 +137,62 @@ export default async function VersusPage({ params }: Props) {
   ];
 
   return (
-    <div className="min-h-screen bg-[#0B0B0C] text-white antialiased selection:bg-white selection:text-black">
+    <div className="min-h-screen bg-[#fafafa] text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
+      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-100/40 via-[#fafafa] to-[#fafafa]" />
 
       <PublicSiteHeader actionHref="/arena" actionLabel="Enter Arena" />
 
       <main className="relative mx-auto max-w-6xl px-4 py-10 sm:py-14">
         <nav aria-label="Breadcrumb" className="mb-8 flex flex-wrap items-center gap-2 font-mono text-xs text-zinc-500">
-          <Link href="/" className="transition hover:text-white">Indie Clash</Link>
-          <span aria-hidden="true">/</span>
-          <Link href="/arena" className="transition hover:text-white">Arena matchups</Link>
-          <span aria-hidden="true">/</span>
-          <span aria-current="page" className="text-zinc-300">{productA.title} vs {productB.title}</span>
+          <Link href="/" className="transition hover:text-zinc-900">Indie Clash</Link>
+          <span aria-hidden="true" className="text-zinc-300">/</span>
+          <Link href="/arena" className="transition hover:text-zinc-900">Arena matchups</Link>
+          <span aria-hidden="true" className="text-zinc-300">/</span>
+          <span aria-current="page" className="text-zinc-700 font-medium">{productA.title} vs {productB.title}</span>
         </nav>
 
         <header className="mb-12 text-center">
-          <span className="inline-flex rounded-full border border-[#A78BFA]/20 bg-[#A78BFA]/[0.06] px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[#A78BFA]">
+          <span className="inline-flex rounded-full border border-violet-200/80 bg-violet-50 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-violet-700 font-medium">
             Recorded round {match.roundNumber} matchup
           </span>
-          <h1 className="mx-auto mt-5 max-w-5xl text-3xl font-semibold tracking-tight sm:text-5xl">
-            <Link href={`/products/${productA.id}`} className="transition hover:text-[#ffbe18]">{productA.title}</Link>
-            <span className="mx-3 font-light italic text-zinc-600">vs</span>
-            <Link href={`/products/${productB.id}`} className="transition hover:text-[#ffbe18]">{productB.title}</Link>
+          <h1 className="mx-auto mt-5 max-w-5xl text-3xl font-bold tracking-tight text-zinc-950 sm:text-5xl">
+            <Link href={`/products/${productA.id}`} className="transition hover:text-amber-600">{productA.title}</Link>
+            <span className="mx-3 font-light italic text-zinc-400">vs</span>
+            <Link href={`/products/${productB.id}`} className="transition hover:text-amber-600">{productB.title}</Link>
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-zinc-400 sm:text-base">A real Indie Clash matchup with its recorded result, product details, and vote-by-vote builder feedback.</p>
+          <p className="mx-auto mt-5 max-w-2xl text-sm leading-7 text-zinc-600 sm:text-base">A real Indie Clash matchup with its recorded result, product details, and vote-by-vote builder feedback.</p>
         </header>
 
-        <section aria-label="Match result" className="mb-10 rounded-2xl border border-white/[0.08] bg-[#121215]/85 p-6 sm:p-8">
+        <section aria-label="Match result" className="mb-10 rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xs sm:p-8">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
-              <strong className="block text-3xl">{percentA}%</strong>
+              <strong className="block text-3xl font-bold text-zinc-950">{percentA}%</strong>
               <span className="text-sm text-zinc-500">{productA.title} · {match.votesA} votes</span>
             </div>
-            <span className="rounded-full border border-white/[0.08] px-3 py-1 font-mono text-xs text-zinc-400">{totalVotes} total votes</span>
+            <span className="rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1 font-mono text-xs text-zinc-600">{totalVotes} total votes</span>
             <div className="text-right">
-              <strong className="block text-3xl">{percentB}%</strong>
+              <strong className="block text-3xl font-bold text-zinc-950">{percentB}%</strong>
               <span className="text-sm text-zinc-500">{productB.title} · {match.votesB} votes</span>
             </div>
           </div>
-          <div className="flex h-2 overflow-hidden rounded-full bg-zinc-900" role="img" aria-label={`${productA.title} ${percentA} percent, ${productB.title} ${percentB} percent`}>
-            <div className="bg-white" style={{ width: `${percentA}%` }} />
-            <div className="bg-[#A78BFA]" style={{ width: `${percentB}%` }} />
+          <div className="flex h-2.5 overflow-hidden rounded-full bg-zinc-100 border border-zinc-200/60" role="img" aria-label={`${productA.title} ${percentA} percent, ${productB.title} ${percentB} percent`}>
+            <div className="bg-zinc-900" style={{ width: `${percentA}%` }} />
+            <div className="bg-violet-600" style={{ width: `${percentB}%` }} />
           </div>
           {match.winnerId ? (
-            <p className="mt-4 text-center text-sm text-zinc-400">Winner: <strong className="text-white">{match.winnerId === productA.id ? productA.title : productB.title}</strong></p>
+            <p className="mt-4 text-center text-sm text-zinc-500">Winner: <strong className="text-zinc-950">{match.winnerId === productA.id ? productA.title : productB.title}</strong></p>
           ) : (
             <p className="mt-4 text-center text-sm text-zinc-500">This matchup is still open.</p>
           )}
           {winner && loser ? (
-            <div className="mt-6 grid gap-3 border-t border-white/[0.06] pt-5 sm:grid-cols-[1fr_auto] sm:items-center">
+            <div className="mt-6 grid gap-3 border-t border-zinc-100 pt-5 sm:grid-cols-[1fr_auto] sm:items-center">
               <CopyLink value={shareText} />
               <a
                 href={shareUrl}
                 target="_blank"
                 rel="noopener"
-                className="rounded-md bg-white px-4 py-3 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-black transition hover:bg-zinc-200"
+                className="rounded-md bg-zinc-900 px-4 py-3 text-center font-mono text-[10px] font-bold uppercase tracking-wider text-white transition hover:bg-zinc-800 shadow-xs"
               >
                 Share result on X ↗
               </a>
@@ -204,25 +204,25 @@ export default async function VersusPage({ params }: Props) {
           <h2 id="comparison-heading" className="sr-only">Product comparison</h2>
           <div className="grid gap-6 md:grid-cols-2">
             {productCards.map(({ product, votes, percent, website }) => (
-              <article key={product.id} className="rounded-2xl border border-white/[0.08] bg-[#121215]/85 p-6 sm:p-8">
+              <article key={product.id} className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-xs transition hover:border-zinc-300 sm:p-8">
                 <div className="flex items-center gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-white/[0.07] bg-black/20">
+                  <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-zinc-200/80 bg-white shadow-2xs">
                     <ProductLogo logo={product.logo} title={product.title} />
                   </div>
                   <div>
-                    <h3 className="text-2xl font-semibold"><Link href={`/products/${product.id}`} className="transition hover:text-[#ffbe18]">{product.title}</Link></h3>
+                    <h3 className="text-2xl font-bold text-zinc-950"><Link href={`/products/${product.id}`} className="transition hover:text-amber-600">{product.title}</Link></h3>
                     <span className="font-mono text-xs text-zinc-500">{votes} votes · {percent}%</span>
                   </div>
                 </div>
-                <p className="mt-6 min-h-14 text-sm leading-7 text-zinc-300">{product.tagline}</p>
-                <dl className="mt-6 space-y-3 border-t border-white/[0.06] pt-5 text-sm">
-                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">Maker</dt><dd className="text-right text-zinc-200">{product.makerName}</dd></div>
-                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">Build timeframe</dt><dd className="text-zinc-200">{product.shipTimeframe}</dd></div>
-                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">All-time arena votes</dt><dd className="text-zinc-200">{product.votesCount}</dd></div>
+                <p className="mt-6 min-h-14 text-sm leading-7 text-zinc-600">{product.tagline}</p>
+                <dl className="mt-6 space-y-3 border-t border-zinc-100 pt-5 text-sm">
+                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">Maker</dt><dd className="text-right text-zinc-800 font-medium">{product.makerName}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">Build timeframe</dt><dd className="text-zinc-800 font-medium">{product.shipTimeframe}</dd></div>
+                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">All-time arena votes</dt><dd className="text-zinc-800 font-medium">{product.votesCount}</dd></div>
                 </dl>
                 <div className="mt-6 flex flex-wrap gap-3">
-                  <Link href={`/products/${product.id}`} className="rounded-lg border border-white/[0.1] px-4 py-2 text-xs font-semibold transition hover:bg-white/[0.05]">View profile</Link>
-                  {website ? <a href={website} target="_blank" rel={productLinkRel(product)} className="rounded-lg bg-white px-4 py-2 text-xs font-semibold text-black transition hover:bg-zinc-200">Visit {product.title} official website ↗</a> : null}
+                  <Link href={`/products/${product.id}`} className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-50 shadow-2xs">View profile</Link>
+                  {website ? <a href={website} target="_blank" rel={productLinkRel(product)} className="rounded-lg bg-zinc-900 px-4 py-2 text-xs font-semibold text-white transition hover:bg-zinc-800 shadow-xs">Visit {product.title} official website ↗</a> : null}
                 </div>
               </article>
             ))}
@@ -230,9 +230,9 @@ export default async function VersusPage({ params }: Props) {
         </section>
 
         <section className="mt-12" aria-labelledby="feedback-heading">
-          <div className="mb-6 border-b border-white/[0.08] pb-4">
+          <div className="mb-6 border-b border-zinc-200/80 pb-4">
             <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Vote context</p>
-            <h2 id="feedback-heading" className="mt-1 text-2xl font-semibold">Builder feedback from this matchup</h2>
+            <h2 id="feedback-heading" className="mt-1 text-2xl font-bold text-zinc-950">Builder feedback from this matchup</h2>
           </div>
           {critiques.length ? (
             <div className="grid gap-6 md:grid-cols-2">
@@ -245,12 +245,12 @@ export default async function VersusPage({ params }: Props) {
                 })).filter((item) => item.body.trim());
                 return (
                   <div key={product.id}>
-                    <h3 className="mb-4 font-semibold">Feedback about <Link href={`/products/${product.id}`} className="underline decoration-white/20 underline-offset-4 hover:decoration-white">{product.title}</Link></h3>
+                    <h3 className="mb-4 font-bold text-zinc-950">Feedback about <Link href={`/products/${product.id}`} className="underline decoration-zinc-300 underline-offset-4 hover:decoration-zinc-900">{product.title}</Link></h3>
                     <div className="space-y-4">
                       {productFeedback.map((feedback) => (
-                        <article key={`${product.id}-${feedback.id}`} className="rounded-xl border border-white/[0.07] bg-[#121215]/70 p-5">
-                          <div className="mb-3 flex flex-wrap justify-between gap-2 font-mono text-[11px]"><span className="text-zinc-300">{feedback.voter}</span><span className="text-zinc-500">{feedback.kind}</span></div>
-                          <p className="text-sm leading-7 text-zinc-300">{feedback.body}</p>
+                        <article key={`${product.id}-${feedback.id}`} className="rounded-xl border border-zinc-200/80 bg-white p-5 shadow-2xs">
+                          <div className="mb-3 flex flex-wrap justify-between gap-2 font-mono text-[11px]"><span className="text-zinc-800 font-semibold">{feedback.voter}</span><span className="text-violet-700 font-medium">{feedback.kind}</span></div>
+                          <p className="text-sm leading-7 text-zinc-600">{feedback.body}</p>
                         </article>
                       ))}
                     </div>
@@ -259,20 +259,20 @@ export default async function VersusPage({ params }: Props) {
               })}
             </div>
           ) : (
-            <p className="rounded-xl border border-dashed border-white/[0.08] p-8 text-sm text-zinc-500">No public critique was submitted in this matchup.</p>
+            <p className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/50 p-8 text-sm text-zinc-500">No public critique was submitted in this matchup.</p>
           )}
         </section>
 
-        <section className="mt-14 flex flex-col items-start justify-between gap-6 rounded-2xl border border-[#ffbe18]/20 bg-[#ffbe18]/[0.05] p-8 sm:flex-row sm:items-center">
+        <section className="mt-14 flex flex-col items-start justify-between gap-6 rounded-2xl border border-amber-300/60 bg-amber-50/60 p-8 sm:flex-row sm:items-center shadow-xs">
           <div>
-            <h2 className="text-2xl font-semibold">Put your product in the arena</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Publish a real product profile, face other builders, and collect actionable feedback.</p>
+            <h2 className="text-2xl font-bold text-zinc-950">Put your product in the arena</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Publish a real product profile, face other builders, and collect actionable feedback.</p>
           </div>
-          <Link href="/?submit=1" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-black">Submit a product</Link>
+          <Link href="/?submit=1" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-zinc-950 hover:bg-[#e0a612] shadow-xs">Submit a product</Link>
         </section>
       </main>
 
-      <footer className="relative mt-16 border-t border-white/[0.06] py-10 text-center font-mono text-xs text-zinc-600">
+      <footer className="relative mt-16 border-t border-zinc-200/80 bg-zinc-50/50 py-10 text-center font-mono text-xs text-zinc-500">
         © 2026 Indie Clash. Match results are based on recorded community votes.
       </footer>
     </div>

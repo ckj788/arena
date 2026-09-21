@@ -40,7 +40,7 @@ export const metadata: Metadata = {
 function ProductMark({ product }: { product: Product }) {
   const image = trustedProductImageUrl(product.logo);
   if (image) {
-    return <img src={image} alt={`${product.title} logo`} className="h-10 w-10 rounded-lg object-contain" />;
+    return <img src={image} alt={`${product.title} logo`} className="h-10 w-10 rounded-lg object-contain bg-white" />;
   }
   // Legacy rows may contain an entire base64 image or an arbitrary remote URL.
   // Never render those untrusted/oversized values as visible fallback text.
@@ -85,39 +85,39 @@ export default async function ProductsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0B0B0C] text-white antialiased selection:bg-white selection:text-black">
+    <div className="min-h-screen bg-[#fafafa] text-zinc-900 antialiased selection:bg-zinc-900 selection:text-white">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#17121f] via-[#0B0B0C] to-[#0B0B0C]" />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-violet-100/40 via-[#fafafa] to-[#fafafa]" />
 
       <PublicSiteHeader />
 
       <main className="relative mx-auto max-w-6xl px-4 py-12 sm:py-16">
         <nav aria-label="Breadcrumb" className="mb-8 flex items-center gap-2 font-mono text-xs text-zinc-500">
-          <Link href="/" className="transition hover:text-white">Indie Clash</Link>
+          <Link href="/" className="transition hover:text-zinc-950">Indie Clash</Link>
           <span aria-hidden="true">/</span>
-          <span aria-current="page" className="text-zinc-300">Products</span>
+          <span aria-current="page" className="text-zinc-700 font-semibold">Products</span>
         </nav>
 
         <section className="mb-12 max-w-4xl">
-          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-[#A78BFA]">Indie product directory</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight sm:text-6xl">Discover new indie products</h1>
-          <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-300 sm:text-lg">{directoryDescription}</p>
-          <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-400">
-            <Link href="/underrated" className="rounded-full border border-[#A78BFA]/25 px-3 py-1.5 text-[#A78BFA] hover:text-white">Explore overlooked products →</Link>
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">{products.length} public profiles</span>
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">Followed official-site links</span>
-            <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">Authenticated builder feedback</span>
+          <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-violet-700 font-semibold">Indie product directory</p>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">Discover new indie products</h1>
+          <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg">{directoryDescription}</p>
+          <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-600">
+            <Link href="/underrated" className="rounded-full border border-violet-200/80 bg-violet-50/80 px-3 py-1.5 text-violet-700 font-medium hover:text-violet-900 transition">Explore overlooked products →</Link>
+            <span className="rounded-full border border-zinc-200 bg-white shadow-2xs px-3 py-1.5">{products.length} public profiles</span>
+            <span className="rounded-full border border-zinc-200 bg-white shadow-2xs px-3 py-1.5">Followed official-site links</span>
+            <span className="rounded-full border border-zinc-200 bg-white shadow-2xs px-3 py-1.5">Authenticated builder feedback</span>
           </div>
         </section>
 
         {products.length ? (
           <section aria-labelledby="product-directory-heading">
-            <div className="mb-5 flex items-end justify-between border-b border-white/[0.08] pb-4">
+            <div className="mb-5 flex items-end justify-between border-b border-zinc-200/80 pb-4">
               <div>
-                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500">Latest first</p>
-                <h2 id="product-directory-heading" className="mt-1 text-2xl font-semibold">All product launches</h2>
+                <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Latest first</p>
+                <h2 id="product-directory-heading" className="mt-1 text-2xl font-semibold text-zinc-950">All product launches</h2>
               </div>
-              <span className="font-mono text-xs text-zinc-600">Updated continuously</span>
+              <span className="font-mono text-xs text-zinc-500">Updated continuously</span>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               {products.map((product) => {
@@ -125,28 +125,28 @@ export default async function ProductsPage() {
                 const submittedAt = new Date(product.submittedAt);
                 const hasDate = !Number.isNaN(submittedAt.getTime());
                 return (
-                  <article key={product.id} className="product-card relative flex flex-col rounded-2xl border border-white/[0.07] bg-[#121215]/80 p-5 transition hover:-translate-y-0.5 hover:border-white/[0.15]">
+                  <article key={product.id} className="product-card relative flex flex-col rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md">
                     <div className="flex items-start gap-4">
-                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-white/[0.06] bg-black/25">
+                      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 bg-white shadow-2xs">
                         <ProductMark product={product} />
                       </span>
                       <div className="min-w-0 flex-1">
-                        <h3 className="text-lg font-semibold">
-                          <Link href={`/products/${encodeURIComponent(product.id)}`} className="card-primary-link transition hover:text-[#ffbe18]">{product.title}</Link>
+                        <h3 className="text-lg font-semibold text-zinc-950">
+                          <Link href={`/products/${encodeURIComponent(product.id)}`} className="card-primary-link transition hover:text-violet-700">{product.title}</Link>
                         </h3>
-                        <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-400">{product.tagline}</p>
+                        <p className="mt-1 line-clamp-2 text-sm leading-6 text-zinc-600">{product.tagline}</p>
                       </div>
                     </div>
-                    <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-white/[0.06] pt-4 text-xs text-zinc-500">
+                    <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-zinc-100 pt-4 text-xs text-zinc-500">
                       <span>By {product.makerName}</span>
-                      {categoryLabel(product.category) ? <Link href={`/categories/${product.category}`} className="card-secondary-link text-[#A78BFA] hover:underline">{categoryLabel(product.category)}</Link> : null}
+                      {categoryLabel(product.category) ? <Link href={`/categories/${product.category}`} className="card-secondary-link text-violet-700 font-medium hover:underline">{categoryLabel(product.category)}</Link> : null}
                       {hasDate ? <time dateTime={submittedAt.toISOString()}>{submittedAt.toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}</time> : null}
                       <span>{product.votesCount} votes</span>
                     </div>
                     <div className="mt-4 flex flex-wrap gap-3 text-xs font-semibold">
-                      <span aria-hidden="true" className="inline-flex min-h-11 items-center text-zinc-300">View product →</span>
+                      <span aria-hidden="true" className="inline-flex min-h-11 items-center text-zinc-700 font-medium">View product →</span>
                       {website ? (
-                        <a href={website} target="_blank" rel={productLinkRel(product)} className="card-secondary-link rounded-lg px-3 py-2 text-[#ffbe18] transition hover:bg-[#ffbe18]/10">
+                        <a href={website} target="_blank" rel={productLinkRel(product)} className="card-secondary-link rounded-lg px-3 py-2 text-violet-700 transition hover:bg-violet-50">
                           Visit {product.title} official website ↗
                         </a>
                       ) : null}
@@ -157,29 +157,29 @@ export default async function ProductsPage() {
             </div>
           </section>
         ) : (
-          <section className="rounded-2xl border border-dashed border-white/[0.1] p-10 text-center text-zinc-500">
+          <section className="rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-zinc-500 shadow-2xs">
             Product profiles are temporarily unavailable. Please check back shortly.
           </section>
         )}
 
-        <section className="mt-16 grid gap-5 border-t border-white/[0.08] pt-10 md:grid-cols-3">
+        <section className="mt-16 grid gap-5 border-t border-zinc-200/80 pt-10 md:grid-cols-3">
           {[
             ["Permanent product profiles", "Every accepted launch receives a crawlable profile with its maker, official website, launch details, and arena history."],
             ["Useful community signals", "Matchups and critique-locked voting create original feedback instead of a page containing only an outbound link."],
             ["Connected discovery", "Products link to matchups and related profiles so visitors and search crawlers can keep exploring the directory."],
           ].map(([title, body]) => (
-            <article key={title} className="rounded-xl border border-white/[0.07] bg-[#121215]/60 p-5">
-              <h2 className="font-semibold">{title}</h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-500">{body}</p>
+            <article key={title} className="rounded-2xl border border-zinc-200/80 bg-white shadow-2xs p-5">
+              <h2 className="font-semibold text-zinc-950">{title}</h2>
+              <p className="mt-2 text-sm leading-6 text-zinc-600">{body}</p>
             </article>
           ))}
         </section>
       </main>
 
-      <footer className="relative border-t border-white/[0.06] py-10 text-center text-xs text-zinc-600">
+      <footer className="relative border-t border-zinc-200/80 bg-zinc-50/70 py-10 text-center text-xs text-zinc-500">
         <div className="mb-3 flex justify-center gap-5">
-          <Link href="/privacy" className="hover:text-white">Privacy</Link>
-          <Link href="/terms" className="hover:text-white">Terms</Link>
+          <Link href="/privacy" className="hover:text-zinc-950">Privacy</Link>
+          <Link href="/terms" className="hover:text-zinc-950">Terms</Link>
         </div>
         © 2026 Indie Clash. Discover, compare, and support independent products.
       </footer>

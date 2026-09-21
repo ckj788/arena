@@ -107,16 +107,16 @@ export default function MakerConsole({
   };
 
   return (
-    <div ref={consoleRef} className="maker-console w-full max-w-6xl mx-auto px-4 py-10 space-y-6 min-h-[70vh] text-[#E4E4E7]">
+    <div ref={consoleRef} className="maker-console w-full max-w-6xl mx-auto px-4 py-10 space-y-6 min-h-[70vh] text-zinc-900">
       {/* Console title */}
-      <div data-console-section className="border-b border-white/[0.06] pb-6">
+      <div data-console-section className="border-b border-zinc-200/80 pb-6">
         <div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
+          <h1 className="text-3xl font-extrabold tracking-tight text-zinc-950 flex items-center gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#ffbe18]"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
             YOUR PRODUCTS
           </h1>
-          <p className="text-zinc-400 text-[10px] mt-1.5 font-mono uppercase tracking-wider">
-            {ownershipStatus === "reauth" ? "Sign in to view your products" : <>Connected account: <span className="text-white font-bold">{userTwitter || "Indie Mode"}</span></>}
+          <p className="text-zinc-500 text-[10px] mt-1.5 font-mono uppercase tracking-wider">
+            {ownershipStatus === "reauth" ? "Sign in to view your products" : <>Connected account: <span className="text-zinc-950 font-bold">{userTwitter || "Indie Mode"}</span></>}
           </p>
           <ModerationLink userId={userSubId} />
         </div>
@@ -127,24 +127,24 @@ export default function MakerConsole({
           ["Products", ownershipStatus === "ready" ? totalMyProducts : "—"],
           ["Discovery views", ownershipStatus === "ready" && trackedProducts.length ? recordedViews.toLocaleString() : "—"],
           ["Votes", ownershipStatus === "ready" ? totalVotesCount : "—"],
-        ].map(([label, value]) => <div key={label} className="glass-panel console-stat p-3 sm:p-5" title={label === "Discovery views" ? "Card visible for 4 seconds at 70% visibility; not unique visitors." : undefined}>
-          <span className="block text-xs text-zinc-400">{label}</span>
-          <strong className="mt-2 block text-3xl font-semibold text-white">{value}</strong>
+        ].map(([label, value]) => <div key={label} className="glass-panel console-stat p-3 sm:p-5 bg-white border border-zinc-200/80 shadow-xs" title={label === "Discovery views" ? "Card visible for 4 seconds at 70% visibility; not unique visitors." : undefined}>
+          <span className="block text-xs font-medium text-zinc-500">{label}</span>
+          <strong className="mt-2 block text-3xl font-semibold text-zinc-950">{value}</strong>
         </div>)}
       </div>
 
       {/* Main List */}
-      <div data-console-section className="glass-panel p-5 md:p-7 space-y-6" aria-busy={ownershipStatus === "loading"}>
-        <div className="border-b border-white/[0.05] pb-4 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+      <div data-console-section className="glass-panel p-5 md:p-7 space-y-6 bg-white border border-zinc-200/80 shadow-xs" aria-busy={ownershipStatus === "loading"}>
+        <div className="border-b border-zinc-100 pb-4 flex flex-col sm:flex-row justify-between sm:items-center gap-4">
           <div>
-            <h2 className="text-lg font-bold text-white uppercase tracking-tight font-sans">
+            <h2 className="text-lg font-bold text-zinc-950 uppercase tracking-tight font-sans">
               Product profiles
             </h2>
           </div>
           {onSubmitProductClick && ownershipStatus !== "reauth" && (
             <button
               onClick={onSubmitProductClick}
-              className="px-4 py-2.5 bg-[#ffbe18] hover:bg-[#e0a612] text-black font-semibold text-xs rounded transition duration-150 cursor-pointer flex items-center gap-1.5 font-mono uppercase tracking-wider"
+              className="px-4 py-2.5 bg-[#ffbe18] hover:bg-[#e0a612] text-zinc-950 font-semibold text-xs rounded transition duration-150 cursor-pointer flex items-center gap-1.5 font-mono uppercase tracking-wider shadow-xs"
             >
               ＋ Submit New Product
             </button>
@@ -153,40 +153,40 @@ export default function MakerConsole({
 
         <div className="space-y-4">
           {ownershipStatus === "loading" ? (
-            <div role="status" className="space-y-3 py-6"><span className="text-sm text-zinc-400">Loading your products…</span><div className="h-24 rounded-xl bg-white/[0.04] animate-pulse" /></div>
+            <div role="status" className="space-y-3 py-6"><span className="text-sm text-zinc-500">Loading your products…</span><div className="h-24 rounded-xl bg-zinc-100 animate-pulse" /></div>
           ) : ownershipStatus === "reauth" ? (
-            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-300">Your sign-in could not be verified. This does not delete your products.</p><button type="button" onClick={onSignIn} className="mt-4 rounded-lg bg-[#ffbe18] px-4 py-2.5 text-sm font-semibold text-black">Sign in again</button></div>
+            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-700">Your sign-in could not be verified. This does not delete your products.</p><button type="button" onClick={onSignIn} className="mt-4 rounded-lg bg-[#ffbe18] px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-xs">Sign in again</button></div>
           ) : ownershipStatus === "error" ? (
-            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-300">Your products couldn&apos;t load.</p>{ownershipError && <p className="mt-2 text-xs text-zinc-400">{ownershipError}</p>}<button type="button" onClick={onRetryOwnership} className="mt-3 rounded-lg border border-white/15 px-4 py-2 text-sm text-white">Retry</button></div>
+            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-700">Your products couldn&apos;t load.</p>{ownershipError && <p className="mt-2 text-xs text-zinc-500">{ownershipError}</p>}<button type="button" onClick={onRetryOwnership} className="mt-3 rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-800 bg-white hover:bg-zinc-50 shadow-2xs">Retry</button></div>
           ) : myProducts.length === 0 ? (
-            <div className="py-12 text-center text-sm text-zinc-400">
+            <div className="py-12 text-center text-sm text-zinc-500">
               No products linked to this account.
             </div>
           ) : (
-            <div className="divide-y divide-white/[0.04] text-left">
+            <div className="divide-y divide-zinc-100 text-left">
               {myProducts.map(p => {
                 const pushed = isPushed(p);
                 return (
                   <div key={p.id} className="py-6 flex flex-col gap-4 first:pt-0 last:pb-0">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 rounded-md bg-[#141417] border border-white/[0.06] flex items-center justify-center text-3xl shrink-0">
+                      <div className="w-14 h-14 rounded-lg bg-zinc-50 border border-zinc-200/80 shadow-2xs flex items-center justify-center text-3xl shrink-0">
                         {renderLogo(p.logo, "w-10 h-10")}
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-bold text-white text-base leading-tight">
+                          <span className="font-bold text-zinc-950 text-base leading-tight">
                             {p.title}
                           </span>
                           {hasActiveDiscoveryBoost(p) ? (
-                            <span className="rounded border border-[#A78BFA]/20 bg-[#A78BFA]/[0.06] px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider text-[#A78BFA]">
+                            <span className="rounded border border-violet-200/80 bg-violet-50 px-1.5 py-0.5 font-mono text-[8px] font-bold uppercase tracking-wider text-violet-700">
                               Peer contributor
                             </span>
                           ) : null}
                         </div>
-                        <p className="text-sm text-zinc-400 mt-1 leading-relaxed">{p.tagline}</p>
-                        {p.moderationStatus === "restricted" && <p className="mt-2 text-xs text-red-300">Restricted from discovery. Edit the profile and contact support to request a review.</p>}
+                        <p className="text-sm text-zinc-600 mt-1 leading-relaxed">{p.tagline}</p>
+                        {p.moderationStatus === "restricted" && <p className="mt-2 text-xs text-red-600">Restricted from discovery. Edit the profile and contact support to request a review.</p>}
                         {p.moderationStatus === "unreviewed" && <p className="mt-2 text-xs text-zinc-500">Live · community-submitted link</p>}
-                        <p className="mt-2 text-xs text-zinc-400">Recorded discovery views: <strong className="text-zinc-200">{typeof p.qualifiedImpressions === "number" ? p.qualifiedImpressions.toLocaleString() : "—"}</strong> · Community votes: {p.votesCount || 0}</p>
+                        <p className="mt-2 text-xs text-zinc-500">Recorded discovery views: <strong className="text-zinc-800">{typeof p.qualifiedImpressions === "number" ? p.qualifiedImpressions.toLocaleString() : "—"}</strong> · Community votes: {p.votesCount || 0}</p>
                       </div>
                     </div>
 
@@ -194,14 +194,14 @@ export default function MakerConsole({
                       {onEditProduct && (
                         <button
                           onClick={() => onEditProduct(p)}
-                          className="py-1.5 px-3 border border-white/[0.08] hover:bg-white/[0.04] hover:border-white/[0.15] text-zinc-350 hover:text-white font-semibold text-[10px] rounded transition duration-150 cursor-pointer font-mono flex items-center gap-1.5"
+                          className="py-1.5 px-3 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 font-semibold text-[10px] rounded shadow-2xs transition duration-150 cursor-pointer font-mono flex items-center gap-1.5"
                         >
                           ✎ Edit Profile
                         </button>
                       )}
                       {p.moderationStatus !== "restricted" && <Link
                         href={`/products/${encodeURIComponent(p.id)}`}
-                        className="py-1.5 px-3 border border-white/[0.08] hover:bg-white/[0.04] hover:border-white/[0.15] text-zinc-350 hover:text-white font-semibold text-[10px] rounded transition duration-150 cursor-pointer font-mono flex items-center gap-1.5"
+                        className="py-1.5 px-3 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 font-semibold text-[10px] rounded shadow-2xs transition duration-150 cursor-pointer font-mono flex items-center gap-1.5"
                       >
                         View profile →
                       </Link>}
@@ -209,45 +209,45 @@ export default function MakerConsole({
                       {onExportCsv && (p.queueStatus === "active" || p.queueStatus === "completed") && (
                         <button
                           onClick={() => onExportCsv(p)}
-                          className="py-1.5 px-3 border border-white/[0.08] hover:bg-white/[0.04] hover:border-white/[0.15] text-zinc-350 hover:text-white font-semibold text-[10px] rounded transition duration-150 cursor-pointer font-mono flex items-center gap-1"
+                          className="py-1.5 px-3 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 font-semibold text-[10px] rounded shadow-2xs transition duration-150 cursor-pointer font-mono flex items-center gap-1"
                         >
                           📥 Export CSV
                         </button>
                       )}
-                      {p.moderationStatus === "restricted" ? <span className="text-xs text-red-300">Restricted</span> : p.queueStatus === "active" ? (
-                        <span className="px-3 py-1 border border-amber-500/30 bg-amber-500/10 text-amber-400 font-mono text-[10px] uppercase tracking-wider rounded font-bold animate-pulse">
+                      {p.moderationStatus === "restricted" ? <span className="text-xs text-red-600">Restricted</span> : p.queueStatus === "active" ? (
+                        <span className="px-3 py-1 border border-amber-500/30 bg-amber-50 text-amber-700 font-mono text-[10px] uppercase tracking-wider rounded font-bold">
                           Live Duel ⚔️
                         </span>
                       ) : p.queueStatus === "completed" ? (
-                        <span className="px-3 py-1 border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 font-mono text-[10px] uppercase tracking-wider rounded font-bold">
+                        <span className="px-3 py-1 border border-emerald-500/30 bg-emerald-50 text-emerald-700 font-mono text-[10px] uppercase tracking-wider rounded font-bold">
                           Completed 🏆
                         </span>
                       ) : !pushed ? (
                         <div className="flex items-center gap-3">
-                          <span className="px-3 py-1 border border-zinc-700 bg-zinc-800 text-zinc-400 font-mono text-[10px] uppercase tracking-wider rounded">
+                          <span className="px-3 py-1 border border-zinc-200 bg-zinc-100 text-zinc-600 font-mono text-[10px] uppercase tracking-wider rounded">
                             Showcase 👁️
                           </span>
                           <button
                             onClick={() => { setQueueError(""); setSelectedProductForPush(p); }}
-                            className="py-1.5 px-4 bg-white hover:bg-zinc-200 text-black font-semibold text-[11px] rounded transition duration-150 cursor-pointer"
+                            className="py-1.5 px-4 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold text-[11px] rounded shadow-xs transition duration-150 cursor-pointer"
                           >
                             Join Arena
                           </button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2">
-                          <span className="px-3 py-1 border border-emerald-500/20 bg-emerald-500/5 text-emerald-400 font-mono text-[10px] uppercase tracking-wider rounded flex items-center gap-1 font-bold">
+                          <span className="px-3 py-1 border border-emerald-500/30 bg-emerald-50 text-emerald-700 font-mono text-[10px] uppercase tracking-wider rounded flex items-center gap-1 font-bold">
                             Queued ⏳
                           </span>
                           {(() => {
                             const pos = getQueuePosition(p.id);
                             if (pos <= 0) return null;
                             return arenaIsLive ? (
-                              <span className="px-2 py-1 border border-[#A78BFA]/15 bg-[#A78BFA]/[0.04] text-[#A78BFA] font-mono text-[9px] uppercase tracking-wider rounded">
+                              <span className="px-2 py-1 border border-violet-200 bg-violet-50 text-violet-700 font-mono text-[9px] uppercase tracking-wider rounded">
                                 Next in line · Priority #{pos}
                               </span>
                             ) : (
-                              <span className="px-2 py-1 border border-white/[0.06] bg-white/[0.02] text-zinc-400 font-mono text-[9px] uppercase tracking-wider rounded">
+                              <span className="px-2 py-1 border border-zinc-200 bg-zinc-100 text-zinc-600 font-mono text-[9px] uppercase tracking-wider rounded">
                                 #{pos} in line
                               </span>
                             );
@@ -263,53 +263,53 @@ export default function MakerConsole({
         </div>
       </div>
 
-      {ownershipStatus === "ready" && myProducts.length > 0 && <details data-console-section className="glass-panel p-4">
-        <summary className="cursor-pointer py-2 text-sm text-zinc-300">Arena overview · {liveDuelsCount} active · {queuedCount} queued · {completedCount} completed</summary>
+      {ownershipStatus === "ready" && myProducts.length > 0 && <details data-console-section className="glass-panel p-4 bg-white border border-zinc-200/80 shadow-xs">
+        <summary className="cursor-pointer py-2 text-sm font-medium text-zinc-700">Arena overview · {liveDuelsCount} active · {queuedCount} queued · {completedCount} completed</summary>
         <div className="mt-4">
       {/* Arena Status Bar */}
-      <div className="bg-[#0b0b0d] border border-white/[0.06] rounded-md p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+      <div className="bg-zinc-50 border border-zinc-200/80 rounded-lg p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           {arenaIsLive ? (
             <>
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse inline-block" />
-              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
-                Arena is <span className="text-amber-400 font-bold">LIVE</span>
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block" />
+              <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">
+                Arena is <span className="text-amber-600 font-bold">LIVE</span>
               </span>
             </>
           ) : (
             <>
-              <span className="w-2 h-2 rounded-full bg-zinc-600 inline-block" />
-              <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider">
-                Arena is <span className="text-zinc-300 font-bold">IDLE</span>
+              <span className="w-2 h-2 rounded-full bg-zinc-400 inline-block" />
+              <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider">
+                Arena is <span className="text-zinc-600 font-bold">IDLE</span>
               </span>
             </>
           )}
         </div>
         <div className="flex flex-wrap items-center gap-4">
           <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-            Queue: <span className="text-white font-bold">{globalQueueCount}</span>
+            Queue: <span className="text-zinc-950 font-bold">{globalQueueCount}</span>
             {!arenaIsLive && dailyRosterSize ? (
-              <> · Daily auto-run: <span className="text-[#A78BFA] font-bold">{dailyRosterSize}</span> <span className="text-zinc-300 font-bold"><DailyArenaRunCountdown /></span></>
+              <> · Daily auto-run: <span className="text-violet-700 font-bold">{dailyRosterSize}</span> <span className="text-zinc-700 font-bold"><DailyArenaRunCountdown /></span></>
             ) : (
-              <> · <span className="text-zinc-300">16 locks automatically</span></>
+              <> · <span className="text-zinc-600">16 locks automatically</span></>
             )}
           </span>
           {/* Mini progress bar */}
-          <div className="w-24 h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
+          <div className="w-24 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
             <div
               className="h-full rounded-full transition-all duration-500 ease-out"
               style={{
                 width: `${Math.min((globalQueueCount / queueGoal) * 100, 100)}%`,
-                backgroundColor: globalQueueCount >= queueGoal ? '#34d399' : '#a78bfa'
+                backgroundColor: globalQueueCount >= queueGoal ? '#10b981' : '#7c3aed'
               }}
             />
           </div>
           {globalQueueCount >= 16 && !arenaIsLive ? (
-            <span className="text-[9px] font-mono text-emerald-400 font-bold uppercase tracking-wider animate-pulse">
+            <span className="text-[9px] font-mono text-emerald-600 font-bold uppercase tracking-wider animate-pulse">
               Auto-lock ready
             </span>
           ) : !arenaIsLive && dailyRosterSize ? (
-            <span className="text-[9px] font-mono text-[#A78BFA] font-bold uppercase tracking-wider">
+            <span className="text-[9px] font-mono text-violet-700 font-bold uppercase tracking-wider">
               Daily run secured
             </span>
           ) : null}
@@ -321,27 +321,27 @@ export default function MakerConsole({
       </details>}
       {/* Enter the Arena Benefit Confirmation Modal */}
       {selectedProductForPush && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-fade-in">
-          <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="join-arena-title" tabIndex={-1} className="glass-panel max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain p-6 max-w-md w-full space-y-5 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/30 backdrop-blur-xs p-4 animate-fade-in">
+          <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="join-arena-title" tabIndex={-1} className="glass-panel max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain p-6 max-w-md w-full space-y-5 relative bg-white border border-zinc-200/90 shadow-2xl rounded-2xl">
             {/* Header */}
-            <div className="border-b border-white/[0.06] pb-3 text-center">
-              <h2 id="join-arena-title" className="text-sm font-black tracking-wider text-white uppercase flex items-center justify-center gap-2 font-mono">
+            <div className="border-b border-zinc-100 pb-3 text-center">
+              <h2 id="join-arena-title" className="text-sm font-black tracking-wider text-zinc-950 uppercase flex items-center justify-center gap-2 font-mono">
                 JOIN THE ARENA
               </h2>
             </div>
 
-            <div className="space-y-3 text-sm leading-6 text-zinc-300">
-              <p>Enter <strong className="text-white">{selectedProductForPush.title}</strong> in the next available matchup.</p>
-              <p className="text-xs text-zinc-400">Matches start automatically. Once matched, your product stays in the Arena until the run ends.</p>
+            <div className="space-y-3 text-sm leading-6 text-zinc-700">
+              <p>Enter <strong className="text-zinc-950">{selectedProductForPush.title}</strong> in the next available matchup.</p>
+              <p className="text-xs text-zinc-500">Matches start automatically. Once matched, your product stays in the Arena until the run ends.</p>
             </div>
 
             {/* Actions */}
-            {queueError && <p role="alert" className="text-sm text-red-300">{queueError}</p>}
+            {queueError && <p role="alert" className="text-sm text-red-600">{queueError}</p>}
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 disabled={isEnqueuing}
                 onClick={() => setSelectedProductForPush(null)}
-                className="px-4 py-2 bg-zinc-900 border border-white/[0.08] hover:bg-white/[0.04] text-zinc-350 hover:text-white font-semibold rounded text-[10px] font-mono uppercase tracking-wider cursor-pointer transition"
+                className="px-4 py-2 bg-white border border-zinc-200 hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 font-semibold rounded text-[10px] font-mono uppercase tracking-wider cursor-pointer shadow-2xs transition"
               >
                 Cancel
               </button>
@@ -360,7 +360,7 @@ export default function MakerConsole({
                     setQueueError(error instanceof Error ? error.message : "Unable to join right now. Please try again.");
                   } finally { enqueuePending.current = false; setIsEnqueuing(false); }
                 }}
-                className="px-5 py-2 bg-[#ffbe18] hover:bg-[#ffc634] text-black font-extrabold rounded text-[10px] font-mono uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-lg shadow-amber-500/10 transition"
+                className="px-5 py-2 bg-[#ffbe18] hover:bg-[#ffc634] text-zinc-950 font-extrabold rounded text-[10px] font-mono uppercase tracking-wider flex items-center gap-1.5 cursor-pointer shadow-xs transition"
               >
                 {isEnqueuing ? "Joining…" : "Join Arena"}
               </button>
