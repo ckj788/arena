@@ -2271,7 +2271,7 @@ export default function ArenaClient({
       <div>
           {/* Hero Banner */}
           {page === "discover" && (
-          <section className="py-14 sm:py-16 relative overflow-hidden">
+          <section className="pt-14 pb-11 sm:pt-16 sm:pb-13 relative overflow-hidden">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
               
               {/* Micro monospace badge on top */}
@@ -2306,7 +2306,7 @@ export default function ArenaClient({
 
         {page === "discover" && <>
         {/* LATEST RELEASES (Product Discovery Feed Style) */}
-        <section id="launches-section" className="py-12 md:py-16">
+        <section id="launches-section" className="pt-8 pb-12 md:pt-10 md:pb-16">
           
           <div data-home-reveal="launches-heading" className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="text-left space-y-1.5">
@@ -2340,7 +2340,7 @@ export default function ArenaClient({
             tabIndex={0}
             aria-label="Latest products. Focus to pause scrolling."
             onPointerDown={(event) => event.currentTarget.focus({ preventScroll: true })}
-            className="release-feed border border-zinc-200/80 bg-white shadow-xs rounded-2xl overflow-hidden h-[460px] sm:h-[540px] relative"
+            className="release-feed border border-zinc-300/80 bg-white shadow-xs rounded-2xl overflow-hidden h-[460px] sm:h-[540px] relative"
             style={{
               maskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
               WebkitMaskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
@@ -2373,7 +2373,7 @@ export default function ArenaClient({
                       data-feed-duplicate={index >= showcaseProducts.length || undefined}
                       aria-hidden={index >= showcaseProducts.length || undefined}
                       inert={index >= showcaseProducts.length || undefined}
-                      className="group px-4 sm:px-6 py-4 flex items-center justify-between gap-4 hover:bg-zinc-50/80 transition-colors duration-150 border-b border-zinc-100 last:border-b-0 min-h-[76px] box-border"
+                      className="group px-4 sm:px-6 py-4 flex items-center justify-between gap-4 hover:bg-zinc-50/80 transition-colors duration-150 border-b border-zinc-200/70 last:border-b-0 min-h-[76px] box-border"
                     >
                       {/* Left side: Squircle badge + text info */}
                       <div className="flex items-center gap-4 min-w-0 flex-1">
