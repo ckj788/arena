@@ -77,17 +77,30 @@ const loadPublicProducts = unstable_cache(async () => {
       if (response.error) {
         const transient = /fetch failed|timeout|aborted|network/i.test(response.error.message);
         if (attempt === 0 && transient) continue;
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[INDIE CLASH] Supabase unavailable in dev, falling back to seed products:", response.error.message);
+          return SEED_PRODUCTS;
+        }
         throw new Error(`Public products are temporarily unavailable: ${response.error.message}`);
       }
       data = response.data as unknown as DatabaseRow[] | null;
       break;
     } catch (error) {
-      if (attempt === 1 || !/fetch failed|timeout|aborted|network/i.test(String(error))) throw error;
+      if (attempt === 1 || !/fetch failed|timeout|aborted|network/i.test(String(error))) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("[INDIE CLASH] Supabase network exception in dev, falling back to seed products:", error);
+          return SEED_PRODUCTS;
+        }
+        throw error;
+      }
     }
   }
   // Do not persist an offline fallback as a successful empty catalogue. An
   // unsuccessful revalidation must preserve the last successful cached value.
-  if (!data) throw new Error("Public products are temporarily unavailable.");
+  if (!data) {
+    if (process.env.NODE_ENV !== "production") return SEED_PRODUCTS;
+    throw new Error("Public products are temporarily unavailable.");
+  }
   return data.map(fromDbProduct);
 }, ["arena-public-products-v2"], {
   revalidate: 60,

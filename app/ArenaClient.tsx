@@ -1725,6 +1725,96 @@ export default function ArenaClient({
     return <span className="inline-block shrink-0">{compactSymbol}</span>;
   }, []);
 
+  const renderDiscoveryFeedBadge = useCallback((item: Product) => {
+    const trustedImage = trustedProductImageUrl(item.logo);
+    const localPreview = !supabase && item.logo?.startsWith("data:image") ? item.logo : undefined;
+    const isEmoji = item.logo && item.logo.length <= 4 && !item.logo.includes(":") && !item.logo.includes("/");
+
+    // Curated high-aesthetic squircle badge themes matching discovery feed mockup
+    const hash = (item.title || item.id).split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const badgeThemes = [
+      "bg-violet-100/80 text-violet-700 border-violet-200/80",
+      "bg-emerald-100/80 text-emerald-800 border-emerald-200/80",
+      "bg-zinc-900 text-white border-zinc-950 shadow-2xs",
+      "bg-amber-100/80 text-amber-800 border-amber-200/80",
+      "bg-blue-100/80 text-blue-700 border-blue-200/80",
+      "bg-rose-100/80 text-rose-700 border-rose-200/80",
+    ];
+    const themeClass = badgeThemes[hash % badgeThemes.length];
+
+    let monogram = "";
+    if (item.title) {
+      const parts = item.title.trim().split(/\s+/);
+      if (parts.length >= 2) {
+        monogram = (parts[0][0] + parts[1][0]).toUpperCase();
+      } else {
+        monogram = item.title.slice(0, 2).toUpperCase();
+      }
+    } else {
+      monogram = "IC";
+    }
+
+    if (trustedImage || localPreview) {
+      return (
+        <span className={`w-12 h-12 relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-xl border border-zinc-200/80 shadow-2xs ${themeClass}`}>
+          <span aria-hidden="true" className="font-bold text-sm tracking-tight select-none">
+            {monogram}
+          </span>
+          <img
+            key={trustedImage || localPreview}
+            src={trustedImage || localPreview}
+            alt={item.title}
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+            className="absolute inset-0 h-full w-full bg-white object-contain p-1 rounded-xl"
+            onError={(event) => {
+              event.currentTarget.style.display = "none";
+            }}
+          />
+        </span>
+      );
+    }
+
+    if (isEmoji && /\p{Emoji}/u.test(item.logo)) {
+      return (
+        <span className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 text-2xl bg-zinc-50 border border-zinc-200/80 shadow-2xs select-none">
+          {item.logo}
+        </span>
+      );
+    }
+
+    return (
+      <span className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 font-bold border text-sm select-none shadow-2xs tracking-tight ${themeClass}`}>
+        {monogram}
+      </span>
+    );
+  }, [supabase]);
+
+  const getProductCategoryTag = useCallback((item: Product) => {
+    if (item.category) {
+      const catMap: Record<string, string> = {
+        "ai-tools": "AI",
+        "developer-tools": "DEV TOOL",
+        "design-tools": "DESIGN",
+        "productivity": "PRODUCTIVITY",
+        "marketing": "MARKETING",
+        "video-tools": "VIDEO",
+        "founder-tools": "FOUNDER",
+        "saas": "SAAS",
+      };
+      if (catMap[item.category]) return catMap[item.category];
+    }
+    const text = `${item.title} ${item.tagline}`.toLowerCase();
+    if (text.includes("ai") || text.includes("gpt") || text.includes("llm") || text.includes("model")) return "AI";
+    if (text.includes("design") || text.includes("ui") || text.includes("ux") || text.includes("figma")) return "DESIGN";
+    if (text.includes("dev") || text.includes("code") || text.includes("api") || text.includes("infra")) return "DEV TOOL";
+    if (text.includes("image") || text.includes("photo") || text.includes("psd")) return "IMAGE";
+    if (text.includes("life") || text.includes("habit") || text.includes("health")) return "LIFESTYLE";
+    if (text.includes("saas") || text.includes("cloud")) return "SAAS";
+    return "DISCOVERY";
+  }, []);
+
   const isProductOwner = (p: Product, _userTwitter: string, userSubId?: string) => {
     if (supabase) return Boolean(userLoggedIn && userSubId && ownership.userId === userSubId && ownership.ids.includes(p.id));
     // Local-only submissions are tracked in the browser; cloud ownership always uses auth.uid().
@@ -2215,23 +2305,33 @@ export default function ArenaClient({
 
 
         {page === "discover" && <>
-        {/* LATEST RELEASES (System Audit Logs Terminal Style Grid Layout) */}
+        {/* LATEST RELEASES (Product Discovery Feed Style) */}
         <section id="launches-section" className="py-12 md:py-16">
           
-          <div data-home-reveal="launches-heading" className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="text-left space-y-2">
+          <div data-home-reveal="launches-heading" className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="text-left space-y-1.5">
               <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-zinc-950 border-l-2 border-zinc-900 pl-4 font-sans">
                   LATEST LAUNCHES
                 </h2>
-                <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full animate-pulse flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
+                <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  Newest 50: Rolling
+                  Newest 50 · Rolling
                 </span>
               </div>
-              <p className="text-sm text-zinc-500 mt-2">
+              <p className="text-sm text-zinc-500 pl-4">
                 Freshly launched by indie makers.
               </p>
+            </div>
+            <div className="flex items-center sm:self-center pl-4 sm:pl-0">
+              <Link
+                href="/products"
+                className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-zinc-600 hover:text-zinc-950 transition group"
+                onClick={() => synthClick(280, "sine", 0.05)}
+              >
+                Browse all products
+                <span className="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
+              </Link>
             </div>
           </div>
           {/* Motion stops on hover or keyboard focus without an extra control. */}
@@ -2240,7 +2340,7 @@ export default function ArenaClient({
             tabIndex={0}
             aria-label="Latest products. Focus to pause scrolling."
             onPointerDown={(event) => event.currentTarget.focus({ preventScroll: true })}
-            className="release-feed border border-zinc-200/90 bg-white shadow-xs rounded-xl overflow-hidden h-[440px] sm:h-[520px] relative"
+            className="release-feed border border-zinc-200/80 bg-white shadow-xs rounded-2xl overflow-hidden h-[460px] sm:h-[540px] relative"
             style={{
               maskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
               WebkitMaskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
@@ -2264,90 +2364,105 @@ export default function ArenaClient({
                 {/* Double the list to make seamless looping possible */}
                 {[...showcaseProducts, ...showcaseProducts].map((item, index) => {
                   const website = publicHttpUrl(item.url);
+                  const isQueued = item.arenaEnqueued ?? (!item.makerAvatar || !item.makerAvatar.includes("pushed=false"));
+                  const makerHandle = item.makerTwitter ? (item.makerTwitter.startsWith("@") ? item.makerTwitter : `@${item.makerTwitter}`) : null;
+                  const categoryTag = getProductCategoryTag(item);
                   return (
                     <div 
                       key={`${item.id}-dup-${index}`} 
                       data-feed-duplicate={index >= showcaseProducts.length || undefined}
                       aria-hidden={index >= showcaseProducts.length || undefined}
                       inert={index >= showcaseProducts.length || undefined}
-                      className="px-4 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-zinc-50/90 transition duration-150 border-b border-zinc-100 h-auto sm:min-h-[80px] box-border"
+                      className="group px-4 sm:px-6 py-4 flex items-center justify-between gap-4 hover:bg-zinc-50/80 transition-colors duration-150 border-b border-zinc-100 last:border-b-0 min-h-[76px] box-border"
                     >
-                      {/* Left segment */}
-                      <div className="flex items-center gap-3 shrink-0">
-                        {!(item.arenaEnqueued ?? (!item.makerAvatar || !item.makerAvatar.includes("pushed=false"))) ? (
-                          <span className="text-[10px] font-mono text-zinc-600 bg-zinc-100 px-2 py-0.5 rounded border border-zinc-200 uppercase tracking-wider">
-                            showcase
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-mono text-violet-700 bg-violet-50 px-2 py-0.5 rounded border border-violet-200 uppercase tracking-wider">
-                            queued
-                          </span>
-                        )}
-                        <span className="w-6 h-6 flex items-center justify-center shrink-0 text-base">
-                          {renderLogo(item.logo, "w-6 h-6")}
-                        </span>
-                      </div>
+                      {/* Left side: Squircle badge + text info */}
+                      <div className="flex items-center gap-4 min-w-0 flex-1">
+                        <Link 
+                          href={`/products/${encodeURIComponent(item.id)}`}
+                          className="shrink-0 transition-transform duration-150 group-hover:scale-[1.03]"
+                          onClick={() => synthClick(320, "sine", 0.04)}
+                        >
+                          {renderDiscoveryFeedBadge(item)}
+                        </Link>
 
-                      {/* Main Product Tagline truncate flex list */}
-                      <div className="flex-1 min-w-0 text-left">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Link
-                            href={`/products/${encodeURIComponent(item.id)}`}
-                            className="font-bold text-zinc-950 text-sm hover:underline hover:text-amber-600 transition relative z-10 cursor-pointer"
-                          >
-                            {item.title}
-                          </Link>
-                          <span className="text-[10px] font-mono text-zinc-500">
-                            by{" "}
-                            <a 
-                              href={`https://x.com/${item.makerTwitter ? item.makerTwitter.replace(/^@/, "") : ""}`}
-                              target="_blank"
-                              rel="ugc noopener noreferrer"
-                              className="hover:underline hover:text-zinc-950 transition duration-150 relative z-10 cursor-pointer"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
+                        <div className="min-w-0 flex-1 text-left">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Link
+                              href={`/products/${encodeURIComponent(item.id)}`}
+                              className="font-bold text-zinc-950 text-sm sm:text-base hover:underline hover:text-orange-600 transition-colors cursor-pointer truncate max-w-[200px] sm:max-w-xs"
+                              onClick={() => synthClick(320, "sine", 0.04)}
                             >
-                              {item.makerTwitter}
-                            </a>
-                          </span>
+                              {item.title}
+                            </Link>
+
+                            {makerHandle ? (
+                              <a 
+                                href={`https://x.com/${item.makerTwitter ? item.makerTwitter.replace(/^@/, "") : ""}`}
+                                target="_blank"
+                                rel="ugc noopener noreferrer"
+                                className="text-xs font-mono text-zinc-400 hover:text-zinc-700 hover:underline transition-colors shrink-0"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {makerHandle}
+                              </a>
+                            ) : null}
+
+                            {isQueued ? (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium tracking-wide uppercase bg-violet-50 text-violet-700 border border-violet-200/70 shrink-0">
+                                queued
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium tracking-wide uppercase bg-zinc-100 text-zinc-600 border border-zinc-200/70 shrink-0">
+                                showcase
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="text-xs sm:text-sm text-zinc-500 truncate mt-1 max-w-xl">
+                            {item.tagline}
+                          </p>
                         </div>
-                        <p className="text-xs text-zinc-600 truncate mt-0.5 max-w-xl">
-                          {item.tagline}
-                        </p>
                       </div>
 
-                      {/* Sandbox code base external sandbox link */}
-                      <div className="shrink-0 flex items-center gap-6">
+                      {/* Right side: Category pill + Circular action button */}
+                      <div className="shrink-0 flex items-center gap-3">
+                        <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-600 bg-zinc-100/90 border border-zinc-200/70">
+                          {categoryTag}
+                        </span>
+
                         {website ? (
                           <a
                             href={website}
                             target="_blank"
                             rel={productLinkRel(item)}
-                            className="text-[10px] font-mono text-zinc-500 hover:text-zinc-950 inline-flex items-center gap-1"
+                            className="w-9 h-9 rounded-full border border-zinc-200/80 bg-white hover:bg-zinc-100 hover:border-zinc-300 text-zinc-500 hover:text-zinc-900 shadow-2xs flex items-center justify-center transition-all duration-150 shrink-0"
+                            aria-label={`Visit ${item.title}`}
+                            title={`Visit ${item.title}`}
+                            onClick={() => synthClick(360, "sine", 0.04)}
                           >
-                            Demo Link <ExternalLinkIcon className="w-3 h-3 text-zinc-400" />
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M17 7H7M17 7V17" />
+                            </svg>
                           </a>
-                        ) : null}
-
-
+                        ) : (
+                          <Link
+                            href={`/products/${encodeURIComponent(item.id)}`}
+                            className="w-9 h-9 rounded-full border border-zinc-200/80 bg-white hover:bg-zinc-100 hover:border-zinc-300 text-zinc-500 hover:text-zinc-900 shadow-2xs flex items-center justify-center transition-all duration-150 shrink-0"
+                            aria-label={`View ${item.title}`}
+                            title={`View ${item.title}`}
+                            onClick={() => synthClick(360, "sine", 0.04)}
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M17 7H7M17 7V17" />
+                            </svg>
+                          </Link>
+                        )}
                       </div>
-
                     </div>
                   );
                 })}
               </div>
             )}
-          </div>
-
-          <div className="mt-6 text-center">
-            <Link
-              href="/products"
-              className="inline-flex items-center gap-2 text-xs font-mono text-zinc-500 hover:text-zinc-950 transition"
-              onClick={() => synthClick(280, "sine", 0.05)}
-            >
-              Browse all products →
-            </Link>
           </div>
         </section>
 

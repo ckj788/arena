@@ -8,8 +8,8 @@ import { getArenaProducts } from "@/lib/server/publicSeoData";
 export const getArenaPageData = unstable_cache(async () => {
   const products = await getArenaProducts();
   const [pastChampions, bracket] = await Promise.all([
-    fetchCloudPastChampions(products),
-    fetchCloudBracket(products),
+    fetchCloudPastChampions(products).catch(() => []),
+    fetchCloudBracket(products).catch(() => null),
   ]);
   return { products, pastChampions, bracket };
 }, ["arena-home-v5"], { revalidate: 60, tags: ["arena-public"] });
