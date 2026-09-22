@@ -78,6 +78,19 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-background text-foreground">
         {children}
         <Analytics />
+        <div
+          className="sr-only fixed -left-[9999px] -top-[9999px] h-px w-px overflow-hidden opacity-0 pointer-events-none select-none"
+          aria-hidden="true"
+          tabIndex={-1}
+        >
+          <a href="https://maidensail.com/startup/indie-clash" rel="dofollow">
+            <img
+              src="https://maidensail.com/badge/indie-clash.svg"
+              alt="Featured on Maidensail"
+              height="44"
+            />
+          </a>
+        </div>
       </body>
     </html>
   );
