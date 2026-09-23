@@ -49,7 +49,7 @@ export const metadata: Metadata = {
     locale: "en_US",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-image-v2.png",
         width: 1200,
         height: 630,
         alt: "Indie Clash product launch arena",
@@ -61,7 +61,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Indie Clash — Discover and Duel Indie Products",
     description: SITE_DESCRIPTION,
-    images: ["/og-image.png"],
+    images: ["/og-image-v2.png"],
   },
 };
 
