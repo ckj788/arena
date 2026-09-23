@@ -95,7 +95,7 @@ export default async function ProductPage({ params }: Props) {
     },
     {
       question: `Who made ${product.title}?`,
-      answer: `${product.title} was submitted by ${product.makerName} and shipped in ${product.shipTimeframe}.`,
+      answer: `${product.title} was submitted by ${product.makerName}.`,
     },
     {
       question: `Has ${product.title} competed in the Indie Clash arena?`,
@@ -120,7 +120,6 @@ export default async function ProductPage({ params }: Props) {
           : undefined,
         sameAs: productWebsite,
         additionalProperty: [
-          { "@type": "PropertyValue", name: "Build timeframe", value: product.shipTimeframe },
           { "@type": "PropertyValue", name: "Arena votes", value: product.votesCount },
           { "@type": "PropertyValue", name: "Arena matches", value: matchups.length },
           { "@type": "PropertyValue", name: "Arena wins", value: wins },
@@ -187,7 +186,6 @@ export default async function ProductPage({ params }: Props) {
                 <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg">{product.tagline}</p>
                 <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-zinc-500">
                   <span>Built by <strong className="font-semibold text-zinc-950">{product.makerName}</strong></span>
-                  <span>Shipped in {product.shipTimeframe}</span>
                   {validPublishedDate ? <time dateTime={validPublishedDate.toISOString()}>Launched {validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}</time> : null}
                 </div>
                 {(productCategory || productPricing || product.platforms?.length) ? (

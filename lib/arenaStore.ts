@@ -1,4 +1,5 @@
 import { Product, Match, Bracket } from "./mockData";
+import { isProductCategory } from "./productTaxonomy";
 import { supabase, DB_PREFIX, publicArenaTable } from "./supabaseClient";
 import { getNextNewYorkMidnightIso, getRoundEndAtIso } from "./timeHelpers";
 import { compareArenaQueue } from "./discoveryRanking";
@@ -341,7 +342,6 @@ export function addDummyMaker(products: Product[]): Product[] {
     title: randomProject,
     tagline: randomTagline,
     url: `https://${randomProject.toLowerCase().replace(/\s/g, "").replace(/[^a-z0-9]/g, "")}.xyz`,
-    shipTimeframe: Math.random() > 0.5 ? "24h" : Math.random() > 0.5 ? "48h" : "7d",
     makerName: randomName,
     makerTwitter: `@${randomName.toLowerCase()}_ship`,
     makerAvatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 500000)}?w=100&h=100&fit=crop&crop=faces`,
@@ -363,7 +363,6 @@ export function toDbProduct(p: Product) {
     [`${DB_PREFIX}title`]: p.title,
     [`${DB_PREFIX}tagline`]: p.tagline,
     [`${DB_PREFIX}url`]: p.url,
-    [`${DB_PREFIX}ship_timeframe`]: p.shipTimeframe,
     [`${DB_PREFIX}maker_name`]: p.makerName,
     [`${DB_PREFIX}maker_twitter`]: p.makerTwitter,
     [`${DB_PREFIX}maker_avatar`]: p.makerAvatar,
@@ -397,7 +396,6 @@ export function toDbProduct(p: Product) {
 
 // 映射器 2：DB 产品行 -> 本地 Product
 export function fromDbProduct(row: DatabaseRow): Product {
-  const timeframe = databaseString(row, `${DB_PREFIX}ship_timeframe`);
   const queueStatus = databaseString(row, `${DB_PREFIX}queue_status`);
   const makerAvatar = databaseString(row, `${DB_PREFIX}maker_avatar`);
   const arenaEnqueued = row[`${DB_PREFIX}arena_enqueued`];
@@ -410,7 +408,6 @@ export function fromDbProduct(row: DatabaseRow): Product {
     title: databaseString(row, `${DB_PREFIX}title`, "Untitled product"),
     tagline: databaseString(row, `${DB_PREFIX}tagline`),
     url: databaseString(row, `${DB_PREFIX}url`),
-    shipTimeframe: timeframe === "24h" || timeframe === "7d" ? timeframe : "48h",
     makerName: databaseString(row, `${DB_PREFIX}maker_name`, "Anonymous maker"),
     makerTwitter: databaseString(row, `${DB_PREFIX}maker_twitter`),
     makerAvatar,
@@ -427,9 +424,7 @@ export function fromDbProduct(row: DatabaseRow): Product {
       : (!makerAvatar || !makerAvatar.includes("pushed=false")),
     arenaEnqueuedAt: databaseString(row, `${DB_PREFIX}arena_enqueued_at`) || undefined,
     description: databaseString(row, `${DB_PREFIX}description`) || undefined,
-    category: ["ai-tools", "developer-tools", "productivity", "marketing", "design-tools", "video-tools", "founder-tools", "saas"].includes(category)
-      ? category as Product["category"]
-      : undefined,
+    category: isProductCategory(category) ? category : undefined,
     pricingModel: ["unspecified", "free", "freemium", "paid", "open-source", "contact"].includes(pricingModel)
       ? pricingModel as Product["pricingModel"]
       : "unspecified",

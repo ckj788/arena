@@ -84,7 +84,6 @@ export interface ProductSubmission {
   title: string;
   tagline: string;
   url: string;
-  shipTimeframe: Product["shipTimeframe"];
   makerName: string;
   makerTwitter: string;
   makerAvatar: string;

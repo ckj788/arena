@@ -9,7 +9,6 @@ interface OgProduct {
   logo: string;
   votesCount: number;
   tagline: string;
-  shipTimeframe: string;
 }
 
 export async function GET(request: Request) {
@@ -30,14 +29,12 @@ export async function GET(request: Request) {
       logo: sourceA.logo,
       votesCount: sourceA.votesCount,
       tagline: sourceA.tagline,
-      shipTimeframe: sourceA.shipTimeframe,
     };
     const productB: OgProduct | null = sourceB ? {
       title: sourceB.title,
       logo: sourceB.logo,
       votesCount: sourceB.votesCount,
       tagline: sourceB.tagline,
-      shipTimeframe: sourceB.shipTimeframe,
     } : null;
     const totalDuels = productData?.matchups.length ?? 0;
     const winRate = totalDuels > 0 ? Math.round(((productData?.wins ?? 0) / totalDuels) * 100) : 0;

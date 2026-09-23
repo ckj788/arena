@@ -7,7 +7,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = '';
 const rows = Array.from({ length: 8 }, (_, i) => ({
   shipandbattle_id: `safety-fixture-${i}`, shipandbattle_title: `Safety Fixture ${i}`,
   shipandbattle_tagline: 'A fixture for testing product safety and screenshots.',
-  shipandbattle_url: `https://product-${i}.example.com`, shipandbattle_ship_timeframe: '7d',
+  shipandbattle_url: `https://product-${i}.example.com`,
   shipandbattle_maker_name: 'Test Maker', shipandbattle_maker_twitter: '@fixture', shipandbattle_logo: 'I',
   shipandbattle_description: 'A local test product with a clear description. This is isolated fixture data, never a real submission.',
   shipandbattle_submitted_at: '2026-09-19T00:00:00Z', shipandbattle_queue_status: 'waiting',

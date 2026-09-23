@@ -92,5 +92,20 @@ await db.query('SELECT shipandbattle_moderate_product($1,$2,$3,$4)', ['old',repo
 assert.deepEqual((await one("SELECT shipandbattle_screenshots v FROM shipandbattle_public_products WHERE shipandbattle_id='old'")).v, []);
 await db.exec("UPDATE shipandbattle_products SET shipandbattle_screenshots='{}' WHERE shipandbattle_id='old'");
 assert.equal((await one("SELECT shipandbattle_screenshot v FROM shipandbattle_products WHERE shipandbattle_id='old'")).v, null, 'clear does not resurrect legacy image');
+// Retirement of build-time metadata preserves safety, gallery, rows and triggers.
+await db.exec(`CREATE FUNCTION public.shipandbattle_touch_product_updated_at() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN NEW.shipandbattle_updated_at:=now(); RETURN NEW; END $$;
+CREATE TRIGGER shipandbattle_products_touch_updated_at BEFORE UPDATE OF shipandbattle_title, shipandbattle_ship_timeframe, shipandbattle_url ON shipandbattle_products FOR EACH ROW EXECUTE FUNCTION shipandbattle_touch_product_updated_at();`);
+const countBefore = (await one('SELECT count(*)::int n FROM shipandbattle_products')).n;
+for (const name of ['20260923_timeframe_prepare.sql','20260923_remove_timeframe.sql','20260923_remove_timeframe.sql']) {
+  await db.exec(fs.readFileSync(`lib/migrations/${name}`,'utf8'));
+}
+assert.equal((await one('SELECT count(*)::int n FROM shipandbattle_products')).n, countBefore);
+assert.equal((await one("SELECT count(*)::int n FROM information_schema.columns WHERE table_schema='public' AND column_name='shipandbattle_ship_timeframe'")).n, 0);
+assert.deepEqual((await one("SELECT shipandbattle_screenshots v FROM shipandbattle_public_products WHERE shipandbattle_id='old'")).v, []);
+await db.exec("UPDATE shipandbattle_products SET shipandbattle_title='Still editable' WHERE shipandbattle_id='new'");
+await db.exec('SET ROLE anon');
+await db.query('SELECT * FROM shipandbattle_public_products');
+await assert.rejects(db.query('SELECT * FROM shipandbattle_product_reports'), e => e.code === '42501');
+await db.exec('RESET ROLE');
 await db.close();
 console.log('PASS: migration runs twice, preserves legacy records, rejects duplicate domains, resets edited link trust, keeps restricted match participants as tombstones, enforces report limits and private admin privileges. No production database accessed.');

@@ -53,7 +53,7 @@ import MakerConsole from "@/app/components/MakerConsole";
 import FairDiscoverySection from "@/app/components/FairDiscoverySection";
 import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
 import PrimaryNavigation, { type MainPage } from "@/app/components/PrimaryNavigation";
-import { PRICING_MODELS, PRODUCT_CATEGORIES, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
+import { PRICING_MODELS, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_GROUPS, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { isVisibleProduct, productLinkRel } from "@/lib/productSafety";
@@ -104,14 +104,6 @@ const playHaptics = (freq = 220, type: OscillatorType = "sine", duration = 0.08,
 
 
 
-// --- INLINE SVG ICONS INSTEAD OF LUCIDE-REACT ---
-const ExternalLinkIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-    <polyline points="15 3 21 3 21 9" />
-    <line x1="10" y1="14" x2="21" y2="3" />
-  </svg>
-);
 
 const PlusIcon = ({ className = "w-4 h-4" }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
@@ -252,7 +244,6 @@ export default function ArenaClient({
   const [newTargetAudience, setNewTargetAudience] = useState("");
   const [newMakerStory, setNewMakerStory] = useState("");
   const [newFeedbackRequest, setNewFeedbackRequest] = useState("");
-  const newTimeframe = "48h" as const;
   const [newMaker, setNewMaker] = useState("");
   const [newTwitter, setNewTwitter] = useState("");
   const [newLogo, setNewLogo] = useState("🚀");
@@ -1135,7 +1126,6 @@ export default function ArenaClient({
         title: randomProject,
         tagline: randomTagline,
         url: `https://${randomProject.toLowerCase().replace(/\s/g, "").replace(/[^a-z0-9]/g, "")}.xyz`,
-        shipTimeframe: Math.random() > 0.5 ? "24h" : Math.random() > 0.5 ? "48h" : "7d",
         makerName: randomName,
         makerTwitter: `@${randomName.toLowerCase()}_ship`,
         makerAvatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 500000)}?w=100&h=100&fit=crop&crop=faces#pushed=false`,
@@ -1222,7 +1212,6 @@ export default function ArenaClient({
         title: randomProject,
         tagline: randomTagline,
         url: `https://${randomProject.toLowerCase().replace(/\s/g, "").replace(/[^a-z0-9]/g, "")}.xyz`,
-        shipTimeframe: Math.random() > 0.5 ? "24h" : Math.random() > 0.5 ? "48h" : "7d",
         makerName: randomName,
         makerTwitter: `@${randomName.toLowerCase()}_ship`,
         makerAvatar: `https://images.unsplash.com/photo-${1500000000000 + Math.floor(Math.random() * 500000)}?w=100&h=100&fit=crop&crop=faces`,
@@ -1335,7 +1324,6 @@ export default function ArenaClient({
           title: newTitle,
           tagline: newTagline,
           url: normalizedUrl,
-          shipTimeframe: editingProduct?.shipTimeframe || newTimeframe,
           makerName,
           makerTwitter,
           makerAvatar,
@@ -1370,7 +1358,6 @@ export default function ArenaClient({
           title: newTitle,
           tagline: newTagline,
           url: normalizedUrl,
-          shipTimeframe: editingProduct?.shipTimeframe || newTimeframe,
           makerName,
           makerTwitter,
           makerAvatar: `${makerAvatar}#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}&pushed=false`,
@@ -3343,7 +3330,11 @@ export default function ArenaClient({
                   className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
                   <option value="">Not sure yet</option>
-                  {PRODUCT_CATEGORIES.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
+                  {PRODUCT_CATEGORY_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
+                    </optgroup>
+                  ))}
                 </select>
                 <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-500">Choose the main use. Not displayed publicly yet.</p>
               </div>

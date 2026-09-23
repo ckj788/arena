@@ -74,7 +74,6 @@ export interface NewProductInput {
   title: string;
   tagline: string;
   url: string;
-  shipTimeframe: Product["shipTimeframe"];
   makerName: string;
   makerTwitter: string;
   logo: string;
@@ -125,7 +124,6 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     title: input.title,
     tagline: input.tagline,
     url: input.url,
-    shipTimeframe: input.shipTimeframe,
     makerName: input.makerName,
     makerTwitter: input.makerTwitter,
     makerAvatar,
@@ -183,7 +181,6 @@ export async function updateOwnedProduct(user: User, productId: string, input: N
       [`${DB_PREFIX}title`]: input.title,
       [`${DB_PREFIX}tagline`]: input.tagline,
       [`${DB_PREFIX}url`]: input.url,
-      [`${DB_PREFIX}ship_timeframe`]: input.shipTimeframe,
       [`${DB_PREFIX}maker_name`]: input.makerName,
       [`${DB_PREFIX}maker_twitter`]: input.makerTwitter,
       [`${DB_PREFIX}logo`]: input.logo,

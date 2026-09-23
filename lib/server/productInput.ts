@@ -69,10 +69,6 @@ export function parseProductInput(body: unknown): NewProductInput {
       return image;
     });
   }
-  const shipTimeframe = value.shipTimeframe;
-  if (shipTimeframe !== "24h" && shipTimeframe !== "48h" && shipTimeframe !== "7d") {
-    throw new HttpError(400, "Invalid ship timeframe.");
-  }
 
   const makerTwitter = requiredText(value.makerTwitter, "Maker handle", 1, 50);
   const category = optionalText(value.category, "Category", 40);
@@ -87,7 +83,6 @@ export function parseProductInput(body: unknown): NewProductInput {
     title: requiredText(value.title, "Title", 2, 80),
     tagline: requiredText(value.tagline, "Tagline", 10, 240),
     url: safeHttpUrl(value.url, "Product URL"),
-    shipTimeframe,
     makerName: requiredText(value.makerName, "Maker name", 1, 80),
     makerTwitter: makerTwitter.startsWith("@") ? makerTwitter : `@${makerTwitter}`,
     logo: safeLogo(value.logo),

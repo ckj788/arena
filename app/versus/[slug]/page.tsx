@@ -217,7 +217,6 @@ export default async function VersusPage({ params }: Props) {
                 <p className="mt-6 min-h-14 text-sm leading-7 text-zinc-600">{product.tagline}</p>
                 <dl className="mt-6 space-y-3 border-t border-zinc-100 pt-5 text-sm">
                   <div className="flex justify-between gap-4"><dt className="text-zinc-500">Maker</dt><dd className="text-right text-zinc-800 font-medium">{product.makerName}</dd></div>
-                  <div className="flex justify-between gap-4"><dt className="text-zinc-500">Build timeframe</dt><dd className="text-zinc-800 font-medium">{product.shipTimeframe}</dd></div>
                   <div className="flex justify-between gap-4"><dt className="text-zinc-500">All-time arena votes</dt><dd className="text-zinc-800 font-medium">{product.votesCount}</dd></div>
                 </dl>
                 <div className="mt-6 flex flex-wrap gap-3">
