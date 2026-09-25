@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import Link from '@/app/components/NavigationLink';
-import ShareProductButton from '@/app/components/ShareProductButton';
+import LaunchShareKit from '@/app/components/LaunchShareKit';
+import ProfileReadiness from '@/app/components/ProfileReadiness';
 import useModalAccessibility from '@/app/components/useModalAccessibility';
-import { absoluteUrl } from '@/lib/site';
 import { Product, Bracket } from "@/lib/mockData";
 import { compareArenaQueue, hasActiveDiscoveryBoost } from "@/lib/discoveryRanking";
 import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
@@ -205,7 +205,10 @@ export default function MakerConsole({
                       >
                         View profile →
                       </Link>}
-                      {p.moderationStatus !== "restricted" && <ShareProductButton url={absoluteUrl(`/products/${encodeURIComponent(p.id)}`)} />}
+                      {p.moderationStatus !== "restricted" && <details className="w-full rounded-lg border border-zinc-200 p-3 text-sm text-zinc-600">
+                        <summary className="cursor-pointer font-medium">Share & improve profile</summary>
+                        <div className="mt-4 space-y-4"><LaunchShareKit product={p} /><ProfileReadiness product={p} /><Link href={`/products/${encodeURIComponent(p.id)}#critiques-heading`} className="inline-flex min-h-11 items-center text-sm font-medium text-violet-700">Read builder feedback →</Link></div>
+                      </details>}
                       {onExportCsv && (p.queueStatus === "active" || p.queueStatus === "completed") && (
                         <button
                           onClick={() => onExportCsv(p)}

@@ -5,6 +5,7 @@ import { withDeadline } from '@/lib/requestSafety';
 
 interface CopyLinkProps {
   value: string;
+  label?: string;
 }
 
 const CopyIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
@@ -20,7 +21,7 @@ const CheckIcon = ({ className = "w-3 h-3" }: { className?: string }) => (
   </svg>
 );
 
-export default function CopyLink({ value }: CopyLinkProps) {
+export default function CopyLink({ value, label = "Share link" }: CopyLinkProps) {
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -45,7 +46,7 @@ export default function CopyLink({ value }: CopyLinkProps) {
     <div className="relative flex items-center">
       <input
         ref={input}
-        aria-label="Share link"
+        aria-label={label}
         type="text"
         readOnly
         value={value}
@@ -73,7 +74,7 @@ export default function CopyLink({ value }: CopyLinkProps) {
           </>
         )}
       </button>
-      <span role="status" className={failed ? "absolute top-full mt-1 text-xs text-zinc-600" : "sr-only"}>{failed ? "Select and copy the link manually." : copied ? "Link copied." : ""}</span>
+      <span role="status" className={failed ? "absolute top-full mt-1 text-xs text-zinc-600" : "sr-only"}>{failed ? "Select and copy the text manually." : copied ? "Copied." : ""}</span>
     </div>
   );
 }

@@ -1,10 +1,11 @@
 import Link from "./NavigationLink";
 import ClashLogo from "./ClashLogo";
-import PrimaryNavigation from "./PrimaryNavigation";
+import PrimaryNavigation, { type MainPage } from "./PrimaryNavigation";
 import PublicAccountLink from "./PublicAccountLink";
 
 /** The same navigation on public profiles, directories, and matchup pages. */
-export default function PublicSiteHeader({ actionHref = "/?submit=1", actionLabel = "Submit Product" }: {
+export default function PublicSiteHeader({ actionHref = "/?submit=1", actionLabel = "Submit Product", activePage }: {
+  activePage?: MainPage;
   actionHref?: string;
   actionLabel?: string;
 }) {
@@ -16,7 +17,7 @@ export default function PublicSiteHeader({ actionHref = "/?submit=1", actionLabe
             <ClashLogo size="md" className="max-sm:w-7 max-sm:h-7" />
             <span className="whitespace-nowrap text-sm font-bold tracking-tight text-zinc-950 sm:text-xl">Indie-Clash</span>
           </Link>
-          <PrimaryNavigation className="hidden lg:flex" />
+          <PrimaryNavigation activePage={activePage} className="hidden lg:flex" />
         </div>
         <div className="flex shrink-0 items-center gap-1">
         <PublicAccountLink />
@@ -25,7 +26,7 @@ export default function PublicSiteHeader({ actionHref = "/?submit=1", actionLabe
         </Link>
         </div>
       </div>
-      <PrimaryNavigation className="flex border-t border-zinc-200/80 px-3 lg:hidden" />
+      <PrimaryNavigation activePage={activePage} className="flex border-t border-zinc-200/80 px-3 lg:hidden" />
     </header>
   );
 }

@@ -2,6 +2,7 @@ import type { MetadataRoute } from "next";
 import { getSitemapRecords, matchSlug } from "@/lib/server/publicSeoData";
 import { absoluteUrl } from "@/lib/site";
 import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
+import { RESOURCE_PATH, RESOURCE_REVIEWED_AT } from "@/lib/launchResources";
 
 // Cache the complete XML with ISR, not a partial fallback. A failed regeneration
 // leaves the previous successful sitemap in place. Arena writes also invalidate
@@ -10,6 +11,8 @@ export const revalidate = 3600;
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
+    { url: absoluteUrl("/resources"), changeFrequency: "monthly", priority: 0.7 },
+    { url: absoluteUrl(RESOURCE_PATH), lastModified: new Date(RESOURCE_REVIEWED_AT), changeFrequency: "monthly", priority: 0.8 },
     {
       url: absoluteUrl("/"),
       changeFrequency: "daily",

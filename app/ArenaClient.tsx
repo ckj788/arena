@@ -58,6 +58,8 @@ import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { isVisibleProduct, productLinkRel } from "@/lib/productSafety";
 import ScreenshotInput from "@/app/components/ScreenshotInput";
+import ProfileReadiness from "@/app/components/ProfileReadiness";
+import LaunchShareKit from "@/app/components/LaunchShareKit";
 import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, safeOAuthReturnPath } from "@/lib/browserOAuth";
 
 function firstOpenBracketMatch(bracket: Bracket): Match | null {
@@ -231,6 +233,7 @@ export default function ArenaClient({
   const publicRevisionRef = useRef(0);
   const publicSyncPendingRef = useRef(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [publishedProduct, setPublishedProduct] = useState<Product | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
@@ -1407,12 +1410,11 @@ export default function ArenaClient({
       setEditingProduct(null);
       if (wasEditing) {
         pushToast("Product profile updated!", "success");
-      } else if (submitSource === "home") {
-        setSuccessModalTitle("PROJECT SUBMITTED 🛡️");
-        setSuccessModalText("Your product is live. Open your console to view its profile or choose Join Arena to enter a matchup.");
-        setIsSuccessOpen(true);
       } else {
-        pushToast("Product successfully submitted!", "success");
+        setPublishedProduct(newProd);
+        setSuccessModalTitle("Your product is live");
+        setSuccessModalText("Share your profile with people who could use it. You can join the Arena from My Console.");
+        setIsSuccessOpen(true);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unable to submit this product.";
@@ -3259,6 +3261,7 @@ export default function ArenaClient({
               aria-busy={isSubmittingProduct}
               className="space-y-4 text-left"
             >
+              <ProfileReadiness product={{ description: newDescription, logo: newLogo, screenshots: newScreenshot, makerName: newMaker, targetAudience: newTargetAudience, pricingModel: newPricingModel, makerStory: newMakerStory, feedbackRequest: newFeedbackRequest }} />
               <div className="flex flex-col gap-1">
                 <label htmlFor="product-title" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
                 <input
@@ -3270,6 +3273,7 @@ export default function ArenaClient({
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                 />
+                <p className="text-[10px] leading-4 text-zinc-500">Use your own product name. Explain any third-party models or integrations in the description.</p>
               </div>
 
               <div className="flex flex-col gap-1">
@@ -3286,7 +3290,7 @@ export default function ArenaClient({
               </div>
 
               <div className="flex flex-col gap-1">
-                <label htmlFor="product-url" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Demo URL *</label>
+                <label htmlFor="product-url" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product website *</label>
                 <input
                   type="url"
                   inputMode="url"
@@ -3823,6 +3827,7 @@ export default function ArenaClient({
             onClick={() => setIsSuccessOpen(false)}
           />
           <div ref={successDialogRef} role="dialog" aria-modal="true" aria-label="Confirmation" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] overflow-y-auto bg-white border border-zinc-200/90 rounded-2xl p-6 w-full max-w-md relative z-10 text-sm space-y-4 text-center text-zinc-900 shadow-xl">
+            <button type="button" aria-label="Close confirmation" onClick={() => setIsSuccessOpen(false)} className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-950">×</button>
             
             <div className="w-10 h-10 bg-zinc-50 border border-zinc-200 rounded-xl mx-auto flex items-center justify-center text-xl font-mono shadow-2xs">
               🛡️
@@ -3840,7 +3845,11 @@ export default function ArenaClient({
               {successModalText}
             </div>
 
-            {successModalTitle.includes("PROJECT SUBMITTED") ? (
+            {successModalTitle === "Your product is live" && publishedProduct ? (
+              <div className="space-y-4">
+                <Link href={`/products/${encodeURIComponent(publishedProduct.id)}`} className="block rounded-lg bg-amber-400 px-4 py-3 font-semibold hover:bg-amber-300">View {publishedProduct.title} →</Link>
+                <LaunchShareKit product={publishedProduct} />
+                <ProfileReadiness product={publishedProduct} />
               <button
                 onClick={() => {
                   setIsSuccessOpen(false);
@@ -3848,8 +3857,9 @@ export default function ArenaClient({
                 }}
                 className="w-full py-2.5 bg-zinc-900 text-white hover:bg-zinc-800 text-xs font-semibold rounded-lg shadow-xs transition duration-150 cursor-pointer"
               >
-                ENTER THE CONSOLE ➔
+                My Console →
               </button>
+              </div>
             ) : (
               <button
                 onClick={() => {

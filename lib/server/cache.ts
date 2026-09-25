@@ -7,6 +7,7 @@ export function invalidateArenaPublic(paths: string[] = []) {
   revalidatePath("/");
   revalidatePath("/arena");
   revalidatePath("/champions");
+  revalidatePath("/resources/startup-launch-directories");
   revalidatePath("/sitemap.xml");
   for (const path of paths) revalidatePath(path);
 }

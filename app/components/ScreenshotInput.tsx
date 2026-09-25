@@ -11,6 +11,7 @@ export default function ScreenshotInput({ value, onChange, onBusy, disabled = fa
   return <div className="space-y-3">
     <div className="block text-xs font-semibold uppercase tracking-wider text-zinc-700">Product images (optional) · {value.length}/5
       <span className="block mt-1 text-xs normal-case font-normal text-zinc-500">Up to 5 images · 5 MB each · Product detail page only</span>
+      <span className="block mt-1 text-xs normal-case font-normal text-zinc-500">Show a real workflow or result so visitors can see what your product does.</span>
       <div className={`mt-2 flex min-h-14 items-center gap-3 rounded-lg border border-zinc-200 bg-zinc-50/50 p-3 normal-case ${uploadDisabled ? "opacity-50" : ""}`}>
         <label htmlFor="product-images-input" className={`rounded-md bg-white border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-800 shadow-2xs transition-colors ${uploadDisabled ? "cursor-not-allowed" : "cursor-pointer hover:bg-zinc-50"}`}>
           {busy ? "Preparing images…" : "Choose images"}

@@ -19,6 +19,8 @@ Indie Clash exists to give independent products durable discovery rather than a 
 - Champions and how Indie Clash works: ${SITE_URL}/champions
 - Product directory: ${SITE_URL}/products
 - Underrated products: ${SITE_URL}/underrated
+- Launch resources: ${SITE_URL}/resources
+- Startup launch directories: ${SITE_URL}/resources/startup-launch-directories
 ${PUBLIC_CATEGORIES_ENABLED ? `- Product categories: ${SITE_URL}/categories\n` : ""}\
 - Sitemap: ${SITE_URL}/sitemap.xml
 
