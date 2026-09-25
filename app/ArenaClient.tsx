@@ -782,7 +782,7 @@ export default function ArenaClient({
 
   // Sync products and bracket from cloud or local storage with Stale-While-Revalidate
   const syncCloudData = useCallback(async () => {
-    if (isResettingRef.current || isSyncLockedRef.current || publicSyncPendingRef.current) {
+    if (isResettingRef.current || isSyncLockedRef.current || votePendingRef.current || publicSyncPendingRef.current) {
       console.log("ℹ️ [INDIE CLASH] syncCloudData bypassed because operation lock is active.");
       return;
     }
@@ -838,7 +838,7 @@ export default function ArenaClient({
       const [champs, b] = await Promise.all([
         fetchCloudPastChampions(prods), fetchCloudBracket(prods),
       ]);
-      if (isSyncLockedRef.current || revision !== publicRevisionRef.current) return;
+      if (isSyncLockedRef.current || votePendingRef.current || revision !== publicRevisionRef.current) return;
 
       memoryCache.lastFetchTime = Date.now();
 
@@ -1615,6 +1615,7 @@ export default function ArenaClient({
     else if (round === 4) nextBracket.round4 = updateVotes(nextBracket.round4);
 
     setBracket(nextBracket);
+    memoryCache.bracket = nextBracket;
     if (!supabase) saveBracket(nextBracket);
 
     let freshMatch = null;
@@ -1663,11 +1664,16 @@ export default function ArenaClient({
     }
     const discoveryBoostUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1_000).toISOString();
     setProducts((current) => {
-      const next = current.map((product) => (
-        (userSupabaseId && (product.creator_uid === userSupabaseId || (ownership.userId === userSupabaseId && ownership.ids.includes(product.id)))) || locallyOwnedIds.has(product.id)
-          ? { ...product, discoveryBoostUntil }
-          : product
-      ));
+      // Apply our confirmed vote immediately; background reads reconcile other voters.
+      const next = current.map((product) => {
+        const voted = product.id === votingTarget.id
+          ? { ...product, votesCount: (product.votesCount || 0) + 1 }
+          : product;
+        return (userSupabaseId && (product.creator_uid === userSupabaseId || (ownership.userId === userSupabaseId && ownership.ids.includes(product.id)))) || locallyOwnedIds.has(product.id)
+          ? { ...voted, discoveryBoostUntil }
+          : voted;
+      });
+      memoryCache.products = next;
       if (!supabase) saveProducts(next);
       return next;
     });
@@ -1680,6 +1686,8 @@ export default function ArenaClient({
     } catch (error) {
       setVoteError(error instanceof Error ? error.message : "Unable to finish your vote. Please check the match before retrying.");
     } finally {
+      // Invalidate reads spanning this mutation, including failed/ambiguous requests.
+      publicRevisionRef.current += 1;
       votePendingRef.current = false;
       setIsVoting(false);
     }
