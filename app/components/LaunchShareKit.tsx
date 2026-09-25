@@ -4,6 +4,8 @@ import type { Product } from "@/lib/mockData";
 import { absoluteUrl } from "@/lib/site";
 import CopyLink from "./CopyLink";
 import ShareProductButton from "./ShareProductButton";
+import Link from "./NavigationLink";
+import { RESOURCE_PATH } from "@/lib/launchResources";
 
 export default function LaunchShareKit({ product }: { product: Pick<Product, "id" | "title" | "tagline"> }) {
   const url = absoluteUrl(`/products/${encodeURIComponent(product.id)}`);
@@ -21,5 +23,6 @@ export default function LaunchShareKit({ product }: { product: Pick<Product, "id
         <div><p className="mb-2">Optional badge for your website or README</p><CopyLink value={badge} label="Featured badge Markdown" /></div>
       </div>
     </details>
+    <Link href={RESOURCE_PATH} className="inline-block text-sm font-medium text-violet-700 hover:underline">Plan your next launch: compare launch platforms →</Link>
   </div>;
 }

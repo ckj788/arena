@@ -9,6 +9,7 @@ import { productLinkRel } from "@/lib/productSafety";
 import ReportProduct from "@/app/components/ReportProduct";
 import ProductGallery from "@/app/components/ProductGallery";
 import { categoryLabel, pricingLabel } from "@/lib/productTaxonomy";
+import { RESOURCE_PATH } from "@/lib/launchResources";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -380,6 +381,7 @@ export default async function ProductPage({ params }: Props) {
             <div>
               <h2 className="text-2xl font-semibold text-zinc-950">Launch your own indie product</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Create a public product profile, enter real 1v1 matchups, and collect useful builder feedback.</p>
+              <Link href={RESOURCE_PATH} className="mt-3 inline-block text-sm font-medium text-violet-700 hover:underline">Explore more places to launch your startup →</Link>
             </div>
             <Link href="/?submit=1" className="shrink-0 rounded-xl bg-zinc-900 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-800 transition shadow-xs">Submit a product</Link>
           </section>

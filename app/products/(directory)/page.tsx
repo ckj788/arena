@@ -11,6 +11,7 @@ import {
   trustedProductImageUrl,
 } from "@/lib/site";
 import { categoryLabel } from "@/lib/productTaxonomy";
+import { RESOURCE_PATH } from "@/lib/launchResources";
 
 export const revalidate = 60;
 
@@ -162,6 +163,7 @@ export default async function ProductsPage() {
           </section>
         )}
 
+        <p className="mt-10 text-sm text-zinc-600">Launching your own product? <Link href={RESOURCE_PATH} className="font-medium text-violet-700 hover:underline">Compare startup launch directories →</Link></p>
         <section className="mt-16 grid gap-5 border-t border-zinc-200/80 pt-10 md:grid-cols-3">
           {[
             ["Permanent product profiles", "Every accepted launch receives a crawlable profile with its maker, official website, launch details, and arena history."],
