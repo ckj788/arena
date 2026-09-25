@@ -4,6 +4,7 @@ import RecentLaunches from "../RecentLaunches";
 import LaunchGuideSections from "../LaunchGuideSections";
 import Link from "@/app/components/NavigationLink";
 import PublicSiteHeader from "@/app/components/PublicSiteHeader";
+import InteractiveGrid from "@/app/components/InteractiveGrid";
 import ResourceDirectory from "../ResourceDirectory";
 import { LAUNCH_RESOURCES, RESOURCE_PATH, RESOURCE_REVIEWED_AT } from "@/lib/launchResources";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
@@ -19,7 +20,8 @@ export const metadata: Metadata = {
 
 export default function LaunchDirectoriesPage() {
   const canonical = absoluteUrl(RESOURCE_PATH);
-  return <div className="min-h-screen bg-[#fafafa] text-zinc-950">
+  return <div className="arena-app relative min-h-screen overflow-x-hidden bg-[#fafafa] text-zinc-950 antialiased selection:bg-zinc-900 selection:text-white">
+    <InteractiveGrid />
     <PublicSiteHeader activePage="resources" />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({
       "@context": "https://schema.org", "@graph": [
@@ -31,7 +33,7 @@ export default function LaunchDirectoriesPage() {
         ] },
       ],
     }) }} />
-    <main className="mx-auto max-w-6xl px-5 py-8 sm:py-10">
+    <main className="relative z-10 mx-auto max-w-6xl px-5 py-8 sm:py-10">
       <nav aria-label="Breadcrumb" className="mb-7 flex flex-wrap gap-2 text-xs text-zinc-500"><Link href="/">Indie Clash</Link><span>/</span><Link href="/resources">Resources</Link><span>/</span><span aria-current="page">Launch directories</span></nav>
       <header className="mb-7 max-w-3xl">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700">A practical launch shortlist</p>

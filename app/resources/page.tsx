@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "@/app/components/NavigationLink";
 import PublicSiteHeader from "@/app/components/PublicSiteHeader";
+import InteractiveGrid from "@/app/components/InteractiveGrid";
 import { RESOURCE_PATH, LAUNCH_RESOURCES } from "@/lib/launchResources";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
@@ -12,10 +13,11 @@ export const metadata: Metadata = {
 };
 
 export default function ResourcesPage() {
-  return <div className="min-h-screen bg-[#fafafa] text-zinc-950">
+  return <div className="arena-app relative min-h-screen overflow-x-hidden bg-[#fafafa] text-zinc-950 antialiased selection:bg-zinc-900 selection:text-white">
+    <InteractiveGrid />
     <PublicSiteHeader activePage="resources" />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({ "@context": "https://schema.org", "@type": "CollectionPage", name: "Launch resources for indie makers", url: absoluteUrl("/resources"), hasPart: { "@type": "WebPage", name: "Startup launch directories", url: absoluteUrl(RESOURCE_PATH) } }) }} />
-    <main className="mx-auto max-w-6xl px-5 py-14 sm:py-20">
+    <main className="relative z-10 mx-auto max-w-6xl px-5 py-14 sm:py-20">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700">Resources for makers</p>
       <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">Give your launch a better starting point.</h1>
       <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600">Find the right places to share your work. Show what it does. Start conversations with people who might actually use it.</p>
