@@ -56,15 +56,17 @@ One valid Arena vote requires feedback for both products and activates seven day
 
 ## Search architecture
 
-Categories are currently **collection-only**. Submit and Edit Profile accept an
-optional primary category ("Not sure yet" stores NULL). OAuth drafts preserve it.
-`PUBLIC_CATEGORIES_ENABLED` in `lib/productTaxonomy.ts` remains false: category
-badges, routes, sitemap/llms entries and category-based discovery diversification
-stay disabled until an explicit future rollout. No database migration is needed
-if the product-profile migration has already been applied.
+Submit and Edit Profile accept an optional primary category ("Not sure yet"
+stores NULL). OAuth drafts preserve it. Product profiles display the saved category;
+the discovery feed maps it to one of eight broad labels. Unselected categories
+have no badge. Apply `lib/migrations/20260929_expand_product_categories.sql`
+before deploying the expanded taxonomy; it preserves existing values and extends
+the database constraint. The adjacent `_verify.sql` inspects the installed constraint.
+`PUBLIC_CATEGORIES_ENABLED` remains false: category landing pages, sitemap/llms
+entries and category-based discovery diversification stay disabled.
 
 - `/products/[slug]` is the canonical product identity page. Legacy `/reviews/[slug]` URLs permanently redirect to it.
-- `/categories/[slug]` provides a deliberately small eight-category taxonomy. Thin category pages remain `noindex,follow` until they contain at least four products.
+- `/categories/[slug]` remains disabled. If enabled later, thin category pages remain `noindex,follow` until they contain at least four products.
 - `/underrated` orders real products by qualified visibility rather than payment or raw popularity.
 - `/versus/[product-a]-vs-[product-b]` is indexable only when that exact matchup exists in Supabase. Unknown products and fabricated matchups return a real `404` with `noindex`.
 - `/sitemap.xml` contains the homepage, product directory, underrated discovery, sufficiently populated category pages, real product pages, and deduplicated real matchup pages. `/robots.txt` keeps public pages crawlable while excluding API and auth endpoints.

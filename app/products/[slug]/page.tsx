@@ -8,7 +8,7 @@ import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } f
 import { productLinkRel } from "@/lib/productSafety";
 import ReportProduct from "@/app/components/ReportProduct";
 import ProductGallery from "@/app/components/ProductGallery";
-import { categoryLabel, pricingLabel } from "@/lib/productTaxonomy";
+import { profileCategoryLabel, pricingLabel } from "@/lib/productTaxonomy";
 import { RESOURCE_PATH } from "@/lib/launchResources";
 
 interface Props {
@@ -85,7 +85,7 @@ export default async function ProductPage({ params }: Props) {
   const canonicalPath = `/products/${encodeURIComponent(product.id)}`;
   const canonicalUrl = absoluteUrl(canonicalPath);
   const productWebsite = publicHttpUrl(product.url);
-  const productCategory = categoryLabel(product.category);
+  const productCategory = profileCategoryLabel(product.category);
   const productPricing = pricingLabel(product.pricingModel);
   const publishedDate = product.submittedAt ? new Date(product.submittedAt) : null;
   const validPublishedDate = publishedDate && !Number.isNaN(publishedDate.getTime()) ? publishedDate : null;
@@ -191,7 +191,7 @@ export default async function ProductPage({ params }: Props) {
                 </div>
                 {(productCategory || productPricing || product.platforms?.length) ? (
                   <div className="mt-4 flex flex-wrap gap-2">
-                    {productCategory && product.category ? <Link href={`/categories/${product.category}`} className="rounded-full border border-violet-200/80 bg-violet-50 px-3 py-1 text-xs text-violet-700 font-medium transition hover:border-violet-300">{productCategory}</Link> : null}
+                    {productCategory ? <span className="rounded-full border border-violet-200/80 bg-violet-50 px-3 py-1 text-xs text-violet-700 font-medium">{productCategory}</span> : null}
                     {productPricing ? <span className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 font-medium">{productPricing}</span> : null}
                     {product.platforms?.map((platform) => <span key={platform} className="rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-600 font-medium">{platform}</span>)}
                   </div>

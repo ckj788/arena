@@ -26,6 +26,24 @@ assert(urls.length > 10, `sitemap only contains ${urls.length} URLs`);
 assert.equal(new Set(urls).size, urls.length, 'sitemap contains duplicate URLs');
 assert(urls.every(url => new URL(url).origin === origin), 'sitemap contains a noncanonical origin');
 
+for (let start = 0; start < urls.length; start += 8) {
+  const pageResults = await Promise.all(urls.slice(start, start + 8).map(async url => {
+    const response = await request(url, { redirect: 'manual' });
+    const contentType = response.headers.get('content-type') || '';
+    const html = contentType.includes('text/html') ? await response.text() : '';
+    return { url, status: response.status, html };
+  }));
+  for (const { url, status, html } of pageResults) {
+    assert.equal(status, 200, `${url}: sitemap URL returned ${status}`);
+    if (html) {
+      const canonical = html.match(/<link\b[^>]*rel="canonical"[^>]*href="([^"]+)"/i)?.[1];
+      assert(canonical, `${url}: canonical missing`);
+      assert.equal(new URL(canonical).href, url, `${url}: canonical mismatch`);
+      assert(!/<meta[^>]*name="robots"[^>]*content="[^"]*noindex/i.test(html), `${url}: unexpected noindex`);
+    }
+  }
+}
+
 const required = ['/', '/products', '/arena', '/champions', '/resources', '/resources/startup-launch-directories'];
 for (const path of required) {
   assert(urls.includes(`${origin}${path}`), `${path} missing from sitemap`);

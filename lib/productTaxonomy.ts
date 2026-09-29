@@ -1,4 +1,4 @@
-// Collect categories now; public category browsing is an explicit later launch.
+// Category landing pages remain a separate rollout from profile labels.
 export const PUBLIC_CATEGORIES_ENABLED = false;
 
 const LEGACY_CATEGORIES = [
@@ -73,6 +73,44 @@ export const PRODUCT_CATEGORY_GROUPS: { label: string; categories: Category[] }[
 ];
 export const PRODUCT_CATEGORIES = PRODUCT_CATEGORY_GROUPS.flatMap(group => group.categories);
 
+type BroadCategory = (typeof LEGACY_CATEGORIES)[number]["value"];
+const FEED_LABELS: Record<BroadCategory, string> = {
+  "ai-tools": "AI", "developer-tools": "DEV TOOL", productivity: "PRODUCTIVITY",
+  marketing: "MARKETING", "design-tools": "DESIGN", "video-tools": "VIDEO",
+  "founder-tools": "FOUNDER", saas: "SAAS",
+};
+// Explicit assignments keep saved categories authoritative, regardless of title.
+const DETAIL_TO_BROAD: Record<DetailedCategory, BroadCategory> = {
+  "ai-agents": "ai-tools", "ai-chatbots": "ai-tools", "ai-image-generators": "ai-tools",
+  "ai-video-generators": "video-tools", "ai-writing": "ai-tools", "voice-ai": "ai-tools",
+  llms: "ai-tools", "ai-meeting-assistants": "ai-tools",
+  "code-editors": "developer-tools", apis: "developer-tools", "no-code": "developer-tools",
+  databases: "developer-tools", hosting: "developer-tools", testing: "developer-tools",
+  monitoring: "developer-tools", authentication: "developer-tools", "open-source-tools": "developer-tools",
+  "note-taking": "productivity", "project-management": "productivity", "calendar-scheduling": "productivity",
+  "workflow-automation": "productivity", "email-tools": "productivity", "file-management": "productivity",
+  "team-collaboration": "productivity", "focus-time-tracking": "productivity",
+  seo: "marketing", "social-media": "marketing", "email-marketing": "marketing", crm: "marketing",
+  "lead-generation": "marketing", analytics: "marketing", "customer-support": "marketing",
+  "ui-design": "design-tools", "graphic-design": "design-tools", "website-builders": "design-tools",
+  "video-editing": "video-tools", "screen-recording": "video-tools", "audio-music": "design-tools",
+  presentations: "design-tools", "3d-animation": "design-tools",
+  ecommerce: "saas", payments: "founder-tools", accounting: "founder-tools", "personal-finance": "productivity",
+  hiring: "founder-tools", legal: "founder-tools", "launch-tools": "founder-tools",
+  education: "productivity", "health-fitness": "productivity", travel: "productivity",
+  communities: "saas", gaming: "saas", "news-reading": "productivity",
+};
+
+export function feedCategoryLabel(value?: string): string | null {
+  if (!isProductCategory(value)) return null;
+  const broad = value in FEED_LABELS ? value as BroadCategory : DETAIL_TO_BROAD[value as DetailedCategory];
+  return FEED_LABELS[broad];
+}
+
+export function profileCategoryLabel(value?: string): string | null {
+  return PRODUCT_CATEGORIES.find(category => category.value === value)?.label ?? null;
+}
+
 export const PRICING_MODELS = [
   { value: "unspecified", label: "Not specified" },
   { value: "free", label: "Free" },
@@ -90,7 +128,7 @@ export function isProductCategory(value: unknown): value is ProductCategory {
 
 export function categoryLabel(value?: string): string | null {
   if (!PUBLIC_CATEGORIES_ENABLED) return null;
-  return PRODUCT_CATEGORIES.find((category) => category.value === value)?.label ?? null;
+  return profileCategoryLabel(value);
 }
 
 export function pricingLabel(value?: string): string | null {

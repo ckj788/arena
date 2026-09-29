@@ -53,7 +53,7 @@ import MakerConsole from "@/app/components/MakerConsole";
 import FairDiscoverySection from "@/app/components/FairDiscoverySection";
 import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
 import PrimaryNavigation, { type MainPage } from "@/app/components/PrimaryNavigation";
-import { PRICING_MODELS, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_GROUPS, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
+import { PRICING_MODELS, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_GROUPS, feedCategoryLabel, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { isVisibleProduct, productLinkRel } from "@/lib/productSafety";
@@ -1788,30 +1788,6 @@ export default function ArenaClient({
     );
   }, [supabase]);
 
-  const getProductCategoryTag = useCallback((item: Product) => {
-    if (item.category) {
-      const catMap: Record<string, string> = {
-        "ai-tools": "AI",
-        "developer-tools": "DEV TOOL",
-        "design-tools": "DESIGN",
-        "productivity": "PRODUCTIVITY",
-        "marketing": "MARKETING",
-        "video-tools": "VIDEO",
-        "founder-tools": "FOUNDER",
-        "saas": "SAAS",
-      };
-      if (catMap[item.category]) return catMap[item.category];
-    }
-    const text = `${item.title} ${item.tagline}`.toLowerCase();
-    if (text.includes("ai") || text.includes("gpt") || text.includes("llm") || text.includes("model")) return "AI";
-    if (text.includes("design") || text.includes("ui") || text.includes("ux") || text.includes("figma")) return "DESIGN";
-    if (text.includes("dev") || text.includes("code") || text.includes("api") || text.includes("infra")) return "DEV TOOL";
-    if (text.includes("image") || text.includes("photo") || text.includes("psd")) return "IMAGE";
-    if (text.includes("life") || text.includes("habit") || text.includes("health")) return "LIFESTYLE";
-    if (text.includes("saas") || text.includes("cloud")) return "SAAS";
-    return "DISCOVERY";
-  }, []);
-
   const isProductOwner = (p: Product, _userTwitter: string, userSubId?: string) => {
     if (supabase) return Boolean(userLoggedIn && userSubId && ownership.userId === userSubId && ownership.ids.includes(p.id));
     // Local-only submissions are tracked in the browser; cloud ownership always uses auth.uid().
@@ -2363,7 +2339,7 @@ export default function ArenaClient({
                   const website = publicHttpUrl(item.url);
                   const isQueued = item.arenaEnqueued ?? (!item.makerAvatar || !item.makerAvatar.includes("pushed=false"));
                   const makerHandle = item.makerTwitter ? (item.makerTwitter.startsWith("@") ? item.makerTwitter : `@${item.makerTwitter}`) : null;
-                  const categoryTag = getProductCategoryTag(item);
+                  const categoryTag = feedCategoryLabel(item.category);
                   return (
                     <div 
                       key={`${item.id}-dup-${index}`} 
@@ -2423,9 +2399,9 @@ export default function ArenaClient({
 
                       {/* Right side: Category pill + Circular action button */}
                       <div className="shrink-0 flex items-center gap-3">
-                        <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-600 bg-zinc-100/90 border border-zinc-200/70">
+                        {categoryTag ? <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-600 bg-zinc-100/90 border border-zinc-200/70">
                           {categoryTag}
-                        </span>
+                        </span> : null}
 
                         {website ? (
                           <a
@@ -3348,7 +3324,7 @@ export default function ArenaClient({
                     </optgroup>
                   ))}
                 </select>
-                <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-500">Choose the main use. Not displayed publicly yet.</p>
+                <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-500">Choose the main use. Your profile shows this category; the discovery feed shows its broader group.</p>
               </div>
               <div className="flex flex-col gap-1">
                 <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing</label>
