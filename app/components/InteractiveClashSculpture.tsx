@@ -1,38 +1,10 @@
 "use client";
 
 import { useCallback, useId, useRef, type ReactNode } from "react";
-import { CLASH_BRAND } from "../../lib/clash-brand";
-
-type Point = [number, number, number];
-type Face = { points: Point[]; color: typeof CLASH_BRAND[keyof typeof CLASH_BRAND] };
-
-// Closed folded prisms: front, back and sides rotate together.
-function prism(outline: Point[], ridge: Point, color: Face["color"]): Face[] {
-  const back = outline.map(([x, y, z]) => [x, y, z - 40] as Point);
-  return outline.flatMap((point, index) => {
-    const next = (index + 1) % outline.length;
-    return [
-      { points: [point, outline[next], ridge], color },
-      { points: [back[index], back[next], outline[next], point], color },
-    ];
-  }).concat([{ points: [...back].reverse(), color }]);
-}
-
-const faces = [
-  ...prism([[-12, -171, 18], [-152, -18, 18], [-22, 87, 18]], [-16, -32, 39], CLASH_BRAND.cyan),
-  ...prism([[28, -76, 18], [166, 30, 18], [20, 179, 18]], [25, 45, 39], CLASH_BRAND.purple),
-];
+import { createClashSculptureRenderer } from "../../lib/clash-sculpture-renderer";
 
 const fullTurn = Math.PI * 2;
 const nearestTurn = (angle: number) => ((angle + Math.PI) % fullTurn + fullTurn) % fullTurn - Math.PI;
-
-function rotate([x, y, z]: Point, pitch: number, yaw: number, roll: number): Point {
-  const x1 = x * Math.cos(yaw) + z * Math.sin(yaw);
-  const z1 = z * Math.cos(yaw) - x * Math.sin(yaw);
-  const y1 = y * Math.cos(pitch) - z1 * Math.sin(pitch);
-  const z2 = y * Math.sin(pitch) + z1 * Math.cos(pitch);
-  return [x1 * Math.cos(roll) - y1 * Math.sin(roll), x1 * Math.sin(roll) + y1 * Math.cos(roll), z2];
-}
 
 export default function InteractiveClashSculpture({ children }: { children: ReactNode }) {
   const resetRef = useRef<() => void>(() => {});
@@ -43,8 +15,8 @@ export default function InteractiveClashSculpture({ children }: { children: Reac
     if (!mountedSurface) return;
     const surface = mountedSurface;
     const canvas = surface.querySelector("canvas")!;
-    const context = canvas.getContext("2d");
-    if (!context) return;
+    let renderer = createClashSculptureRenderer(canvas);
+    if (!renderer) return;
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     let width = surface.clientWidth;
     let ratio = Math.min(window.devicePixelRatio, 2);
@@ -67,9 +39,11 @@ export default function InteractiveClashSculpture({ children }: { children: Reac
     let velocityX = 0;
     let velocityY = 0;
     let returning = false;
+    let contextAvailable = true;
 
     function draw(time: number) {
       frame = 0;
+      if (!contextAvailable) return;
       const dt = lastTime ? Math.min((time - lastTime) / 1000, .04) : 1 / 60;
       lastTime = time;
       if (!motion.matches && !dragging) elapsed += dt;
@@ -86,67 +60,13 @@ export default function InteractiveClashSculpture({ children }: { children: Reac
       const settled = Math.abs(targetPitch + hoverY - pitch) + Math.abs(targetYaw + hoverX - yaw) < .001;
       if (returning && settled) returning = false;
       const breath = motion.matches || dragging ? 0 : Math.sin(elapsed * .65) * .028;
-      context!.setTransform(ratio * width / 520, 0, 0, ratio * width / 520, 0, 0);
-      context!.clearRect(0, 0, 520, 520);
-
-      const projected = faces.map(face => {
-        const points = face.points.map(point => rotate(point, pitch + breath, yaw, breath * .35));
-        const [a, b, c] = points;
-        const u = b.map((value, axis) => value - a[axis]);
-        const v = c.map((value, axis) => value - a[axis]);
-        const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-        const length = Math.hypot(...normal);
-        const light = Math.abs((-normal[0] * .35 - normal[1] * .55 + normal[2] * .76) / length);
-        return { points, color: face.color, shade: .58 + light * .47, depth: points.reduce((sum, point) => sum + point[2], 0) / points.length };
-      });
-      const sphere = rotate([0, -19 + Math.sin(elapsed * 1.2) * 7, 52], pitch + breath, yaw, breath * .35);
-      const layers = [
-        ...projected.map(face => ({ type: "face" as const, depth: face.depth, face })),
-        { type: "sphere" as const, depth: sphere[2], point: sphere },
-      ].sort((a, b) => a.depth - b.depth);
-
-      for (const layer of layers) {
-        if (layer.type === "sphere") {
-          const [x, y, z] = layer.point;
-          const perspective = 850 / (850 - z);
-          const sx = 260 + x * perspective;
-          const sy = 258 + y * perspective;
-          const radius = 19 * perspective;
-          const pearl = context!.createRadialGradient(sx - radius * .35, sy - radius * .4, radius * .05, sx, sy, radius);
-          pearl.addColorStop(0, "#fff");
-          pearl.addColorStop(.3, "#f9faff");
-          pearl.addColorStop(.65, "#d5e2eb");
-          pearl.addColorStop(1, "#8996b6");
-          context!.beginPath();
-          context!.arc(sx, sy, radius, 0, fullTurn);
-          context!.fillStyle = pearl;
-          context!.fill();
-          continue;
-        }
-        const face = layer.face;
-        const screen = face.points.map(([x, y, z]) => {
-          const perspective = 850 / (850 - z);
-          return [260 + x * perspective, 258 + y * perspective];
-        });
-        context!.beginPath();
-        screen.forEach(([x, y], index) => index ? context!.lineTo(x, y) : context!.moveTo(x, y));
-        context!.closePath();
-        const gradient = context!.createLinearGradient(150, 90, 375, 410);
-        const tint = (rgb: readonly number[]) => `rgb(${rgb.map(value => Math.min(255, value * face.shade)).join(", ")})`;
-        gradient.addColorStop(0, tint(face.color.rgbLight));
-        gradient.addColorStop(1, tint(face.color.rgbDark));
-        context!.fillStyle = gradient;
-        context!.fill();
-        context!.strokeStyle = "rgba(235, 245, 255, .24)";
-        context!.lineWidth = .65;
-        context!.stroke();
-      }
+      renderer!.draw(pitch + breath, yaw, breath * .35, -19 + Math.sin(elapsed * 1.2) * 7);
       surface.dataset.ready = "true";
       if (visible && !document.hidden && (!motion.matches || dragging || !settled)) frame = requestAnimationFrame(draw);
     }
 
     function wake() {
-      if (!frame && visible && !document.hidden) { lastTime = 0; frame = requestAnimationFrame(draw); }
+      if (!frame && contextAvailable && visible && !document.hidden) { lastTime = 0; frame = requestAnimationFrame(draw); }
     }
     function stop() { cancelAnimationFrame(frame); frame = 0; lastTime = 0; }
     function reset() {
@@ -216,6 +136,18 @@ export default function InteractiveClashSculpture({ children }: { children: Reac
       }
     }
     function visibility() { if (document.hidden) stop(); else wake(); }
+    function contextLost(event: Event) {
+      event.preventDefault();
+      contextAvailable = false;
+      stop();
+      delete surface.dataset.ready;
+    }
+    function contextRestored() {
+      // Rebind GPU resources after the browser restores this canvas context.
+      renderer!.dispose();
+      const restored = createClashSculptureRenderer(canvas);
+      if (restored) { renderer = restored; contextAvailable = true; draw(performance.now()); wake(); }
+    }
     const resize = new ResizeObserver(entries => {
       const nextWidth = entries[0].contentRect.width;
       const nextRatio = Math.min(window.devicePixelRatio, 2);
@@ -244,6 +176,8 @@ export default function InteractiveClashSculpture({ children }: { children: Reac
     surface.addEventListener("keydown", key);
     document.addEventListener("visibilitychange", visibility);
     motion.addEventListener("change", wake);
+    canvas.addEventListener("webglcontextlost", contextLost);
+    canvas.addEventListener("webglcontextrestored", contextRestored);
     draw(performance.now());
     return () => {
       stop();
@@ -259,6 +193,9 @@ export default function InteractiveClashSculpture({ children }: { children: Reac
       surface.removeEventListener("keydown", key);
       document.removeEventListener("visibilitychange", visibility);
       motion.removeEventListener("change", wake);
+      canvas.removeEventListener("webglcontextlost", contextLost);
+      canvas.removeEventListener("webglcontextrestored", contextRestored);
+      renderer!.dispose();
       delete surface.dataset.ready;
     };
   }, []);
