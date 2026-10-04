@@ -1,0 +1,184 @@
+/* Shared exhibition language. Product flows and dialogs keep their own styles. */
+.arena-app {
+  --exhibition-ink: #25231f;
+  --exhibition-paper: #f8f6f0;
+  --exhibition-line: #dcd7cc;
+  --exhibition-amber: #a26728;
+}
+.arena-app h1, .arena-app h2, .exhibition-wordmark {
+  font-family: var(--font-display), var(--font-inter), sans-serif;
+}
+.exhibition-wordmark { letter-spacing: -.055em; font-weight: 600; }
+.site-glass-nav {
+  background: rgb(250 248 242 / 88%);
+  border-bottom-color: #ded9ce;
+  box-shadow: 0 1px 0 rgb(255 255 255 / 65%);
+}
+.exhibition-nav-link {
+  position: relative;
+  border-radius: 0;
+  padding: 0 14px;
+  min-height: 64px;
+  color: #6b665f;
+  font-size: 13px;
+  font-weight: 500;
+  transition: color .18s ease;
+}
+.exhibition-nav-link:hover { color: #25231f; }
+.exhibition-nav-link[aria-current="page"] { color: #25231f; }
+.exhibition-nav-link[aria-current="page"]::after {
+  content: ""; position: absolute; bottom: 0; left: 14px; right: 14px;
+  height: 2px; background: #a26728;
+}
+.exhibition-kicker {
+  display: flex; align-items: center; gap: 12px;
+  font: 11px/1.5 var(--font-mono);
+  letter-spacing: .12em; text-transform: uppercase; color: #766b5b;
+}
+.exhibition-kicker::before { content: ""; width: 24px; height: 1px; background: #ad8b55; }
+.exhibition-hero { padding: 52px 0 0; position: relative; }
+.exhibition-hero-layout {
+  max-width: 1280px; padding: 0 32px; margin: auto;
+  display: grid; grid-template-columns: 1.15fr 1fr; gap: 32px; align-items: center;
+}
+.exhibition-hero-copy { position: relative; z-index: 1; padding: 32px 0 52px; }
+.exhibition-hero-title {
+  margin: 28px 0 24px; color: #25231f; font-weight: 500;
+  font-size: clamp(48px, 5.5vw, 78px); line-height: 1.02; letter-spacing: -.055em;
+}
+.exhibition-hero-title > span { display: block; }
+.exhibition-hero-title .exhibition-title-accent {
+  font-family: Georgia, "Times New Roman", serif; font-style: italic;
+  font-weight: 400; letter-spacing: -.065em; color: #95652c;
+}
+.exhibition-hero-description { max-width: 440px; color: #6c665c; font-size: 15px; line-height: 1.9; }
+.exhibition-hero-actions { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; margin-top: 28px; }
+.exhibition-button {
+  display: inline-flex; align-items: center; justify-content: space-between; gap: 28px;
+  min-height: 48px; padding: 0 21px; border: 1px solid #353129;
+  border-radius: 4px; background: #2d2a24; color: #fffaf0; font-size: 13px; font-weight: 500;
+  box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 3px 7px rgb(54 43 25 / 9%);
+  transition: background .18s ease, translate .18s ease;
+}
+.exhibition-button:hover { background: #484034; translate: 0 -1px; }
+.exhibition-button:active { translate: 0 1px; }
+.exhibition-text-link { display: inline-flex; gap: 18px; align-items: center; min-height: 44px; font-size: 13px; color: #5c554b; }
+.exhibition-text-link:hover { color: #95652c; }
+.exhibition-ledger {
+  max-width: 1216px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between;
+  gap: 16px; border-top: 1px solid #dcd7cc; border-bottom: 1px solid #dcd7cc; padding: 16px 0;
+  color: #736b5f; font: 10px/1.8 var(--font-mono); letter-spacing: .09em; text-transform: uppercase;
+}
+.exhibition-ledger strong { font-weight: 500; color: #25231f; }
+.exhibition-ledger > span { display: inline-flex; gap: 16px; align-items: center; }
+.exhibition-ledger i { width: 5px; height: 5px; border-radius: 50%; background: #a88142; }
+.clash-sculpture { position: relative; max-width: 520px; width: 100%; margin-inline: auto; }
+.clash-sculpture::before {
+  content: ""; position: absolute; inset: 8% 4% 9%; border-radius: 50%;
+  background: radial-gradient(ellipse, rgb(210 184 137 / 14%), transparent 66%); pointer-events: none;
+}
+.clash-sculpture svg { position: relative; width: 100%; height: auto; display: block; overflow: visible; }
+.sculpture-caption {
+  display: flex; justify-content: space-between; border-top: 1px solid #dcd7cc;
+  margin: -8px 48px 0; padding-top: 12px; color: #8c8170;
+  font: 9px/1.5 var(--font-mono); letter-spacing: .15em;
+}
+.sculpture-fold { transform-box: fill-box; transform-origin: center; }
+.sculpture-interaction { position: relative; cursor: grab; touch-action: pan-y; border-radius: 8px; outline: none; }
+.sculpture-interaction[data-dragging="true"] { cursor: grabbing; }
+.sculpture-interaction:focus-visible { outline: 1px solid #a88142; outline-offset: -24px; }
+.sculpture-interaction canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; opacity: 0; }
+.sculpture-interaction[data-ready="true"] canvas { opacity: 1; }
+.sculpture-interaction[data-ready="true"] .sculpture-fold,
+.sculpture-interaction[data-ready="true"] .sculpture-core { visibility: hidden; animation: none; }
+.sculpture-controls { align-items: center; }
+.sculpture-controls button { min-height: 36px; padding: 0 0 0 16px; cursor: pointer; font: inherit; letter-spacing: inherit; text-transform: uppercase; }
+.sculpture-controls button:hover { color: #95652c; }
+.sculpture-controls button:focus-visible { outline: 1px solid #a88142; outline-offset: 4px; }
+.exhibition-section-heading { display: flex; gap: 20px; align-items: baseline; }
+.exhibition-index { color: #a8885a; font: 11px/1.5 var(--font-mono); letter-spacing: .04em; }
+.exhibition-section-title { font-size: 32px; font-weight: 500; letter-spacing: -.035em; text-transform: none; color: #25231f; }
+.arena-app .release-feed {
+  border-color: #dcd7cc; border-radius: 10px; background: #fffefa;
+  box-shadow: 0 12px 35px -25px rgb(57 42 19 / 24%);
+}
+.arena-app .release-feed > div { background-color: #fffefa; }
+.exhibition-discovery { border-color: #dcd7cc; }
+.exhibition-discovery #discovery-grid { border-color: #dcd7cc; border-radius: 8px; background: #dcd7cc; }
+.exhibition-discovery .product-card { background: #fffefa; padding: 26px; }
+.exhibition-discovery .product-card:hover { background: #f6f2e9; }
+.exhibition-discovery .card-primary-link { font-family: var(--font-display), sans-serif; font-weight: 500; font-size: 23px; letter-spacing: -.025em; }
+.exhibition-arena-preview { border-color: #dcd7cc; background: #f7f3eb; border-radius: 8px; box-shadow: none; }
+.exhibition-route-heading { position: relative; overflow: hidden; padding: 34px 0 38px; border-bottom: 1px solid #dcd7cc; }
+.exhibition-route-heading h1 { font-size: clamp(44px, 5vw, 68px); line-height: 1.05; letter-spacing: -.05em; font-weight: 500; }
+.exhibition-route-heading > div:first-child { position: relative; z-index: 1; }
+.exhibition-arena-heading { min-height: 210px; padding-right: 240px; }
+.exhibition-arena-heading .clash-sculpture { position: absolute; right: 8px; top: -38px; width: 270px; opacity: .85; pointer-events: none; }
+.exhibition-arena-heading .sculpture-caption { display: none; }
+.arena-app[data-main-page="arena"] [data-home-reveal="arena-queue"] {
+  background: #fffdf7; border-color: #dcd7cc; border-radius: 8px;
+  box-shadow: 0 18px 42px -30px rgb(57 42 19 / 25%);
+}
+.arena-app[data-main-page="arena"] .match-card-item { border-radius: 6px; }
+.arena-app[data-main-page="arena"] .inspector-card-a {
+  background: linear-gradient(145deg, #f4f0f8, #fffdfa); border-color: #dcd1e6; border-radius: 8px;
+}
+.arena-app[data-main-page="arena"] .inspector-card-b {
+  background: linear-gradient(145deg, #f8efdd, #fffdfa); border-color: #e4d4b8; border-radius: 8px;
+}
+.arena-app[data-main-page="arena"] .inspector-card-a h3,
+.arena-app[data-main-page="arena"] .inspector-card-b h3 { font-family: var(--font-display), sans-serif; font-size: 21px; font-weight: 500; }
+.arena-app[data-main-page="arena"] .inspector-vs > span:first-child {
+  font-family: var(--font-display), sans-serif; font-size: 24px; font-weight: 500; letter-spacing: -.035em; color: #8a795f;
+}
+.exhibition-champions-heading { padding: 38px 0 48px; }
+.exhibition-champions-heading h1 { font-size: clamp(54px, 6.5vw, 88px); }
+.exhibition-champions-heading .exhibition-kicker { color: #8b642d; }
+.exhibition-champions-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.exhibition-champion {
+  position: relative; background: #fffefa; border-color: #dcd7cc; border-radius: 8px;
+  min-height: 250px; padding: 28px; box-shadow: 0 12px 30px -24px rgb(57 42 19 / 20%);
+}
+.exhibition-champion:first-child { grid-column: span 2; background: linear-gradient(120deg, #f4ead3, #fffdf7 75%); }
+.exhibition-champion a[href^="/products/"] { font-family: var(--font-display), sans-serif; font-size: 25px; line-height: 1.2; font-weight: 500; text-transform: none; letter-spacing: -.03em; }
+.exhibition-champion:first-child a[href^="/products/"] { font-size: 36px; }
+.exhibition-champion:hover { background: #f6f2e9; }
+.exhibition-champions-empty { max-width: none; min-height: 210px; background: #f8f4e9; border-color: #d8c7a5; border-style: solid; border-radius: 8px; }
+.exhibition-resource-hero { padding-bottom: 32px; border-bottom: 1px solid #dcd7cc; }
+.exhibition-resource-hero h1 { font-size: clamp(42px, 5vw, 68px); line-height: 1.05; letter-spacing: -.045em; font-weight: 500; }
+.exhibition-resource-feature { border-radius: 8px; border-color: #d7c6a5; background: linear-gradient(115deg, #f3e8d0, #fffefa 75%); }
+.exhibition-resource-feature h2 { font-weight: 500; font-size: 38px; }
+.exhibition-resource-card { background: #fffefa; border-radius: 8px; border-color: #dcd7cc; }
+.exhibition-resource-table { border-radius: 8px; border-color: #dcd7cc; background: #fffefa; }
+.exhibition-resource-table h3 { font-family: var(--font-display), sans-serif; font-size: 23px; font-weight: 500; }
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes sculpture-float-violet { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+  @keyframes sculpture-float-amber { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
+  .sculpture-fold--cyan { animation: sculpture-float-violet 9s ease-in-out infinite; }
+  .sculpture-fold--violet { animation: sculpture-float-amber 11s ease-in-out infinite; }
+  .sculpture-core { transform-box: fill-box; transform-origin: center; animation: sculpture-float-violet 5s ease-in-out infinite; }
+}
+@media (max-width: 1023px) {
+  .exhibition-hero-layout { padding-inline: 24px; gap: 8px; }
+  .exhibition-ledger { margin-inline: 24px; }
+  .exhibition-nav-link { min-height: 46px; }
+  .exhibition-champions-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 767px) {
+  .exhibition-hero { padding-top: 24px; }
+  .exhibition-hero-layout { grid-template-columns: 1fr; padding-inline: 20px; gap: 0; }
+  .exhibition-hero-copy { padding: 24px 0 8px; }
+  .exhibition-hero-title { font-size: clamp(45px, 9.5vw, 68px); margin: 24px 0 20px; }
+  .exhibition-hero-description { font-size: 14px; }
+  .exhibition-hero-layout > .clash-sculpture { max-width: 280px; margin-top: -12px; margin-bottom: 24px; }
+  .sculpture-caption { margin-inline: 28px; }
+  .exhibition-ledger { margin-inline: 20px; font-size: 9px; gap: 7px; }
+  .exhibition-section-title { font-size: 27px; }
+  .exhibition-arena-heading { padding-right: 0; min-height: 0; }
+  .exhibition-arena-heading .clash-sculpture { width: 190px; right: -80px; top: 16px; opacity: .24; }
+  .exhibition-arena-heading h1 { max-width: 360px; font-size: 42px; }
+  .exhibition-champions-grid { grid-template-columns: 1fr; }
+  .exhibition-champion:first-child { grid-column: auto; }
+  .exhibition-champion:first-child a[href^="/products/"] { font-size: 28px; }
+  .exhibition-resource-feature h2 { font-size: 30px; }
+}

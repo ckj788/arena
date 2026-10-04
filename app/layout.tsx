@@ -3,6 +3,7 @@ import { Inter, Outfit } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
+import "./exhibition.css";
 
 const inter = Inter({
   variable: "--font-inter",

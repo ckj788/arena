@@ -1,4 +1,5 @@
 import React from 'react';
+import { CLASH_BRAND } from '../../lib/clash-brand';
 
 interface ClashLogoProps {
   className?: string;
@@ -23,7 +24,7 @@ export default function ClashLogo({ className = "", size = "md" }: ClashLogoProp
       className={`relative group select-none flex items-center justify-center cursor-pointer transition-transform duration-300 hover:scale-105 ${containerClass} ${className}`}
     >
       {/* Soft glowing background aura */}
-      <div className="absolute -inset-0.5 bg-gradient-to-tr from-[#06B6D4]/35 via-[#6366F1]/25 to-[#8B5CF6]/35 rounded-xl blur-[3px] opacity-40 group-hover:opacity-90 transition-opacity duration-300" />
+      <div className="absolute -inset-0.5 bg-gradient-to-tr from-[#b79460]/20 to-[#8b70ac]/20 rounded-xl blur-[3px] opacity-30 group-hover:opacity-60 transition-opacity duration-300" />
       
       {/* Obsidian black logo container */}
       <div className="relative w-full h-full rounded-lg bg-[#111114] border border-zinc-800/80 shadow-xs flex items-center justify-center overflow-hidden">
@@ -36,20 +37,20 @@ export default function ClashLogo({ className = "", size = "md" }: ClashLogoProp
           <defs>
             {/* Cyan-blue gradient wing on the left */}
             <linearGradient id="logo-cyan" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#22D3EE" />
-              <stop offset="100%" stopColor="#0891B2" />
+              <stop offset="0%" stopColor={CLASH_BRAND.cyan.light} />
+              <stop offset="100%" stopColor={CLASH_BRAND.cyan.dark} />
             </linearGradient>
             
             {/* Flowing purple gradient wing on the right */}
             <linearGradient id="logo-purple" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#C084FC" />
-              <stop offset="100%" stopColor="#7C3AED" />
+              <stop offset="0%" stopColor={CLASH_BRAND.purple.light} />
+              <stop offset="100%" stopColor={CLASH_BRAND.purple.dark} />
             </linearGradient>
             
             {/* Core energy gold gradient */}
             <linearGradient id="logo-gold" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="#FDE047" />
-              <stop offset="100%" stopColor="#D97706" />
+              <stop offset="0%" stopColor={CLASH_BRAND.gold.light} />
+              <stop offset="100%" stopColor={CLASH_BRAND.gold.dark} />
             </linearGradient>
           </defs>
 
@@ -63,7 +64,6 @@ export default function ClashLogo({ className = "", size = "md" }: ClashLogoProp
           <polygon 
             points="45,40 55,30 55,48 45,58" 
             fill="url(#logo-gold)" 
-            className="animate-pulse" 
           />
           
           {/* Aesthetic Focus Flare */}
@@ -72,12 +72,9 @@ export default function ClashLogo({ className = "", size = "md" }: ClashLogoProp
             cy="45" 
             r="3.5" 
             fill="#FFFFFF" 
-            className="animate-ping" 
-            style={{ animationDuration: '2.5s' }} 
           />
         </svg>
       </div>
     </div>
   );
 }
-

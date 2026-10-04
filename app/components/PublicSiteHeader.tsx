@@ -15,13 +15,13 @@ export default function PublicSiteHeader({ actionHref = "/?submit=1", actionLabe
         <div className="flex min-w-0 items-center gap-6">
           <Link href="/" aria-label="Indie Clash home" className="flex min-h-11 items-center gap-2">
             <ClashLogo size="md" className="max-sm:w-7 max-sm:h-7" />
-            <span className="whitespace-nowrap text-sm font-bold tracking-tight text-zinc-950 sm:text-xl">Indie-Clash</span>
+            <span className="exhibition-wordmark whitespace-nowrap text-sm text-zinc-950 sm:text-xl">Indie-Clash</span>
           </Link>
           <PrimaryNavigation activePage={activePage} className="hidden lg:flex" />
         </div>
         <div className="flex shrink-0 items-center gap-1">
         <PublicAccountLink />
-        <Link href={actionHref} className="inline-flex min-h-10 shrink-0 items-center rounded-md bg-zinc-900 px-2 text-[11px] font-semibold text-white shadow-xs transition-all hover:bg-zinc-800 active:scale-[0.99] sm:px-3 sm:text-xs">
+        <Link href={actionHref} className="exhibition-button shrink-0 max-sm:min-h-10 max-sm:px-3">
           {actionLabel}
         </Link>
         </div>

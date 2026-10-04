@@ -35,8 +35,8 @@ export default function LaunchDirectoriesPage() {
     }) }} />
     <main className="relative z-10 mx-auto max-w-6xl px-5 py-8 sm:py-10">
       <nav aria-label="Breadcrumb" className="mb-7 flex flex-wrap gap-2 text-xs text-zinc-500"><Link href="/">Indie Clash</Link><span>/</span><Link href="/resources">Resources</Link><span>/</span><span aria-current="page">Launch directories</span></nav>
-      <header className="mb-7 max-w-3xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700">A practical launch shortlist</p>
+      <header className="exhibition-resource-hero mb-7 max-w-4xl">
+        <p className="exhibition-kicker">A practical launch shortlist</p>
         <h1 className="mt-4 text-4xl font-semibold tracking-tight sm:text-5xl">Startup launch directories.</h1>
         <p className="mt-4 text-lg leading-8 text-zinc-600">Compare {LAUNCH_RESOURCES.length} product launch platforms by cost, audience and waiting time. Find a practical starting point for your next launch.</p>
         <p className="mt-5 text-xs text-zinc-500">Reviewed <time dateTime={RESOURCE_REVIEWED_AT}>September 24, 2026</time> · Maintained by Indie Clash · No affiliate links</p>

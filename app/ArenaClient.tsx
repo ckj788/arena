@@ -49,6 +49,7 @@ import {
 } from "@/lib/timeHelpers";
 import InteractiveGrid from "@/app/components/InteractiveGrid";
 import ClashLogo from "@/app/components/ClashLogo";
+import ClashSculpture from "@/app/components/ClashSculpture";
 import MakerConsole from "@/app/components/MakerConsole";
 import FairDiscoverySection from "@/app/components/FairDiscoverySection";
 import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
@@ -2140,7 +2141,7 @@ export default function ArenaClient({
               className="flex min-h-11 items-center gap-2 cursor-pointer"
             >
               <ClashLogo size="md" className="max-sm:w-7 max-sm:h-7" />
-              <span className="whitespace-nowrap font-bold text-zinc-950 tracking-tight text-sm sm:text-xl font-sans">
+              <span className="exhibition-wordmark whitespace-nowrap text-zinc-950 text-sm sm:text-xl">
                 Indie-Clash
               </span>
             </Link>
@@ -2198,7 +2199,7 @@ export default function ArenaClient({
                   synthClick(420, "sine", 0.08, 0.04);
                   openSubmitModal('home');
                 }}
-                className="whitespace-nowrap bg-zinc-900 hover:bg-zinc-800 text-white shadow-xs py-2 px-2 sm:px-3 rounded-md text-[11px] sm:text-xs font-semibold tracking-tight transition duration-250 cursor-pointer"
+                className="exhibition-button whitespace-nowrap max-sm:min-h-10 max-sm:px-3"
               >
                 Submit Product
               </button>
@@ -2244,30 +2245,30 @@ export default function ArenaClient({
       <div>
           {/* Hero Banner */}
           {page === "discover" && (
-          <section className="pt-14 pb-11 sm:pt-16 sm:pb-13 relative overflow-hidden">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-              
-              {/* Micro monospace badge on top */}
-              <div className="inline-block text-[10px] font-mono uppercase tracking-widest text-violet-700 bg-violet-50 border border-violet-200/80 shadow-2xs px-3 py-1 rounded-md mb-5 hero-badge">
-                FREE PRODUCT DISCOVERY &amp; LAUNCH PLATFORM
+          <section className="exhibition-hero">
+            <div className="exhibition-hero-layout">
+              <div className="exhibition-hero-copy">
+                <p className="exhibition-kicker hero-badge">Free product discovery &amp; launch platform</p>
+                <h1 className="exhibition-hero-title hero-title">
+                  <span>Every Indie Product</span>
+                  <span>deserves</span>
+                  <span className="exhibition-title-accent">to be seen.</span>
+                </h1>
+                <p className="exhibition-hero-description hero-desc">
+                  Launch for free. Discover overlooked indie products. Join optional Arena battles for honest feedback.
+                </p>
+                <div className="exhibition-hero-actions hero-stats">
+                  <button type="button" className="exhibition-button" onClick={() => openSubmitModal('home')}>
+                    Launch your product <span aria-hidden="true">↗</span>
+                  </button>
+                  <a href="#new-and-unseen-section" className="exhibition-text-link">Find your next discovery <span aria-hidden="true">↓</span></a>
+                </div>
               </div>
-
-              {/* Extreme large title font bold tracking tight */}
-              <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold tracking-tight text-zinc-950 uppercase mb-6 leading-none hero-title">
-                Every Indie Product<br />
-                <span className="text-zinc-600 font-mono font-medium">DESERVES TO BE SEEN</span>
-              </h1>
-
-              {/* Centered brief description, restricted width */}
-              <p className="max-w-[780px] mx-auto text-sm sm:text-base text-zinc-600 leading-relaxed font-sans tracking-wide hero-desc">
-                Launch for free. Discover overlooked indie products. Join optional Arena battles for honest feedback.
-              </p>
-              <div className="mt-8 flex flex-wrap justify-center gap-4 text-xs text-zinc-500 hero-stats">
-                <span className="bg-white border border-zinc-200 shadow-2xs px-2.5 py-1 rounded-md uppercase tracking-wider">
-                  Products Submitted: <span className="text-zinc-950 font-semibold">{visibleProducts.length}</span>
-                </span>
-              </div>
-
+              <ClashSculpture />
+            </div>
+            <div className="exhibition-ledger">
+              <span><i aria-hidden="true" /> <strong>{visibleProducts.length} products</strong> · Independent makers</span>
+              <span>Free to launch <span aria-hidden="true">/</span> Built for discovery <span aria-hidden="true">/</span> Honest feedback</span>
             </div>
           </section>
           )}
@@ -2284,9 +2285,8 @@ export default function ArenaClient({
           <div data-home-reveal="launches-heading" className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="text-left space-y-1.5">
               <div className="flex flex-wrap items-center gap-3">
-                <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-zinc-950 border-l-2 border-zinc-900 pl-4 font-sans">
-                  LATEST LAUNCHES
-                </h2>
+                <span className="exhibition-index" aria-hidden="true">01 /</span>
+                <h2 className="exhibition-section-title">Latest launches</h2>
                 <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                   Newest 50 · Rolling
@@ -2446,7 +2446,7 @@ export default function ArenaClient({
         />
 
         <section id="arena-preview" aria-labelledby="arena-preview-title" className="border-t border-zinc-200/80 py-10 md:py-14">
-          <div data-home-reveal="arena-preview" className="glass-panel flex flex-col gap-6 rounded-2xl bg-white border border-zinc-200/90 shadow-xs p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
+          <div data-home-reveal="arena-preview" className="exhibition-arena-preview glass-panel flex flex-col gap-6 border p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
             <div className="max-w-xl">
               <p className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-violet-700">
                 <span className={`h-1.5 w-1.5 rounded-full ${bracket?.status === "active" ? "bg-emerald-500" : "bg-violet-600"}`} />
@@ -2468,9 +2468,10 @@ export default function ArenaClient({
 
         {page === "arena" && <section id="arena-section" className="scroll-mt-32 py-10 md:py-14 relative">
           
-          <div data-home-reveal="arena-heading" data-route-enter="left" className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div data-home-reveal="arena-heading" data-route-enter="left" className="exhibition-route-heading exhibition-arena-heading mb-10 flex flex-col gap-5">
             <div>
-              <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-zinc-950 font-sans">
+              <p className="exhibition-kicker mb-5">The independent arena</p>
+              <h1 className="text-zinc-950">
                 ARENA · PRODUCT BATTLES
               </h1>
               <p className="text-sm text-zinc-600 mt-3">
@@ -2486,6 +2487,7 @@ export default function ArenaClient({
                 </span>
               </div>
             )}
+            <ClashSculpture variant="arena" />
           </div>
 
           {/* Arena Queue Status Bar */}
@@ -2969,10 +2971,10 @@ export default function ArenaClient({
         {page === "champions" && <>
         {/* THE HALL OF VALOR — HISTORIC CHAMPIONS */}
         <section id="champions-section" className="scroll-mt-32 py-10 md:py-14">
-          <div data-home-reveal="champions-heading" data-route-enter="left" className="mb-12 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div data-home-reveal="champions-heading" data-route-enter="left" className="exhibition-route-heading exhibition-champions-heading mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div className="text-left">
-              <p className="mb-3 font-mono text-[10px] uppercase tracking-widest text-violet-700 font-semibold">Hall of Valor</p>
-              <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-950 font-sans">
+              <p className="exhibition-kicker mb-5">Hall of Valor</p>
+              <h1 className="text-zinc-950">
                 Champions
               </h1>
               <p className="text-sm text-zinc-600 mt-3">
@@ -2983,14 +2985,14 @@ export default function ArenaClient({
           </div>
 
           {pastChampions && pastChampions.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="exhibition-champions-grid">
               {pastChampions.map((c, idx) => (
                 <div 
                   key={c.id} 
                   data-home-reveal={`champion-${c.id}`}
                   data-route-enter="up"
                   style={{ "--route-delay": `${140 + (idx % 4) * 70}ms` } as React.CSSProperties}
-                  className="p-5 border border-zinc-200/90 bg-white rounded-2xl hover:border-zinc-300 hover:-translate-y-1 hover:bg-zinc-50/70 shadow-xs hover:shadow-md transition-[background-color,border-color,box-shadow,translate] duration-300 flex flex-col justify-between"
+                  className="exhibition-champion border hover:border-zinc-300 hover:-translate-y-1 transition-[background-color,border-color,box-shadow,translate] duration-300 flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex justify-between items-center mb-3">
@@ -3037,7 +3039,7 @@ export default function ArenaClient({
               ))}
             </div>
           ) : (
-            <div data-home-reveal="champions-empty" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="border border-dashed border-zinc-200 bg-zinc-50/50 rounded-2xl p-16 text-center text-zinc-500 font-mono text-xs max-w-xl mx-auto flex flex-col items-center justify-center space-y-3">
+            <div data-home-reveal="champions-empty" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="exhibition-champions-empty border p-10 sm:p-16 text-center text-zinc-500 font-mono text-xs mx-auto flex flex-col items-center justify-center space-y-3">
               <svg className="w-8 h-8 text-zinc-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
               </svg>

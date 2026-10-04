@@ -21,10 +21,10 @@ export default function ResourcesPage() {
     <PublicSiteHeader activePage="resources" />
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({ "@context": "https://schema.org", "@type": "CollectionPage", name: "Launch resources for indie makers", url: absoluteUrl("/resources"), hasPart: { "@type": "WebPage", name: "Startup launch directories", url: absoluteUrl(RESOURCE_PATH) } }) }} />
     <main className="relative z-10 mx-auto max-w-6xl px-5 py-14 sm:py-20">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-violet-700">Resources for makers</p>
+      <p className="exhibition-kicker">Resources for makers</p>
       <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">Give your launch a better starting point.</h1>
       <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600">Find the right places to share your work. Show what it does. Start conversations with people who might actually use it.</p>
-      <Link href={RESOURCE_PATH} className="mt-12 block rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-white to-white p-8 shadow-xs transition hover:border-amber-400 sm:p-10">
+      <Link href={RESOURCE_PATH} className="exhibition-resource-feature mt-12 block border p-8 transition hover:border-amber-400 sm:p-10">
         <span className="text-xs font-medium uppercase tracking-wider text-amber-800">The launch directory · {LAUNCH_RESOURCES.length} platforms</span>
         <h2 className="mt-4 text-3xl font-semibold tracking-tight">Where to launch your startup</h2>
         <p className="mt-4 max-w-2xl leading-7 text-zinc-600">Compare submission costs, launch timing and audience fit. Includes free options, Product Hunt alternatives and links to each platform’s official rules.</p>
@@ -37,7 +37,7 @@ export default function ResourcesPage() {
             ["01", "Make it understandable", "Explain who the product helps, what they can do with it, and one concrete use case. Use a screenshot of the working product rather than only a logo."],
             ["02", "Match the audience", "Choose two or three relevant communities. Read their rules and tailor your introduction. A beta signup page and a working developer tool need different launch venues."],
             ["03", "Stay for the feedback", "Be available for questions. Ask about a specific workflow, note where people get stuck, and improve the product before your next launch."],
-          ].map(([number, title, copy]) => <article key={number} className="rounded-2xl border border-zinc-200 bg-white p-6"><span className="font-mono text-sm text-amber-700">{number}</span><h3 className="mt-4 font-semibold">{title}</h3><p className="mt-3 text-sm leading-7 text-zinc-600">{copy}</p></article>)}
+          ].map(([number, title, copy]) => <article key={number} className="exhibition-resource-card border p-6"><span className="font-mono text-sm text-amber-700">{number}</span><h3 className="mt-4 font-semibold">{title}</h3><p className="mt-3 text-sm leading-7 text-zinc-600">{copy}</p></article>)}
         </div>
       </section>
       <div className="mt-14 flex flex-wrap items-center gap-5 border-t border-zinc-200 pt-8"><Link href="/?submit=1" className="rounded-lg bg-amber-400 px-5 py-3 font-semibold hover:bg-amber-300">Publish your product for free →</Link><Link href="/products" className="text-sm text-zinc-600 hover:text-zinc-950">See what other makers are building →</Link></div>

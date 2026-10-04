@@ -46,7 +46,7 @@ export default function ResourceDirectory() {
         <p role="status" className="text-xs leading-6 text-zinc-500">{filtered.length} of {LAUNCH_RESOURCES.length} platforms · Alphabetical · Free tiers may have conditions</p>
         {hasFilters && <button type="button" onClick={resetFilters} className="min-h-11 text-sm font-medium underline underline-offset-4">Clear filters</button>}
       </div>
-      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+      <div className="exhibition-resource-table overflow-hidden border">
         <div aria-hidden="true" className="hidden grid-cols-[190px_1fr_1fr_24px] gap-5 border-b border-zinc-200 bg-zinc-50 px-6 py-3 text-xs font-medium text-zinc-500 md:grid"><span>Platform / cost</span><span>Best fit</span><span>Timing & access</span><span /></div>
         {filtered.map(item => <ResourceCard key={item.name} item={item} />)}
       </div>

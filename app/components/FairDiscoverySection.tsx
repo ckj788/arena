@@ -180,10 +180,10 @@ function FairDiscoverySection({ products, renderLogo, onAdvance }: FairDiscovery
   };
 
   return (
-    <section ref={sectionRef} id="new-and-unseen-section" data-home-reveal="discovery" className="border-t border-zinc-200/80 py-12 md:py-16">
+    <section ref={sectionRef} id="new-and-unseen-section" data-home-reveal="discovery" className="exhibition-discovery border-t py-12 md:py-16">
       <div className="mb-7 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
         <div className="max-w-2xl">
-          <h2 className="border-l-2 border-[#7C3AED] pl-4 text-xl font-bold uppercase tracking-tight text-zinc-950">WORTH A CLOSER LOOK</h2>
+          <div className="exhibition-section-heading"><span className="exhibition-index" aria-hidden="true">02 /</span><h2 className="exhibition-section-title">Worth a closer look</h2></div>
           <p className="mt-3 text-sm leading-6 text-zinc-600">
             Products with fewer recorded views, shown first.
           </p>
