@@ -16,7 +16,7 @@ export default function ResourceDirectory() {
   const filtered = LAUNCH_RESOURCES.filter(item =>
     (cost === "All" || item.cost === cost) &&
     (!LAUNCH_SCENARIOS[scenario] || LAUNCH_SCENARIOS[scenario]!.includes(item.name)) &&
-    `${item.name} ${item.kind} ${item.fit}`.toLowerCase().includes(query.trim().toLowerCase()));
+    `${item.name} ${item.kind} ${item.fit} ${item.timing} ${item.submissionCondition}`.toLowerCase().includes(query.trim().toLowerCase()));
   return (
     <div ref={ref}>
       <div className="mb-6 grid gap-3 sm:grid-cols-3" aria-label="Quick platform selection">
@@ -67,7 +67,10 @@ function ResourceCard({ item }: { item: LaunchResource }) {
       <span className={`mr-5 inline-block rounded-full px-2.5 py-1 text-xs font-medium md:mt-2 md:mr-0 ${item.cost === "Free" ? "bg-emerald-50 text-emerald-800" : "bg-amber-50 text-amber-900"}`}>{item.cost === "Free" ? "Free option" : item.cost}</span>
     </div>
     <p className="text-sm leading-6 text-zinc-600"><span className="sr-only">Best fit: </span>{item.fit}</p>
-    <p className="text-sm leading-6 text-zinc-600"><span className="mr-1 font-medium text-zinc-800 md:sr-only">Timing:</span>{item.timing}</p>
+    <div>
+      <p className="text-sm leading-6 text-zinc-600"><span className="mr-1 font-medium text-zinc-800 md:sr-only">Timing:</span>{item.timing}</p>
+      <p className="mt-2 text-xs leading-5 text-amber-900"><span className="font-semibold">Before submitting: </span>{item.submissionCondition}</p>
+    </div>
     <span aria-hidden="true" className="absolute top-5 right-5 text-xl text-zinc-400 transition-transform group-open:rotate-45 motion-reduce:transition-none md:static">+</span>
     <span className="sr-only">Requirements, caveats and official sources</span>
     </summary>
@@ -76,6 +79,7 @@ function ResourceCard({ item }: { item: LaunchResource }) {
       {[["What you get", item.listing], ["Website link", item.links]].map(([label, value]) => <div key={label}><dt className="font-medium text-zinc-900">{label}</dt><dd className="mt-1 leading-6 text-zinc-600">{value}</dd></div>)}
     </dl>
     <p className="mb-6 text-sm leading-6 text-zinc-600">{item.note}</p>
+    <p className="mb-4 text-xs text-zinc-500">Official rules reviewed: <time dateTime={item.reviewedAt}>{item.reviewedAt}</time> · Submission outcome not independently tested</p>
     <div className="mt-auto">
       {item.url.startsWith("/") ? <Link href={item.url} className={buttonClass}>Submit on Indie Clash →</Link> : <a href={item.url} target="_blank" rel="noopener noreferrer" className={buttonClass}>Visit {item.name} ↗</a>}
       <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs">{item.sources.map(source => <a key={source.url} href={source.url} target={source.url.startsWith("/") ? undefined : "_blank"} rel="noopener noreferrer" className="text-zinc-500 underline decoration-zinc-300 underline-offset-4 hover:text-zinc-950">{source.label}</a>)}</div>

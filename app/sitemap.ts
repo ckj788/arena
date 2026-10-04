@@ -4,10 +4,9 @@ import { absoluteUrl } from "@/lib/site";
 import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { RESOURCE_PATH, RESOURCE_REVIEWED_AT } from "@/lib/launchResources";
 
-// Cache the complete XML with ISR, not a partial fallback. A failed regeneration
-// leaves the previous successful sitemap in place. Arena writes also invalidate
-// /sitemap.xml. With no successful snapshot, fail rather than publish missing URLs.
-export const revalidate = 3600;
+// Read the public catalogue at request time. New URLs must not wait for an ISR
+// snapshot to expire. Database failures propagate instead of publishing partial XML.
+export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [

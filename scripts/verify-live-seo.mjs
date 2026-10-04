@@ -65,6 +65,19 @@ assert(productHtml.includes('href="/resources/startup-launch-directories"'), 'de
 
 const directoryHtml = await (await request(`${origin}/products`)).text();
 assert(directoryHtml.includes('href="/resources/startup-launch-directories"'), 'deployed directory is missing resource content link');
+const directoryMarkup = directoryHtml.replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '');
+for (const match of directoryMarkup.matchAll(/href="(\/products\/[^"?#]+)"/g)) {
+  assert(urls.includes(`${origin}${match[1]}`), `Published directory product missing from sitemap: ${match[1]}`);
+}
+const resourceHub = await (await request(`${origin}/resources`)).text();
+assert(resourceHub.includes('name="twitter:title" content="Launch Resources for Indie Makers"'), 'resource hub inherits homepage sharing title');
+assert(!resourceHub.includes('maidensail.com'), 'hidden badge is still deployed');
+const guideHtml = await (await request(`${origin}/resources/startup-launch-directories`)).text();
+const summaries = [...guideHtml.matchAll(/<summary\b[^>]*>([\s\S]*?)<\/summary>/g)];
+const fazier = summaries.find(match => match[1].includes('Fazier'));
+const uneed = summaries.find(match => match[1].includes('Uneed'));
+assert(fazier?.[1].includes('homepage or footer'), 'Fazier free condition missing from visible summary');
+assert(uneed?.[1].includes('score 10'), 'Uneed free condition missing from visible summary');
 
 const robotsResponse = await request(`${origin}/robots.txt`);
 assert.equal(robotsResponse.status, 200, 'robots status');
@@ -77,4 +90,4 @@ const imageResponse = await request(`${origin}/og-image.png`);
 assert.equal(imageResponse.status, 200, 'OG image status');
 assert.match(imageResponse.headers.get('content-type') || '', /image\//);
 
-console.log(`PASS: live deployment, canonical redirects, ${urls.length}-URL sitemap, resource links, robots and OG image.`);
+console.log(`PASS: live deployment, canonical redirects, ${urls.length}-URL sitemap, directory coverage, resource links/sharing/conditions, robots and OG image.`);

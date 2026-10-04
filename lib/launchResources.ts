@@ -7,6 +7,8 @@ export type LaunchResource = {
   cost: "Free" | "Paid" | "Check plans";
   fit: string;
   timing: string;
+  submissionCondition: string;
+  reviewedAt: string;
   listing: string;
   links: string;
   note: string;
@@ -19,6 +21,8 @@ export type LaunchResource = {
 export const LAUNCH_RESOURCES: LaunchResource[] = [
   {
     name: "AlternativeTo", kind: "Software directory", cost: "Free",
+    submissionCondition: "Verify your email. Released software only; payment does not buy approval.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Released software with a clear use case and meaningful alternatives to existing apps.",
     timing: "Normal review can take months. Optional $5 priority review usually takes 1–2 business days, sometimes longer.",
     listing: "Software profile and relevant alternative relationships, if approved.",
@@ -29,6 +33,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "BetaList", kind: "Startup directory", cost: "Paid",
+    submissionCondition: "Own domain required. All submissions are paid and subject to selection.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Pre-launch and recently launched internet startups with their own domain.",
     timing: "Editorial review; featuring timeline depends on the selected plan.",
     listing: "Startup listing if accepted.",
@@ -39,6 +45,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Fazier", kind: "Launch platform", cost: "Free",
+    submissionCondition: "Free submission requires a backlink on your homepage or footer.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Makers willing to add a reciprocal badge, or pay for a scheduled launch.",
     timing: "Free submissions are reviewed and listed within 30 days according to the submission page.",
     listing: "Product listing; free homepage featuring is selective.",
@@ -49,6 +57,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Indie Clash", kind: "Launch platform", cost: "Free",
+    submissionCondition: "Profiles are subject to moderation. Arena participation is optional.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Independent makers who want a public profile, ongoing discovery and optional peer feedback.",
     timing: "A successful submission creates a profile. Optional Arena entry has a separate queue.",
     listing: "Permanent product profile, subject to moderation.",
@@ -59,6 +69,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Launching Next", kind: "Startup directory", cost: "Free",
+    submissionCondition: "Editorial acceptance is required. Faster consideration does not guarantee publication.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Early-stage startups seeking an editorial listing beyond a single launch-day community.",
     timing: "Free review queue; optional $99 upgrade for consideration within one business day.",
     listing: "Startup profile if accepted.",
@@ -69,6 +81,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Microlaunch", kind: "Launch platform", cost: "Check plans",
+    submissionCondition: "Standard submission cost is unconfirmed; check the launch flow before proceeding.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Working technology products seeking maker feedback, reviews and monthly discovery.",
     timing: "Monthly discovery and rankings; Pro Launch advertises queue skipping.",
     listing: "Product page with feedback and reviews; paid distribution options are separate.",
@@ -79,6 +93,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Peerlist Launchpad", kind: "Launch platform", cost: "Check plans",
+    submissionCondition: "Confirm current eligibility and cost. Our launch-day source is from February 2025.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Developers and designers sharing projects with a professional builder community.",
     timing: "Weekly launches; the official Launchpad article describes Monday as launch day.",
     listing: "Project showcase on Launchpad.",
@@ -89,6 +105,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "PitchWall", kind: "Launch platform", cost: "Free",
+    submissionCondition: "Free launch requires at least a 30-day wait; newsletter placement is not guaranteed.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "AI tools, SaaS and technology products, including alpha or beta products with a real product presence.",
     timing: "Free launch has a minimum 30-day wait. Paid options offer shorter waits or a chosen date.",
     listing: "Reviewed product listing with plan-specific homepage exposure.",
@@ -99,6 +117,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Product Hunt", kind: "Launch platform", cost: "Free",
+    submissionCondition: "A listing does not guarantee homepage featuring. Prepare a usable demo.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Ready-to-try technology products with a clear demo and a maker available for launch-day discussion.",
     timing: "Prepare a draft and schedule a launch; scheduling is available up to a month ahead.",
     listing: "Product and launch pages; homepage featuring is not guaranteed.",
@@ -109,6 +129,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "SaaSHub", kind: "Software directory", cost: "Check plans",
+    submissionCondition: "Released software and approval required; verify submission cost before proceeding.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Released SaaS and software products that buyers can compare with named competitors.",
     timing: "Approval required; relevant competitors and domain verification help prioritize review.",
     listing: "Software profile and alternatives discovery; paid featured promotion is separate.",
@@ -119,6 +141,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Show HN", kind: "Community", cost: "Free",
+    submissionCondition: "Share a working project you built, not a signup-only landing page.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "A working project you personally built and can discuss in technical detail.",
     timing: "Community submission, not a scheduled directory slot. Account restrictions can apply.",
     listing: "Discussion thread rather than a product profile.",
@@ -129,6 +153,8 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
   },
   {
     name: "Uneed", kind: "Launch platform", cost: "Free",
+    submissionCondition: "Free tier: upvote score 10 to stay published, 20 for a dofollow link.",
+    reviewedAt: RESOURCE_REVIEWED_AT,
     fit: "Technology products seeking a dedicated listing and launch community.",
     timing: "Free assigned launch date up to five months out; paid scheduling and fast-track options.",
     listing: "Dedicated tool listing.",

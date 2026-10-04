@@ -5,11 +5,14 @@ import InteractiveGrid from "@/app/components/InteractiveGrid";
 import { RESOURCE_PATH, LAUNCH_RESOURCES } from "@/lib/launchResources";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
+const title = "Launch Resources for Indie Makers";
+const description = "Choose where to launch your startup, prepare a useful product profile, and turn your launch into conversations with real users.";
 export const metadata: Metadata = {
-  title: "Launch Resources for Indie Makers",
-  description: "Choose where to launch your startup, prepare a useful product profile, and turn your launch into conversations with real users.",
+  title,
+  description,
   alternates: { canonical: "/resources" },
-  openGraph: { title: "Launch Resources for Indie Makers", description: "Practical launch preparation and a source-backed directory of product launch platforms.", url: "/resources", images: ["/og-image.png"] },
+  openGraph: { title, description, url: "/resources", images: ["/og-image.png"] },
+  twitter: { card: "summary_large_image", title, description, images: ["/og-image.png"] },
 };
 
 export default function ResourcesPage() {

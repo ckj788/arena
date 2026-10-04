@@ -404,8 +404,6 @@ async function loadSitemapRecords(): Promise<{
   };
 }
 
-// The sitemap route owns the complete ISR snapshot. A second stale-while-
-// revalidate cache here could turn an old dataset into a newly cached XML after
-// submission, delaying new URLs for another hour. Regenerate from fresh records
-// and let a failed query preserve the route's last successful snapshot instead.
+// The dynamic sitemap route reads all public records without a second data cache.
+// Query failures propagate; do not turn them into a successful partial catalogue.
 export const getSitemapRecords = loadSitemapRecords;
