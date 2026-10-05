@@ -85,7 +85,8 @@ attribute vec3 aPosition;
 attribute vec3 aNormal;
 attribute float aMaterial;
 uniform vec3 uAngles;
-uniform float uSphereY;
+uniform vec2 uFloat;
+uniform float uBreath;
 varying vec3 vPosition;
 varying vec3 vNormal;
 varying vec3 vLocal;
@@ -98,8 +99,14 @@ vec3 rotate(vec3 p) {
 }
 void main() {
   vec3 position = aPosition;
-  if (aMaterial > 1.5) position += vec3(0., uSphereY, 52.);
-  vPosition = rotate(position);
+  if (aMaterial > 1.5) {
+    // The core shares the orbit of the folds, without an independent bobbing offset.
+    vPosition = rotate(position + vec3(0., 0., 52.)) + vec3(0., -19., 0.);
+  } else {
+    position.y += 19.;
+    vPosition = rotate(position * uBreath);
+    vPosition.y += -19. + (aMaterial < .5 ? uFloat.x : uFloat.y);
+  }
   vNormal = rotate(aNormal);
   vLocal = aPosition;
   vMaterial = aMaterial;
@@ -223,7 +230,8 @@ export function createClashSculptureRenderer(canvas: HTMLCanvasElement) {
     gl.vertexAttribPointer(location, size, gl.FLOAT, false, 28, offset);
   }
   const angles = gl.getUniformLocation(program,"uAngles");
-  const sphereY = gl.getUniformLocation(program,"uSphereY");
+  const float = gl.getUniformLocation(program,"uFloat");
+  const breath = gl.getUniformLocation(program,"uBreath");
   gl.uniform3fv(gl.getUniformLocation(program,"uCyan"),CLASH_BRAND.cyan.rgbLight.map((value,axis) => (value*.35+CLASH_BRAND.cyan.rgbDark[axis]*.65)/255));
   gl.uniform3fv(gl.getUniformLocation(program,"uPurple"),CLASH_BRAND.purple.rgbDark.map(value => value/255));
   gl.enable(gl.DEPTH_TEST);
@@ -231,11 +239,13 @@ export function createClashSculptureRenderer(canvas: HTMLCanvasElement) {
   gl.frontFace(gl.CW);
   gl.clearColor(0,0,0,0);
   return {
-    draw(pitch: number, yaw: number, roll: number, coreY: number) {
+    draw(pitch: number, yaw: number, roll: number, elapsed: number, motion: number) {
       gl.viewport(0,0,canvas.width,canvas.height);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.uniform3f(angles,pitch,yaw,roll);
-      gl.uniform1f(sphereY,coreY);
+      const lift = Math.sin(elapsed*.72)*12*motion;
+      gl.uniform2f(float,lift,-lift);
+      gl.uniform1f(breath,1+Math.sin(elapsed*.72)*.008*motion);
       gl.drawArrays(gl.TRIANGLES,0,vertices.length/7);
     },
     dispose() { gl.deleteBuffer(buffer); gl.deleteProgram(program); },

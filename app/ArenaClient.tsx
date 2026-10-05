@@ -2250,7 +2250,7 @@ export default function ArenaClient({
               <div className="exhibition-hero-copy">
                 <p className="exhibition-kicker hero-badge">Free product discovery &amp; launch platform</p>
                 <h1 className="exhibition-hero-title hero-title">
-                  <span>Every Indie Product</span>
+                  <span>Every Product</span>
                   <span>deserves</span>
                   <span className="exhibition-title-accent">to be seen.</span>
                 </h1>
