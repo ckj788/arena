@@ -65,13 +65,16 @@
 .exhibition-text-link { display: inline-flex; gap: 18px; align-items: center; min-height: 44px; font-size: 13px; color: #5c554b; }
 .exhibition-text-link:hover { color: #95652c; }
 .exhibition-ledger {
-  max-width: 1216px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between;
+  max-width: 1216px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
   gap: 16px; border-top: 1px solid #dcd7cc; border-bottom: 1px solid #dcd7cc; padding: 16px 0;
   color: #736b5f; font: 10px/1.8 var(--font-mono); letter-spacing: .09em; text-transform: uppercase;
 }
-.exhibition-ledger strong { font-weight: 500; color: #25231f; }
-.exhibition-ledger > span { display: inline-flex; gap: 16px; align-items: center; }
-.exhibition-ledger i { width: 5px; height: 5px; border-radius: 50%; background: #a88142; }
+.exhibition-product-count { display: inline-flex; align-items: center; gap: 16px; }
+.exhibition-product-count strong { font-weight: 500; color: #25231f; }
+.exhibition-product-count i { width: 5px; height: 5px; border-radius: 50%; background: #a88142; }
+.exhibition-ledger-principles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
+.exhibition-ledger-principles > span { display: inline-flex; align-items: center; gap: 20px; }
+.exhibition-ledger-principles > span:not(:last-child)::after { content: "/"; color: #b3a58f; }
 .clash-sculpture { position: relative; max-width: 520px; width: 100%; margin-inline: auto; }
 .clash-sculpture::before {
   content: ""; position: absolute; inset: 8% 4% 9%; border-radius: 50%;
@@ -171,6 +174,8 @@
   .exhibition-hero-layout > .clash-sculpture { max-width: 280px; margin-top: -12px; margin-bottom: 24px; }
   .sculpture-caption { margin-inline: 28px; }
   .exhibition-ledger { margin-inline: 20px; font-size: 9px; gap: 7px; }
+  .exhibition-ledger-principles { width: 100%; gap: 6px 12px; }
+  .exhibition-ledger-principles > span { gap: 12px; }
   .exhibition-section-title { font-size: 27px; }
   .exhibition-arena-heading { padding-right: 0; min-height: 0; }
   .exhibition-arena-heading .clash-sculpture { width: 190px; right: -80px; top: 16px; opacity: .24; }
