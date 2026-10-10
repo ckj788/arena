@@ -24,6 +24,9 @@ import { productDomainKey } from "@/lib/productSafety";
 type DbRow = Record<string, unknown>;
 
 function databaseError(context: string, error: { message: string; code?: string } | null): never {
+  if ((error?.code === "42703" || error?.code === "PGRST204") && error.message.includes("pricing_details")) {
+    throw new HttpError(503, "The optional pricing update is not installed yet. Please contact the site administrator.");
+  }
   if (error?.code === "23505" && error.message.includes("domain")) {
     throw new HttpError(409, "This website already has a product profile. Edit the existing profile instead.");
   }
@@ -82,6 +85,7 @@ export interface NewProductInput {
   description: string;
   category?: Product["category"];
   pricingModel: NonNullable<Product["pricingModel"]>;
+  pricingDetails?: Product["pricingDetails"] | null;
   platforms: string[];
   targetAudience: string;
   makerStory: string;
@@ -139,6 +143,7 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     description: input.description,
     category: input.category,
     pricingModel: input.pricingModel,
+    pricingDetails: input.pricingDetails || undefined,
     platforms: input.platforms,
     targetAudience: input.targetAudience || undefined,
     makerStory: input.makerStory || undefined,
@@ -189,6 +194,7 @@ export async function updateOwnedProduct(user: User, productId: string, input: N
       [`${DB_PREFIX}description`]: input.description,
       [`${DB_PREFIX}category`]: input.category || null,
       [`${DB_PREFIX}pricing_model`]: input.pricingModel,
+      ...(input.pricingDetails !== undefined ? { [`${DB_PREFIX}pricing_details`]: input.pricingDetails } : {}),
       [`${DB_PREFIX}platforms`]: input.platforms,
       [`${DB_PREFIX}target_audience`]: input.targetAudience || null,
       [`${DB_PREFIX}maker_story`]: input.makerStory || null,

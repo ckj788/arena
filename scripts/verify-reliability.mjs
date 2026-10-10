@@ -58,7 +58,7 @@ const query = new Proxy({}, { get(_target, key) {
 const store = load('lib/arenaStore.ts', { './supabaseClient': {
   supabase: { from: () => query }, DB_PREFIX: 'shipandbattle_', publicArenaTable: t => t,
 } });
-await assert.rejects(store.fetchCloudProducts(), /refresh products/);
+await assert.rejects(store.fetchCloudProducts(), error => error instanceof store.PublicRefreshError && error.cause === dbResult.error);
 await assert.rejects(store.fetchCloudBracket(), /refresh the Arena/);
 await assert.rejects(store.fetchCloudPastChampions(), /refresh champions/);
 dbResult = { data: null, error: null };

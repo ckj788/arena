@@ -93,6 +93,7 @@ export interface ProductSubmission {
   description: string;
   category?: Product["category"];
   pricingModel: NonNullable<Product["pricingModel"]>;
+  pricingDetails?: Product["pricingDetails"] | null;
   platforms: string[];
   targetAudience: string;
   makerStory: string;

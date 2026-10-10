@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Keep explicit, local-only fixture tests out of the normal dev/build cache.
+  distDir: process.env.INDIECLASH_SAFETY_FIXTURE === "1" ? ".next-fixture" : ".next",
   poweredByHeader: false,
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   async redirects() {

@@ -8,6 +8,8 @@ import useModalAccessibility from "@/app/components/useModalAccessibility";
 import useHomeMotion from "@/app/components/useHomeMotion";
 import useArenaNavigation from "@/app/components/useArenaNavigation";
 import AuthProviderButton from "@/app/components/AuthProviderButton";
+import PricingFields from "@/app/components/PricingFields";
+import { EMPTY_PRICING_DRAFT, normalizeProductPricing, pricingDraftValue, productPricingError, type PricingDraft } from "@/lib/productPricing";
 import { gsap } from "gsap";
 import { withDeadline } from "@/lib/requestSafety";
 import { Product, Match, Bracket } from "@/lib/mockData";
@@ -25,6 +27,7 @@ import {
   getRoundMatches,
   advanceTournamentRound,
   fetchCloudProducts,
+  PublicRefreshError,
   fetchCloudBracket,
   fetchCloudPastChampions,
   loadLocalPastChampions,
@@ -233,6 +236,8 @@ export default function ArenaClient({
   const submitPendingRef = useRef(false);
   const publicRevisionRef = useRef(0);
   const publicSyncPendingRef = useRef(false);
+  const [publicSyncError, setPublicSyncError] = useState<string | null>(null);
+  const [isPublicSyncPending, setIsPublicSyncPending] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [publishedProduct, setPublishedProduct] = useState<Product | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -244,6 +249,7 @@ export default function ArenaClient({
   const [newDescription, setNewDescription] = useState("");
   const [newCategory, setNewCategory] = useState<ProductCategory | "">("");
   const [newPricingModel, setNewPricingModel] = useState<PricingModel>("unspecified");
+  const [newPricingDetails, setNewPricingDetails] = useState<PricingDraft>({ ...EMPTY_PRICING_DRAFT });
   const [newPlatforms, setNewPlatforms] = useState("");
   const [newTargetAudience, setNewTargetAudience] = useState("");
   const [newMakerStory, setNewMakerStory] = useState("");
@@ -290,6 +296,11 @@ export default function ArenaClient({
         setNewDescription(typeof draft.description === "string" ? draft.description : "");
         setNewCategory(PRODUCT_CATEGORIES.some((item) => item.value === draft.category) ? draft.category as ProductCategory : "");
         setNewPricingModel(PRICING_MODELS.some((item) => item.value === draft.pricingModel) ? draft.pricingModel as PricingModel : "unspecified");
+        if (draft.pricingDetails && typeof draft.pricingDetails === "object") {
+          const savedPricing = draft.pricingDetails as Record<string, unknown>;
+          setNewPricingDetails(Object.fromEntries(Object.keys(EMPTY_PRICING_DRAFT).map(key => [key, typeof savedPricing[key] === "string" ? savedPricing[key] : ""])) as unknown as PricingDraft);
+        }
+        if (typeof draft.editingProductId === "string") setEditingProduct({ id: draft.editingProductId } as Product);
         setNewPlatforms(typeof draft.platforms === "string" ? draft.platforms : "");
         setNewTargetAudience(typeof draft.targetAudience === "string" ? draft.targetAudience : "");
         setNewMakerStory(typeof draft.makerStory === "string" ? draft.makerStory : "");
@@ -324,6 +335,7 @@ export default function ArenaClient({
     setNewDescription("");
     setNewCategory("");
     setNewPricingModel("unspecified");
+    setNewPricingDetails({ ...EMPTY_PRICING_DRAFT });
     setNewPlatforms("");
     setNewTargetAudience("");
     setNewMakerStory("");
@@ -361,6 +373,7 @@ export default function ArenaClient({
     setNewDescription(product.description || "");
     setNewCategory(product.category || "");
     setNewPricingModel(product.pricingModel || "unspecified");
+    setNewPricingDetails(product.pricingDetails ? { ...product.pricingDetails } : { ...EMPTY_PRICING_DRAFT });
     setNewPlatforms(product.platforms?.join(", ") || "");
     setNewTargetAudience(product.targetAudience || "");
     setNewMakerStory(product.makerStory || "");
@@ -639,6 +652,8 @@ export default function ArenaClient({
           description: newDescription,
           category: newCategory,
           pricingModel: newPricingModel,
+          pricingDetails: newPricingDetails,
+          editingProductId: editingProduct?.id,
           platforms: newPlatforms,
           targetAudience: newTargetAudience,
           makerStory: newMakerStory,
@@ -833,6 +848,7 @@ export default function ArenaClient({
 
     // 4. Background revalidation: fetch fresh database records in parallel
     publicSyncPendingRef.current = true;
+    setIsPublicSyncPending(true);
     const revision = publicRevisionRef.current;
     try {
       const prods = await fetchCloudProducts();
@@ -842,6 +858,7 @@ export default function ArenaClient({
       if (isSyncLockedRef.current || votePendingRef.current || revision !== publicRevisionRef.current) return;
 
       memoryCache.lastFetchTime = Date.now();
+      setPublicSyncError(null);
 
       if (prods) {
         setProducts(prods);
@@ -870,9 +887,15 @@ export default function ArenaClient({
         } catch {}
       }
     } catch (e) {
-      console.error("Error syncing data:", e);
+      if (e instanceof PublicRefreshError) {
+        setPublicSyncError(e.message);
+        console.warn("[INDIE CLASH] Public refresh failed:", e.message, e.cause);
+      } else {
+        console.error("Error syncing data:", e);
+      }
     } finally {
       publicSyncPendingRef.current = false;
+      setIsPublicSyncPending(false);
       isInitialSyncDone.current = true;
     }
   }, [setPastChampions]);
@@ -1304,6 +1327,14 @@ export default function ArenaClient({
       return;
     }
 
+    const pricingDraft = pricingDraftValue(newPricingDetails);
+    const pricingError = productPricingError(pricingDraft, newPricingModel);
+    if (pricingError) {
+      setSubmitError(pricingError);
+      return;
+    }
+    const pricingDetails = pricingDraft ? normalizeProductPricing(pricingDraft) : null;
+
     const normalizedUrl = newUrl.startsWith("http") ? newUrl : `https://${newUrl}`;
 
     isSyncLockedRef.current = true;
@@ -1337,6 +1368,7 @@ export default function ArenaClient({
           description: newDescription,
           category: newCategory || undefined,
           pricingModel: newPricingModel,
+          ...(pricingDetails || editingProduct ? { pricingDetails } : {}),
           platforms: newPlatforms.split(",").map((item) => item.trim()).filter(Boolean),
           targetAudience: newTargetAudience,
           makerStory: newMakerStory,
@@ -1377,6 +1409,7 @@ export default function ArenaClient({
           description: newDescription,
           category: newCategory || undefined,
           pricingModel: newPricingModel,
+          pricingDetails: pricingDetails || undefined,
           platforms: newPlatforms.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
           targetAudience: newTargetAudience || undefined,
           makerStory: newMakerStory || undefined,
@@ -2216,6 +2249,18 @@ export default function ArenaClient({
           </div>}
         </div>
       </header>
+
+      {publicSyncError && (
+        <div data-public-refresh-error role="status" aria-live="polite" className="relative mx-4 mt-4 flex max-w-7xl flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/80 bg-amber-50/90 px-4 py-3 text-sm text-amber-900 sm:mx-6 lg:mx-auto">
+          <div>
+            <p className="font-semibold">{publicSyncError}</p>
+            <p className="mt-1 text-xs text-amber-800">Latest data is unavailable. Any displayed content may be out of date.</p>
+          </div>
+          <button type="button" onClick={() => void syncCloudData()} disabled={isPublicSyncPending} aria-busy={isPublicSyncPending} className="min-h-10 rounded-lg border border-amber-300 bg-white px-4 text-xs font-semibold transition hover:bg-amber-100 disabled:cursor-wait disabled:opacity-60">
+            {isPublicSyncPending ? "Retrying…" : "Retry refresh"}
+          </button>
+        </div>
+      )}
 
       {authError && !isSubmitOpen && !isAuthOpen && !votingMatch && <div role="alert" data-auth-error className="mx-auto mt-4 max-w-4xl rounded-md border border-red-200 bg-red-50 px-5 py-4 text-sm leading-6 text-red-700">
         {authError}
@@ -3333,7 +3378,7 @@ export default function ArenaClient({
                 <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-500">Choose the main use. Your profile shows this category; the discovery feed shows its broader group.</p>
               </div>
               <div className="flex flex-col gap-1">
-                <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing</label>
+                <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing model <span className="normal-case tracking-normal">(optional)</span></label>
                 <select
                   id="product-pricing"
                   value={newPricingModel}
@@ -3344,6 +3389,8 @@ export default function ArenaClient({
                 </select>
               </div>
               </div>
+
+              <PricingFields value={newPricingDetails} onChange={setNewPricingDetails} disabled={isSubmittingProduct} />
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="flex flex-col gap-1">

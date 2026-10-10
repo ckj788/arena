@@ -1,4 +1,5 @@
 import type { PricingModel, ProductCategory } from "./productTaxonomy";
+import type { ProductPricing } from "./productPricing";
 
 export interface Product {
   id: string;
@@ -21,6 +22,7 @@ export interface Product {
   description?: string;
   category?: ProductCategory;
   pricingModel?: PricingModel;
+  pricingDetails?: ProductPricing;
   platforms?: string[];
   targetAudience?: string;
   makerStory?: string;

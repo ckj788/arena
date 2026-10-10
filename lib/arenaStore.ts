@@ -379,6 +379,7 @@ export function toDbProduct(p: Product) {
     [`${DB_PREFIX}description`]: p.description || null,
     [`${DB_PREFIX}category`]: p.category || null,
     [`${DB_PREFIX}pricing_model`]: p.pricingModel || "unspecified",
+    ...(p.pricingDetails !== undefined ? { [`${DB_PREFIX}pricing_details`]: p.pricingDetails } : {}),
     [`${DB_PREFIX}platforms`]: p.platforms || [],
     [`${DB_PREFIX}target_audience`]: p.targetAudience || null,
     [`${DB_PREFIX}maker_story`]: p.makerStory || null,
@@ -428,6 +429,7 @@ export function fromDbProduct(row: DatabaseRow): Product {
     pricingModel: ["unspecified", "free", "freemium", "paid", "open-source", "contact"].includes(pricingModel)
       ? pricingModel as Product["pricingModel"]
       : "unspecified",
+    pricingDetails: row[`${DB_PREFIX}pricing_details`] as Product["pricingDetails"] || undefined,
     platforms: Array.isArray(platforms) ? platforms.filter((item): item is string => typeof item === "string") : [],
     targetAudience: databaseString(row, `${DB_PREFIX}target_audience`) || undefined,
     makerStory: databaseString(row, `${DB_PREFIX}maker_story`) || undefined,
@@ -480,23 +482,24 @@ export function fromDbMatch(row: DatabaseRow, productA: Product, productB: Produ
 }
 
 // 1. 获取云端所有参赛项目列表
+export class PublicRefreshError extends Error {
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = "PublicRefreshError";
+  }
+}
+
 export async function fetchCloudProducts(): Promise<Product[]> {
   if (!supabase) return loadProducts();
-  try {
-    const { data, error } = await supabase
-      .from(publicArenaTable("products"))
-      .select("*")
-      .order(`${DB_PREFIX}submitted_at`, { ascending: true }).abortSignal(AbortSignal.timeout(15_000));
+  const { data, error } = await supabase
+    .from(publicArenaTable("products"))
+    .select("*")
+    .order(`${DB_PREFIX}submitted_at`, { ascending: true }).abortSignal(AbortSignal.timeout(15_000));
 
-    if (error || !data) {
-      console.warn("⚠️ [INDIE CLASH] Cloud products fetch warning, using fallback store:", error?.message || error);
-      throw new Error("Unable to refresh products.");
-    }
-    return data.map(fromDbProduct);
-  } catch (err: unknown) {
-    console.warn("⚠️ [INDIE CLASH] Cloud products network exception, using fallback store:", exceptionMessage(err));
-    throw err;
+  if (error || !data) {
+    throw new PublicRefreshError("Unable to refresh products.", error);
   }
+  return data.map(fromDbProduct);
 }
 
 // 2. 获取当前云端活跃的 Bracket 晋级树
@@ -513,7 +516,7 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
       .limit(1)
       .abortSignal(AbortSignal.timeout(15_000)).maybeSingle();
 
-    if (bErr) throw new Error("Unable to refresh the Arena.");
+    if (bErr) throw new PublicRefreshError("Unable to refresh the Arena.", bErr);
     if (!bData) return null;
 
     // B. 抓取该对局树下的所有场次
@@ -523,8 +526,7 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
       .eq(`${DB_PREFIX}bracket_id`, bData[`${DB_PREFIX}id`]).abortSignal(AbortSignal.timeout(15_000));
 
     if (mErr || !mData) {
-      if (mErr) console.warn("⚠️ [INDIE CLASH] Bracket matches fetch issue, using fallback:", mErr?.message || mErr);
-      throw new Error("Unable to refresh Arena matches.");
+      throw new PublicRefreshError("Unable to refresh Arena matches.", mErr);
     }
 
     // C. 载入云端产品库以便装配成嵌套对象
@@ -575,7 +577,7 @@ export async function fetchCloudBracket(preFetchedProducts?: Product[]): Promise
       round4
     };
   } catch (err: unknown) {
-    console.warn("⚠️ [INDIE CLASH] Cloud bracket network exception, using fallback:", exceptionMessage(err));
+    console.warn("⚠️ [INDIE CLASH] Cloud bracket refresh failed:", exceptionMessage(err));
     throw err;
   }
 }
@@ -624,7 +626,7 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
       .select("*")
       .eq(`${DB_PREFIX}status`, "completed").abortSignal(AbortSignal.timeout(15_000));
     
-    if (bErr || !bData) throw new Error("Unable to refresh champions.");
+    if (bErr || !bData) throw new PublicRefreshError("Unable to refresh champions.", bErr);
     const winnerIds = bData
       .filter(row => {
         const size = Number((row as unknown as DatabaseRow)[`${DB_PREFIX}bracket_size`] || 16);
@@ -645,7 +647,7 @@ export async function fetchCloudPastChampions(preFetchedProducts?: Product[]): P
       .select("*")
       .in(`${DB_PREFIX}id`, winnerIds).abortSignal(AbortSignal.timeout(15_000));
       
-    if (pErr || !pData) throw new Error("Unable to refresh champion products.");
+    if (pErr || !pData) throw new PublicRefreshError("Unable to refresh champion products.", pErr);
     return pData.map(fromDbProduct);
   } catch (err: unknown) {
     console.warn("⚠️ [INDIE CLASH] Cloud past champions network exception:", exceptionMessage(err));

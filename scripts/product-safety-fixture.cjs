@@ -14,6 +14,11 @@ const rows = Array.from({ length: 8 }, (_, i) => ({
   shipandbattle_votes_count: 0, shipandbattle_arena_enqueued: false,
   shipandbattle_moderation_status: i === 7 ? 'restricted' : i === 1 ? 'approved' : 'unreviewed',
   shipandbattle_link_trust: i === 1 ? 'trusted' : 'ugc',
+  shipandbattle_pricing_model: i === 1 ? 'free' : i === 3 ? 'freemium' : 'paid',
+  shipandbattle_pricing_details: i < 2 ? {
+    planName: i === 0 ? 'Pro plan' : 'Free plan', amount: i === 0 ? '19.99' : '0', currency: 'USD',
+    billingPeriod: i === 0 ? 'month' : 'free', pricingUrl: `https://product-${i}.example.com/pricing`,
+  } : null,
   shipandbattle_screenshot: i === 0 ? 'https://fixture.supabase.co/storage/v1/object/public/product-logos/fixture/screenshot.png' : null,
   shipandbattle_screenshots: i === 0 ? [1,2,3].map(n => `https://fixture.supabase.co/storage/v1/object/public/product-logos/fixture/image-${n}.png`) : [],
 }));

@@ -10,6 +10,7 @@ import ReportProduct from "@/app/components/ReportProduct";
 import ProductGallery from "@/app/components/ProductGallery";
 import { profileCategoryLabel, pricingLabel } from "@/lib/productTaxonomy";
 import { RESOURCE_PATH } from "@/lib/launchResources";
+import { productOffer, productPriceLabel } from "@/lib/productPricing";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -87,6 +88,8 @@ export default async function ProductPage({ params }: Props) {
   const productWebsite = publicHttpUrl(product.url);
   const productCategory = profileCategoryLabel(product.category);
   const productPricing = pricingLabel(product.pricingModel);
+  const quote = product.pricingDetails;
+  const schemaImage = [product.logo, ...(product.screenshots || [])].map(trustedProductImageUrl).find(image => image?.startsWith("https://"));
   const publishedDate = product.submittedAt ? new Date(product.submittedAt) : null;
   const validPublishedDate = publishedDate && !Number.isNaN(publishedDate.getTime()) ? publishedDate : null;
   const faqEntries = [
@@ -108,7 +111,7 @@ export default async function ProductPage({ params }: Props) {
   const jsonLd = {
     "@context": "https://schema.org",
     "@graph": [
-      {
+      ...(quote ? [{
         "@type": "Product",
         "@id": `${canonicalUrl}#product`,
         name: product.title,
@@ -116,10 +119,9 @@ export default async function ProductPage({ params }: Props) {
         category: productCategory || undefined,
         audience: product.targetAudience ? { "@type": "Audience", audienceType: product.targetAudience } : undefined,
         url: canonicalUrl,
-        image: trustedProductImageUrl(product.logo)
-          ? (product.logo.startsWith("/") ? absoluteUrl(product.logo) : product.logo)
-          : undefined,
+        image: schemaImage,
         sameAs: productWebsite,
+        offers: productOffer(quote),
         additionalProperty: [
           { "@type": "PropertyValue", name: "Arena votes", value: product.votesCount },
           { "@type": "PropertyValue", name: "Arena matches", value: matchups.length },
@@ -127,7 +129,7 @@ export default async function ProductPage({ params }: Props) {
           productPricing ? { "@type": "PropertyValue", name: "Pricing", value: productPricing } : undefined,
           product.platforms?.length ? { "@type": "PropertyValue", name: "Platforms", value: product.platforms.join(", ") } : undefined,
         ].filter(Boolean),
-      },
+      }] : []),
       {
         "@type": "WebPage",
         "@id": canonicalUrl,
@@ -135,7 +137,7 @@ export default async function ProductPage({ params }: Props) {
         description: conciseDescription(product.title, product.tagline, product.description),
         url: canonicalUrl,
         datePublished: validPublishedDate?.toISOString(),
-        mainEntity: { "@id": `${canonicalUrl}#product` },
+        mainEntity: quote ? { "@id": `${canonicalUrl}#product` } : undefined,
         breadcrumb: { "@id": `${canonicalUrl}#breadcrumb` },
       },
       {
@@ -249,6 +251,16 @@ export default async function ProductPage({ params }: Props) {
                   </div>
                 ) : null}
               </section>
+
+              {quote ? (
+                <section aria-labelledby="pricing-heading" className="rounded-2xl border border-zinc-200/80 bg-white p-6 shadow-2xs">
+                  <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Pricing</p>
+                  <h2 id="pricing-heading" className="mt-2 text-xl font-semibold text-zinc-950">{quote.planName}</h2>
+                  <p className="mt-3 text-2xl font-semibold tracking-tight text-zinc-950">{productPriceLabel(quote)}</p>
+                  <p className="mt-3 text-xs leading-5 text-zinc-500">Price supplied by the maker for this plan. Other plans, taxes, or limits may apply. Check the official page for current terms.</p>
+                  <a href={quote.pricingUrl} target="_blank" rel={productLinkRel(product)} className="mt-5 inline-flex items-center gap-2 text-sm font-semibold text-violet-700 underline underline-offset-4 hover:text-violet-900">View official pricing <span aria-hidden="true">↗</span></a>
+                </section>
+              ) : null}
 
               {product.makerStory ? (
                 <section aria-labelledby="maker-story-heading">

@@ -4,6 +4,7 @@ import type { NewProductInput } from "@/lib/server/arenaAdmin";
 import { HttpError } from "@/lib/server/auth";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { PRICING_MODELS, PRODUCT_CATEGORIES } from "@/lib/productTaxonomy";
+import { normalizeProductPricing, productPricingError, type PricingDraft } from "@/lib/productPricing";
 
 function requiredText(value: unknown, field: string, min: number, max: number): string {
   if (typeof value !== "string") throw new HttpError(400, `${field} is required.`);
@@ -79,6 +80,8 @@ export function parseProductInput(body: unknown): NewProductInput {
   if (!PRICING_MODELS.some((item) => item.value === pricingModel)) {
     throw new HttpError(400, "Invalid pricing model.");
   }
+  const pricingError = productPricingError(value.pricingDetails, pricingModel as NewProductInput["pricingModel"]);
+  if (pricingError) throw new HttpError(400, pricingError);
   return {
     title: requiredText(value.title, "Title", 2, 80),
     tagline: requiredText(value.tagline, "Tagline", 10, 240),
@@ -91,6 +94,9 @@ export function parseProductInput(body: unknown): NewProductInput {
     description: requiredText(value.description, "Description", 80, 2_000),
     category: category ? category as NewProductInput["category"] : undefined,
     pricingModel: pricingModel as NewProductInput["pricingModel"],
+    ...(value.pricingDetails !== undefined ? {
+      pricingDetails: value.pricingDetails === null ? null : normalizeProductPricing(value.pricingDetails as PricingDraft),
+    } : {}),
     platforms: stringList(value.platforms, "Platforms"),
     targetAudience: optionalText(value.targetAudience, "Target audience", 300),
     makerStory: optionalText(value.makerStory, "Maker story", 1_000),
