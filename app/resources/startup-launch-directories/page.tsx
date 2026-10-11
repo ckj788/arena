@@ -67,7 +67,7 @@ export default function LaunchDirectoriesPage() {
         <p className="mt-3">We read the linked official pages for submission rules and costs. We have not purchased every plan or completed every submission. “Check plans” means a current price or free tier could not be confirmed. Backlink claims are attributed to the platform unless verified in our own code.</p>
         <p className="mt-3">Policies and queues change. Follow the source links before submitting. Indie Clash is included as our own service and follows the same alphabetical ordering. A product profile can remain available after launch, but every platform can remove content under its rules.</p>
       </section>
-      <div className="mt-12 flex flex-wrap gap-5 border-t border-zinc-200 pt-8"><Link href="/?submit=1" className="rounded-lg bg-amber-400 px-5 py-3 font-semibold hover:bg-amber-300">Launch on Indie Clash for free →</Link><Link href="/resources" className="self-center text-sm text-zinc-600">Launch preparation checklist →</Link></div>
+      <div className="mt-12 flex flex-wrap gap-5 border-t border-zinc-200 pt-8"><Link href="/?submit=1" className="rounded-lg bg-amber-400 px-5 py-3 font-semibold hover:bg-amber-300">Launch on Indie Clash for free →</Link><Link href="/resources" className="self-center text-sm text-zinc-600">All launch resources and guides →</Link></div>
     </main>
   </div>;
 }

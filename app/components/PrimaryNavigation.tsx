@@ -6,7 +6,7 @@ const items = [
   { page: "discover", href: "/", label: "Discover" },
   { page: "arena", href: "/arena", label: "Arena" },
   { page: "champions", href: "/champions", label: "Champions" },
-  { page: "resources", href: "/resources/startup-launch-directories", label: "Resources" },
+  { page: "resources", href: "/resources", label: "Resources" },
 ] as const;
 
 export default function PrimaryNavigation({ activePage, className = "" }: {

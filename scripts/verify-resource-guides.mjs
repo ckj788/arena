@@ -87,11 +87,15 @@ try {
   assert.equal((await page.goto(`${base}/resources/not-a-real-guide`, { waitUntil: 'domcontentloaded' })).status(), 404);
   assert((await page.$eval('meta[name="robots"]', node => node.content)).includes('noindex'));
   await page.goto(`${base}/resources`, { waitUntil: 'domcontentloaded' });
+  assert.equal(await page.$eval('link[rel="canonical"]', node => node.href), 'https://www.indieclash.com/resources');
+  assert(await page.$('main a[href="/resources/startup-launch-directories"]'), 'The original directory remains linked from the hub');
+  assert(await page.$$eval('header a', nodes => nodes.filter(node => node.textContent.trim() === 'Resources').every(node => node.getAttribute('href') === '/resources')));
   for (const guide of guides) assert(await page.$(`a[href="/resources/${guide.slug}"]`));
   const parts = await page.$eval('script[type="application/ld+json"]', node => JSON.parse(node.textContent).hasPart);
   assert.equal(parts.length, 4);
   await page.goto(`${base}/resources/startup-launch-directories`, { waitUntil: 'domcontentloaded' });
   assert.equal(await page.$eval('link[rel="canonical"]', node => node.href), 'https://www.indieclash.com/resources/startup-launch-directories');
+  assert(await page.$('main a[href="/resources"]'), 'The original directory links back to the hub');
   assert(await page.$$eval('nav[aria-label="On this page"] a', nodes => nodes.every(node => document.getElementById(node.hash.slice(1)))));
   await page.goto(`${base}/products`, { waitUntil: 'domcontentloaded' });
   assert((await page.title()).includes('New Indie Products & Recent Product Launches'));
@@ -101,6 +105,22 @@ try {
   assert((await page.$eval('h1', node => node.textContent)).includes('Every Product'));
 
   await page.setJavaScriptEnabled(true);
+  for (const width of [1440, 390]) {
+    await page.setViewport({ width, height: width === 1440 ? 1000 : 844 });
+    await page.goto(`${base}/resources/startup-launch-directories`, { waitUntil: 'domcontentloaded' });
+    const resourceLink = await page.evaluateHandle(() => [...document.querySelectorAll('header a')].find(node => node.textContent.trim() === 'Resources' && node.getBoundingClientRect().width > 0));
+    await resourceLink.asElement().click();
+    await page.waitForFunction(() => location.pathname === '/resources');
+    await page.waitForSelector('main a[href="/resources/startup-launch-directories"]');
+    await page.click('main a[href="/resources/startup-launch-directories"]');
+    await page.waitForFunction(() => location.pathname === '/resources/startup-launch-directories');
+    await page.waitForSelector('main h1');
+    assert.equal(await page.$eval('main h1', node => node.textContent), 'Startup launch directories.');
+    await page.goBack({ waitUntil: 'domcontentloaded' });
+    assert.equal(new URL(page.url()).pathname, '/resources');
+    for (const guide of guides) assert(await page.$(`main a[href="/resources/${guide.slug}"]`));
+    console.log(`PASS shared Resources navigation and original directory round trip: ${width}px`);
+  }
   for (const width of [1440, 390, 320]) {
     await page.setViewport({ width, height: width === 1440 ? 1000 : 844 });
     for (const route of ['/resources', ...guides.map(guide => `/resources/${guide.slug}`)]) {
