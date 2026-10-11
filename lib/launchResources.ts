@@ -1,4 +1,5 @@
 export const RESOURCE_REVIEWED_AT = "2026-09-24";
+export const RESOURCE_CONTENT_UPDATED_AT = "2026-10-11";
 export const RESOURCE_PATH = "/resources/startup-launch-directories";
 
 export type LaunchResource = {

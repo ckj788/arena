@@ -6,9 +6,22 @@ import { absoluteUrl, serializeJsonLd, SITE_DESCRIPTION } from "@/lib/site";
 export const revalidate = 60;
 
 export const metadata: Metadata = {
-  title: { absolute: "Discover New Indie Products | Indie Clash" },
+  title: { absolute: "Discover New Indie Products & Launch Yours | Indie Clash" },
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
+  openGraph: {
+    title: "Discover New Indie Products & Launch Yours | Indie Clash",
+    description: SITE_DESCRIPTION,
+    url: "/",
+    type: "website",
+    images: ["/og-image-v2.png"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Discover New Indie Products & Launch Yours | Indie Clash",
+    description: SITE_DESCRIPTION,
+    images: ["/og-image-v2.png"],
+  },
 };
 
 export default async function Page() {

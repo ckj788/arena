@@ -1,5 +1,6 @@
 import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { SITE_DESCRIPTION, SITE_URL } from "@/lib/site";
+import { RESOURCE_GUIDES } from "@/lib/resourceGuides";
 
 export const dynamic = "force-static";
 
@@ -21,6 +22,7 @@ Indie Clash exists to give independent products durable discovery rather than a 
 - Underrated products: ${SITE_URL}/underrated
 - Launch resources: ${SITE_URL}/resources
 - Startup launch directories: ${SITE_URL}/resources/startup-launch-directories
+${RESOURCE_GUIDES.map(guide => `- ${guide.title}: ${SITE_URL}/resources/${guide.slug}`).join("\n")}
 ${PUBLIC_CATEGORIES_ENABLED ? `- Product categories: ${SITE_URL}/categories\n` : ""}\
 - Sitemap: ${SITE_URL}/sitemap.xml
 

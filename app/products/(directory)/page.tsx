@@ -16,14 +16,14 @@ import { RESOURCE_PATH } from "@/lib/launchResources";
 export const revalidate = 60;
 
 const directoryDescription =
-  "Discover newly launched indie products, visit their official websites, explore maker profiles, and follow real 1v1 arena results and builder feedback.";
+  "Explore new indie products and recent product launches. Discover SaaS products, developer tools and creative software, visit official websites, and follow maker profiles and Arena feedback.";
 
 export const metadata: Metadata = {
-  title: "New Indie Products — Launches, Makers and Arena Results",
+  title: "New Indie Products & Recent Product Launches",
   description: directoryDescription,
   alternates: { canonical: "/products" },
   openGraph: {
-    title: "Discover New Indie Products",
+    title: "New Indie Products & Recent Product Launches",
     description: directoryDescription,
     url: "/products",
     siteName: "Indie Clash",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Discover New Indie Products",
+    title: "New Indie Products & Recent Product Launches",
     description: directoryDescription,
     images: ["/og-image.png"],
   },
@@ -101,7 +101,7 @@ export default async function ProductsPage() {
 
         <section className="mb-12 max-w-4xl">
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-violet-700 font-semibold">Indie product directory</p>
-          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">Discover new indie products</h1>
+          <h1 className="mt-3 text-4xl font-semibold tracking-tight text-zinc-950 sm:text-6xl">New indie products. Recent launches.</h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg">{directoryDescription}</p>
           <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-600">
             <Link href="/underrated" className="rounded-full border border-violet-200/80 bg-violet-50/80 px-3 py-1.5 text-violet-700 font-medium hover:text-violet-900 transition">Explore overlooked products →</Link>
@@ -163,7 +163,11 @@ export default async function ProductsPage() {
           </section>
         )}
 
-        <p className="mt-10 text-sm text-zinc-600">Launching your own product? <Link href={RESOURCE_PATH} className="font-medium text-violet-700 hover:underline">Compare startup launch directories →</Link></p>
+        <div className="mt-10 flex flex-wrap gap-x-6 gap-y-3 text-sm text-zinc-600">
+          <Link href={RESOURCE_PATH} className="font-medium text-violet-700 hover:underline">Compare startup listing sites →</Link>
+          <Link href="/resources/how-to-launch-a-product" className="font-medium text-violet-700 hover:underline">Plan your product launch →</Link>
+          <Link href="/resources/tools-for-solopreneurs" className="font-medium text-violet-700 hover:underline">Choose tools for your next launch →</Link>
+        </div>
         <section className="mt-16 grid gap-5 border-t border-zinc-200/80 pt-10 md:grid-cols-3">
           {[
             ["Permanent product profiles", "Every accepted launch receives a crawlable profile with its maker, official website, launch details, and arena history."],

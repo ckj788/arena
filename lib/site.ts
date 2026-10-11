@@ -1,7 +1,7 @@
 export const SITE_NAME = "Indie Clash";
 export const SITE_URL = "https://www.indieclash.com";
 export const SITE_DESCRIPTION =
-  "Discover new and underrated indie products, explore permanent maker profiles, and compare critique-driven Arena matchups without paid rankings.";
+  "An independent product discovery platform: discover new indie products, launch your product for free, and explore critique-driven Arena feedback without paid rankings.";
 export const PRODUCT_LOGO_BUCKET = "product-logos";
 const LEGACY_PRODUCT_IMAGE_LIMIT = 100_000;
 const LEGACY_PRODUCT_IMAGE_PATTERN = /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/]+={0,2}$/i;

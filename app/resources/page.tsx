@@ -4,9 +4,10 @@ import PublicSiteHeader from "@/app/components/PublicSiteHeader";
 import InteractiveGrid from "@/app/components/InteractiveGrid";
 import { RESOURCE_PATH, LAUNCH_RESOURCES } from "@/lib/launchResources";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
+import { RESOURCE_GUIDES } from "@/lib/resourceGuides";
 
 const title = "Launch Resources for Indie Makers";
-const description = "Choose where to launch your startup, prepare a useful product profile, and turn your launch into conversations with real users.";
+const description = "Learn how to launch a product, compare startup listing sites, find beta testers and choose practical tools for solopreneurs. Guides for independent makers.";
 export const metadata: Metadata = {
   title,
   description,
@@ -19,7 +20,10 @@ export default function ResourcesPage() {
   return <div className="arena-app relative min-h-screen overflow-x-hidden bg-[#fafafa] text-zinc-950 antialiased selection:bg-zinc-900 selection:text-white">
     <InteractiveGrid />
     <PublicSiteHeader activePage="resources" />
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({ "@context": "https://schema.org", "@type": "CollectionPage", name: "Launch resources for indie makers", url: absoluteUrl("/resources"), hasPart: { "@type": "WebPage", name: "Startup launch directories", url: absoluteUrl(RESOURCE_PATH) } }) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({ "@context": "https://schema.org", "@type": "CollectionPage", name: title, description, url: absoluteUrl("/resources"), hasPart: [
+      { "@type": "WebPage", name: "Startup launch directories", url: absoluteUrl(RESOURCE_PATH) },
+      ...RESOURCE_GUIDES.map(guide => ({ "@type": "Article", headline: guide.title, url: absoluteUrl(`/resources/${guide.slug}`) })),
+    ] }) }} />
     <main className="relative z-10 mx-auto max-w-6xl px-5 py-14 sm:py-20">
       <p className="exhibition-kicker">Resources for makers</p>
       <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">Give your launch a better starting point.</h1>
@@ -30,12 +34,26 @@ export default function ResourcesPage() {
         <p className="mt-4 max-w-2xl leading-7 text-zinc-600">Compare submission costs, launch timing and audience fit. Includes free options, Product Hunt alternatives and links to each platform’s official rules.</p>
         <span className="mt-6 inline-block font-semibold">Explore launch platforms →</span>
       </Link>
+      <section className="mt-12" aria-labelledby="practical-guides">
+        <div className="flex flex-wrap items-end justify-between gap-4 border-b border-zinc-200 pb-5">
+          <div><p className="exhibition-kicker">From preparation to feedback</p><h2 id="practical-guides" className="mt-3 text-2xl font-semibold">Practical guides for your next product launch</h2></div>
+          <span className="text-xs text-zinc-500">Written by Indie Clash · No affiliate links</span>
+        </div>
+        <div className="mt-6 grid gap-5 md:grid-cols-3">
+          {RESOURCE_GUIDES.map(guide => <Link key={guide.slug} href={`/resources/${guide.slug}`} className="exhibition-resource-card flex flex-col border p-6 transition hover:border-amber-400">
+            <p className="text-xs font-medium uppercase tracking-wider text-amber-800">{guide.category}</p>
+            <h3 className="mt-4 text-xl font-semibold leading-snug tracking-tight">{guide.title}</h3>
+            <p className="mt-4 flex-1 text-sm leading-7 text-zinc-600">{guide.description}</p>
+            <span className="mt-6 text-sm font-semibold">Read the guide →</span>
+          </Link>)}
+        </div>
+      </section>
       <section className="mt-16" aria-labelledby="launch-preparation">
         <h2 id="launch-preparation" className="text-2xl font-semibold">Before you submit anywhere</h2>
         <div className="mt-6 grid gap-5 md:grid-cols-3">
           {[
             ["01", "Make it understandable", "Explain who the product helps, what they can do with it, and one concrete use case. Use a screenshot of the working product rather than only a logo."],
-            ["02", "Match the audience", "Choose two or three relevant communities. Read their rules and tailor your introduction. A beta signup page and a working developer tool need different launch venues."],
+            ["02", "Match the audience", "Choose two or three relevant communities. Read their rules and tailor your introduction. A beta signup page and a working developer tool need different launch channels."],
             ["03", "Stay for the feedback", "Be available for questions. Ask about a specific workflow, note where people get stuck, and improve the product before your next launch."],
           ].map(([number, title, copy]) => <article key={number} className="exhibition-resource-card border p-6"><span className="font-mono text-sm text-amber-700">{number}</span><h3 className="mt-4 font-semibold">{title}</h3><p className="mt-3 text-sm leading-7 text-zinc-600">{copy}</p></article>)}
         </div>

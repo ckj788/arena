@@ -22,6 +22,7 @@ function load(file, mocks) {
 
 const site = load('lib/site.ts', {});
 const resources = load('lib/launchResources.ts', {});
+const guides = load('lib/resourceGuides.ts', {});
 const link = props => React.createElement('a', props);
 const jsx = await import('react/jsx-runtime');
 const pageMocks = {
@@ -30,6 +31,7 @@ const pageMocks = {
   '@/app/components/PublicSiteHeader': { default: () => null },
   '@/app/components/InteractiveGrid': { default: () => null },
   '@/lib/launchResources': resources,
+  '@/lib/resourceGuides': guides,
   '@/lib/site': site,
 };
 const hub = load('app/resources/page.tsx', pageMocks);
@@ -65,6 +67,7 @@ let databaseError = false;
 const sitemap = load('app/sitemap.ts', {
   '@/lib/site': site,
   '@/lib/launchResources': resources,
+  '@/lib/resourceGuides': guides,
   '@/lib/productTaxonomy': { PRODUCT_CATEGORIES: [], PUBLIC_CATEGORIES_ENABLED: false },
   '@/lib/server/publicSeoData': {
     getSitemapRecords: async () => {

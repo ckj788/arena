@@ -2,7 +2,8 @@ import type { MetadataRoute } from "next";
 import { getSitemapRecords, matchSlug } from "@/lib/server/publicSeoData";
 import { absoluteUrl } from "@/lib/site";
 import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
-import { RESOURCE_PATH, RESOURCE_REVIEWED_AT } from "@/lib/launchResources";
+import { RESOURCE_PATH, RESOURCE_CONTENT_UPDATED_AT } from "@/lib/launchResources";
+import { RESOURCE_GUIDES } from "@/lib/resourceGuides";
 
 // Read the public catalogue at request time. New URLs must not wait for an ISR
 // snapshot to expire. Database failures propagate instead of publishing partial XML.
@@ -10,8 +11,9 @@ export const dynamic = "force-dynamic";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const entries: MetadataRoute.Sitemap = [
-    { url: absoluteUrl("/resources"), changeFrequency: "monthly", priority: 0.7 },
-    { url: absoluteUrl(RESOURCE_PATH), lastModified: new Date(RESOURCE_REVIEWED_AT), changeFrequency: "monthly", priority: 0.8 },
+    { url: absoluteUrl("/resources"), lastModified: new Date(RESOURCE_CONTENT_UPDATED_AT), changeFrequency: "monthly", priority: 0.7 },
+    { url: absoluteUrl(RESOURCE_PATH), lastModified: new Date(RESOURCE_CONTENT_UPDATED_AT), changeFrequency: "monthly", priority: 0.8 },
+    ...RESOURCE_GUIDES.map(guide => ({ url: absoluteUrl(`/resources/${guide.slug}`), lastModified: new Date(guide.updatedAt), changeFrequency: "monthly" as const, priority: 0.7 })),
     {
       url: absoluteUrl("/"),
       changeFrequency: "daily",
