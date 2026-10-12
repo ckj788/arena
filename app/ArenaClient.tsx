@@ -3209,6 +3209,26 @@ export default function ArenaClient({
             >
               Contact Support
             </a>
+            <a
+              href="https://startupfa.me/s/indie-clash?utm_source=www.indieclash.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+              aria-hidden="true"
+              tabIndex={-1}
+              className="hidden"
+            >
+              <img
+                src="https://startupfa.me/badges/featured-badge-small.webp"
+                alt="Indie-Clash - Featured on Startup Fame"
+                width={224}
+                height={36}
+                hidden
+                aria-hidden="true"
+                className="hidden"
+                loading="lazy"
+              />
+            </a>
           </div>
         </div>
       </footer>
