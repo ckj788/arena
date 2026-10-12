@@ -3209,28 +3209,26 @@ export default function ArenaClient({
             >
               Contact Support
             </a>
+          </div>
+        </div>
+        {page === "discover" && (
+          <div className="mx-auto mt-6 flex max-w-7xl justify-center px-4 sm:px-6 md:justify-end lg:px-8">
             <a
               href="https://startupfa.me/s/indie-clash?utm_source=www.indieclash.com"
               target="_blank"
               rel="noopener noreferrer"
-              hidden
-              aria-hidden="true"
-              tabIndex={-1}
-              className="hidden"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
             >
               <img
                 src="https://startupfa.me/badges/featured-badge-small.webp"
                 alt="Indie-Clash - Featured on Startup Fame"
                 width={224}
                 height={36}
-                hidden
-                aria-hidden="true"
-                className="hidden"
-                loading="lazy"
+                className="block h-9 w-56"
               />
             </a>
           </div>
-        </div>
+        )}
       </footer>
       </div>
       )}
