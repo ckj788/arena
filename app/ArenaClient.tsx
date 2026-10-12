@@ -3227,6 +3227,26 @@ export default function ArenaClient({
                 className="block h-9 w-56"
               />
             </a>
+            <a
+              href="https://twelve.tools"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+              aria-hidden="true"
+              tabIndex={-1}
+              className="hidden"
+            >
+              <img
+                src="https://twelve.tools/badge0-white.svg"
+                alt="Featured on Twelve Tools"
+                width={148}
+                height={40}
+                hidden
+                aria-hidden="true"
+                className="hidden"
+                loading="lazy"
+              />
+            </a>
           </div>
         )}
       </footer>
