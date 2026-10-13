@@ -3212,7 +3212,7 @@ export default function ArenaClient({
           </div>
         </div>
         {page === "discover" && (
-          <div className="mx-auto mt-6 flex max-w-7xl justify-center px-4 sm:px-6 md:justify-end lg:px-8">
+          <div className="mx-auto mt-6 flex max-w-7xl flex-wrap items-center justify-center gap-4 px-4 sm:px-6 md:justify-end lg:px-8">
             <a
               href="https://startupfa.me/s/indie-clash?utm_source=www.indieclash.com"
               target="_blank"
@@ -3225,6 +3225,20 @@ export default function ArenaClient({
                 width={224}
                 height={36}
                 className="block h-9 w-56"
+              />
+            </a>
+            <a
+              href="https://www.toolpilot.ai"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
+            >
+              <img
+                src="https://www.toolpilot.ai/cdn/shop/files/toolpilot-badge-w.png"
+                alt="Featured on ToolPilot.ai"
+                width={164}
+                height={36}
+                className="block h-9 w-auto"
               />
             </a>
             <a
