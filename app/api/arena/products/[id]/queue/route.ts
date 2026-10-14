@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { enqueueOwnedProduct } from "@/lib/server/arenaAdmin";
 import { assertJsonRequest, authenticateRequest, consumeUserRateLimit, HttpError, jsonError } from "@/lib/server/auth";
-import { invalidateArenaPublic } from "@/lib/server/cache";
+import { invalidateArenaState } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ export async function POST(
     const { user, client } = await authenticateRequest(request);
     await consumeUserRateLimit(client, "queue");
     const bracketStarted = await enqueueOwnedProduct(user, id);
-    invalidateArenaPublic([`/products/${encodeURIComponent(id)}`]);
+    invalidateArenaState();
     return NextResponse.json({ bracketStarted });
   } catch (error) {
     return jsonError(error);

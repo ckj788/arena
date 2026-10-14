@@ -13,7 +13,7 @@ import {
 import { categoryLabel } from "@/lib/productTaxonomy";
 import { RESOURCE_PATH } from "@/lib/launchResources";
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 const directoryDescription =
   "Explore new indie products and recent product launches. Discover SaaS products, developer tools and creative software, visit official websites, and follow maker profiles and Arena feedback.";
@@ -55,7 +55,7 @@ function ProductMark({ product }: { product: Product }) {
 }
 
 export default async function ProductsPage() {
-  const products = (await getPublicProducts())
+  const products = (await getPublicProducts().catch(() => []))
     .slice()
     .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
   const canonicalUrl = absoluteUrl("/products");

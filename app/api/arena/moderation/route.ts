@@ -1,7 +1,7 @@
 import { getAdminClient, HttpError, jsonError, readJsonRequest, requireAdmin } from "@/lib/server/auth";
 import { DB_PREFIX } from "@/lib/supabaseClient";
 import { fromDbProduct } from "@/lib/arenaStore";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { invalidateProductModeration } from "@/lib/server/cache";
 
 export async function GET(request: Request) {
   try {
@@ -41,10 +41,7 @@ export async function POST(request: Request) {
     });
     if (error?.code === "P0002") throw new HttpError(404, "Product not found.");
     if (error) throw new Error(`Moderation failed: ${error.code}`);
-    // Safety decisions must expire, not serve a stale-while-revalidate copy.
-    revalidateTag("arena-public", { expire: 0 });
-    revalidatePath("/", "layout");
-    revalidatePath("/sitemap.xml");
+    invalidateProductModeration(body.productId);
     return Response.json({ ok: true }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return jsonError(error); }
 }

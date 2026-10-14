@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { DB_PREFIX } from "@/lib/supabaseClient";
+import { DB_PREFIX, publicArenaTable } from "@/lib/supabaseClient";
 import { authenticateRequest, HttpError, jsonError, readJsonRequest } from "@/lib/server/auth";
-import { invalidateArenaPublic } from "@/lib/server/cache";
+import { invalidateArenaVote } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -28,11 +28,20 @@ export async function POST(request: Request) {
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new HttpError(400, "Invalid vote payload.");
     const matchId = validId(body.matchId, "Match ID");
     const votedProductId = validId(body.votedProductId, "Product ID");
+    const winnerFeedback = validFeedback(body.winnerFeedback, "Positive feedback");
+    const loserFeedback = validFeedback(body.loserFeedback, "Constructive feedback");
+    // Resolve both products from the public match, never from client-provided
+    // cache targets. The RPC remains authoritative for voting permissions.
+    const { data: match, error: matchError } = await client.from(publicArenaTable("matches"))
+      .select(`${DB_PREFIX}product_a_id,${DB_PREFIX}product_b_id`)
+      .eq(`${DB_PREFIX}id`, matchId).abortSignal(AbortSignal.timeout(8_000)).maybeSingle();
+    if (matchError) throw new HttpError(503, "Unable to load the matchup. Please try again.");
+    if (!match) throw new HttpError(404, "Matchup not found.");
     const { data, error } = await client.rpc(`${DB_PREFIX}cast_vote`, {
       p_match_id: matchId,
       p_voted_product_id: votedProductId,
-      p_feedback_winner: validFeedback(body.winnerFeedback, "Positive feedback"),
-      p_feedback_loser: validFeedback(body.loserFeedback, "Constructive feedback"),
+      p_feedback_winner: winnerFeedback,
+      p_feedback_loser: loserFeedback,
     });
 
     if (error) {
@@ -50,7 +59,8 @@ export async function POST(request: Request) {
 
     const result = Array.isArray(data) ? data[0] : data;
     if (!result) throw new HttpError(500, "Vote result was empty.");
-    invalidateArenaPublic([`/products/${encodeURIComponent(votedProductId)}`]);
+    const targets = match as unknown as Record<string, string>;
+    invalidateArenaVote(targets[`${DB_PREFIX}product_a_id`], targets[`${DB_PREFIX}product_b_id`]);
     return NextResponse.json({
       votesA: Number(result.votes_a),
       votesB: Number(result.votes_b),

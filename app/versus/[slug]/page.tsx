@@ -11,7 +11,7 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export const revalidate = 1800;
+export const revalidate = 3600;
 
 function descriptionFor(productA: string, productB: string) {
   return `Compare ${productA} and ${productB} in their recorded Indie Clash matchup. See the actual vote result, product details, makers, and builder feedback.`;

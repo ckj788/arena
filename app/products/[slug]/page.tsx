@@ -16,7 +16,7 @@ interface Props {
   params: Promise<{ slug: string }>;
 }
 
-export const revalidate = 1800;
+export const revalidate = 3600;
 
 export async function generateStaticParams() {
   try {
@@ -89,7 +89,10 @@ export default async function ProductPage({ params }: Props) {
   const productCategory = profileCategoryLabel(product.category);
   const productPricing = pricingLabel(product.pricingModel);
   const quote = product.pricingDetails;
-  const schemaImage = [product.logo, ...(product.screenshots || [])].map(trustedProductImageUrl).find(image => image?.startsWith("https://"));
+  const schemaImage = [product.logo, ...(product.screenshots || [])]
+    .map(trustedProductImageUrl)
+    .map(image => image?.startsWith("/") ? absoluteUrl(image) : image)
+    .find(image => image?.startsWith("https://"));
   const publishedDate = product.submittedAt ? new Date(product.submittedAt) : null;
   const validPublishedDate = publishedDate && !Number.isNaN(publishedDate.getTime()) ? publishedDate : null;
   const faqEntries = [

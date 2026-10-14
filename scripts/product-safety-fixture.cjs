@@ -32,6 +32,7 @@ globalThis.fetch = async function(input, options) {
     let data = url.pathname.endsWith('public_products') ? rows : [];
     const ids = url.searchParams.get('shipandbattle_id');
     if (ids?.startsWith('in.')) data = data.filter(row => ids.includes(row.shipandbattle_id));
+    if (ids?.startsWith('eq.')) data = data.filter(row => row.shipandbattle_id === ids.slice(3));
     const accept = new Headers(options?.headers || input?.headers).get('accept') || '';
     if (accept.includes('vnd.pgrst.object')) data = data[0] || null;
     return Response.json(data, {headers:{'content-range':`0-${Math.max(0,(data?.length || 0)-1)}/${data?.length || 0}`}});

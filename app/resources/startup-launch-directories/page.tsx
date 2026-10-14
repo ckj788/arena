@@ -10,7 +10,7 @@ import { LAUNCH_RESOURCES, RESOURCE_PATH, RESOURCE_CONTENT_UPDATED_AT } from "@/
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
 const title = `${LAUNCH_RESOURCES.length} Startup Directories: Free & Paid Launch Platforms`;
-export const revalidate = 60;
+export const revalidate = 3600;
 const description = "Compare startup directories and startup listing sites by submission cost, audience and timing. Find free options, product launch platforms and Product Hunt alternatives.";
 export const metadata: Metadata = {
   title, description, alternates: { canonical: RESOURCE_PATH },

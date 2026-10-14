@@ -63,7 +63,7 @@ const auth = {'server-only':{}, HttpError,
   getAdminClient:()=>({rpc:async(name,params)=>{calls.push({name,params});return {error:rpcError};}}),
   jsonError:error=>Response.json({error:error.message},{status:error.status||500}),
 };
-const common={'@/lib/server/auth':auth,'@/lib/supabaseClient':{DB_PREFIX:'shipandbattle_'},'@/lib/arenaStore':{fromDbProduct:x=>x},'next/cache':{revalidatePath(){},revalidateTag(){}}};
+const common={'@/lib/server/auth':auth,'@/lib/supabaseClient':{DB_PREFIX:'shipandbattle_'},'@/lib/arenaStore':{fromDbProduct:x=>x},'@/lib/server/cache':{invalidateProductModeration(){}}};
 const reports=load('app/api/arena/reports/route.ts',common);
 const moderation=load('app/api/arena/moderation/route.ts',common);
 const request=body=>new Request('https://local.test/api',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});

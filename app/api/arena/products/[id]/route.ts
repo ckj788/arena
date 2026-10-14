@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { updateOwnedProduct } from "@/lib/server/arenaAdmin";
 import { authenticateRequest, consumeUserRateLimit, HttpError, jsonError, readJsonRequest } from "@/lib/server/auth";
-import { invalidateArenaPublic } from "@/lib/server/cache";
+import { invalidateProductCatalogue } from "@/lib/server/cache";
 import { parseProductInput } from "@/lib/server/productInput";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     const { user, client } = await authenticateRequest(request);
     await consumeUserRateLimit(client, "product_update");
     const product = await updateOwnedProduct(user, id, parseProductInput(await readJsonRequest(request)));
-    invalidateArenaPublic([`/products/${encodeURIComponent(id)}`]);
+    invalidateProductCatalogue(id);
     return NextResponse.json({ product });
   } catch (error) {
     return jsonError(error);

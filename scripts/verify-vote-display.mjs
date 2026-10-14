@@ -43,6 +43,9 @@ page.on('request', req => {
     },raceTest ? 500 : 150);
   }
   if(url.pathname==='/api/arena/products/mine') return reply({products:[],productIds:['vote-alpha']});
+  // This account is simulated in the browser, so the admin-access probe must
+  // also be mocked instead of sending its fake token to the local server.
+  if(url.pathname==='/api/arena/moderation' && req.method()==='GET') return reply({error:'Admin access required.'},403);
   if(url.hostname.endsWith('.supabase.co')) {
     if(url.pathname.endsWith('/user')) return reply(user);
     if(url.pathname.endsWith('public_products')) return reply(products);
@@ -98,6 +101,10 @@ try {
   console.log('PASS: failed vote retains feedback, repeated submit sends once, retry renders API total 11 (not stale local 8).');
   await page.evaluate(()=>[...document.querySelectorAll('button,a')].find(el=>el.textContent.trim().toLowerCase()==='my console').click());
   await page.waitForSelector('.maker-console .console-stat');
+  // Console ownership is revalidated on entry; a loading placeholder is not
+  // the vote total. Assert the confirmed total once that request completes.
+  await page.waitForFunction(() => [...document.querySelectorAll('.console-stat')]
+    .find(el => el.textContent.includes('Votes'))?.querySelector('strong')?.textContent === '1');
   assert.equal(await page.$$eval('.console-stat',els=>els.find(el=>el.textContent.includes('Votes')).querySelector('strong').textContent),'1','Console must immediately include the confirmed vote');
   console.log('PASS: console cumulative Votes updates immediately after successful vote.');
   await page.goBack({waitUntil:'networkidle2'});

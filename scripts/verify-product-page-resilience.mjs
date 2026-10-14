@@ -18,13 +18,16 @@ const supabase = {
   from(table) {
     const query = {
       select() { return query; }, order() { return query; }, or() { return query; },
-      in() { return query; }, limit() { return query; },
-      abortSignal() {
+      in() { return query; }, limit() { return query; }, eq() { return query; },
+      abortSignal() { return query; },
+      async maybeSingle() { return { data: product, error: null }; },
+      then(resolve, reject) { return query.run().then(resolve, reject); },
+      async run() {
         if (table === 'products') {
           productAttempts++;
-          return Promise.resolve(productAttempts === 1
+          return productAttempts === 1
             ? { data: null, error: { message: 'TypeError: fetch failed' } }
-            : { data: [product, opponent], error: null });
+            : { data: [product, opponent], error: null };
         }
         if (table === failAt) return Promise.resolve({ data: null, error: { message: 'Simulated timeout' } });
         if (table === 'matches') return Promise.resolve({ data: [row], error: null });
@@ -42,6 +45,8 @@ const mocks = {
   '@/lib/mockData': { SEED_PRODUCTS: [] },
   '@/lib/supabaseClient': { DB_PREFIX: 'shipandbattle_', publicArenaTable: table => table, supabase },
   '@/lib/productSafety': { isVisibleProduct: item => item.moderationStatus !== 'restricted' },
+  './productImages': { withPublicImageUrls: product => product },
+  './cachePolicy': { productActivityTag: id => id, versusTag: slug => slug },
 };
 const source = ts.transpileModule(fs.readFileSync('lib/server/publicSeoData.ts', 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },

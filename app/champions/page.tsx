@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import ArenaClient from "../ArenaClient";
-import { getArenaPageData } from "@/lib/server/arenaPageData";
+import { getPastChampions } from "@/lib/server/arenaPageData";
+import { getPublicProducts } from "@/lib/server/publicSeoData";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
-export const revalidate = 60;
+export const revalidate = 3600;
 const title = "Champions — Indie Clash Hall of Valor";
 const description = "Discover past Indie Clash Arena winners, explore their products, and learn how free launches, fair discovery, and peer-feedback battles work.";
 
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ChampionsPage() {
-  const { products, pastChampions, bracket } = await getArenaPageData();
+  const [products, pastChampions] = await Promise.all([getPublicProducts().catch(() => []), getPastChampions().catch(() => [])]);
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({
       "@context": "https://schema.org", "@type": "CollectionPage",
@@ -26,6 +27,6 @@ export default async function ChampionsPage() {
         url: absoluteUrl(`/products/${encodeURIComponent(product.id)}`),
       })) },
     }) }} />
-    <ArenaClient page="champions" initialProducts={products} initialPastChampions={pastChampions || []} initialBracket={bracket} />
+    <ArenaClient page="champions" initialProducts={products} initialPastChampions={pastChampions || []} initialBracket={null} />
   </>;
 }

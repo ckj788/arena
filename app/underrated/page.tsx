@@ -8,12 +8,12 @@ import { compareFairDiscovery, hasActiveDiscoveryBoost } from "@/lib/discoveryRa
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
 import { productLinkRel } from "@/lib/productSafety";
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 const pageDescription = "Discover overlooked indie products with low qualified visibility—not paid placements or popularity contests.";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const productCount = (await getPublicProducts()).length;
+  const productCount = (await getPublicProducts().catch(() => [])).length;
   return {
     title: "Underrated Indie Products That Deserve More Attention",
     description: pageDescription,
@@ -37,7 +37,7 @@ function ProductMark({ product }: { product: Product }) {
 }
 
 export default async function UnderratedPage() {
-  const products = (await getPublicProducts()).slice().sort((a, b) => compareFairDiscovery(a, b));
+  const products = (await getPublicProducts().catch(() => [])).slice().sort((a, b) => compareFairDiscovery(a, b));
   const canonicalUrl = absoluteUrl("/underrated");
   const jsonLd = {
     "@context": "https://schema.org",

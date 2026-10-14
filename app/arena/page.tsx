@@ -3,7 +3,7 @@ import ArenaClient from "../ArenaClient";
 import { getArenaPageData } from "@/lib/server/arenaPageData";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
-export const revalidate = 60;
+export const revalidate = 300;
 const title = "Arena — Indie Product Battles";
 const description = "Explore live indie product matchups, compare what makers have built, and leave honest feedback before you vote. Arena participation is optional and free.";
 

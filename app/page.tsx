@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import ArenaClient from "./ArenaClient";
-import { getArenaPageData } from "@/lib/server/arenaPageData";
+import { getPublicProducts } from "@/lib/server/publicSeoData";
 import { absoluteUrl, serializeJsonLd, SITE_DESCRIPTION } from "@/lib/site";
 
-export const revalidate = 60;
+export const revalidate = 3600;
 
 export const metadata: Metadata = {
   title: { absolute: "Discover New Indie Products & Launch Yours | Indie Clash" },
@@ -25,11 +25,7 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  const {
-    products: initialProducts,
-    pastChampions: initialPastChampions,
-    bracket: initialBracket,
-  } = await getArenaPageData();
+  const initialProducts = await getPublicProducts().catch(() => []);
   const latestProducts = initialProducts
     .slice()
     .sort((a, b) => new Date(b.publishedAt || b.submittedAt).getTime() - new Date(a.publishedAt || a.submittedAt).getTime())
@@ -80,8 +76,8 @@ export default async function Page() {
       />
       <ArenaClient
         initialProducts={initialProducts}
-        initialPastChampions={initialPastChampions || []}
-        initialBracket={initialBracket}
+        initialPastChampions={[]}
+        initialBracket={null}
       />
     </>
   );

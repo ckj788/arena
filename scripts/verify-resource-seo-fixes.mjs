@@ -110,6 +110,8 @@ const matchRows = [
 const ranges = [];
 const data = load('lib/server/publicSeoData.ts', {
   'server-only': {},
+  './productImages': {},
+  './cachePolicy': {},
   react: { cache: fn => fn },
   'next/cache': { unstable_cache: fn => fn },
   '@/lib/arenaStore': {},

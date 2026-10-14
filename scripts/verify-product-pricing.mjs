@@ -74,7 +74,7 @@ let authorized = false, calls = 0, invalidations = 0;
 const mocks = { 'next/server': { NextResponse: Response }, '@/lib/server/productInput': input,
   '@/lib/server/arenaAdmin': { createProductForUser: async () => { calls++; return product; }, updateOwnedProduct: async () => { calls++; return product; } },
   '@/lib/server/auth': { HttpError, authenticateRequest: async () => { if (!authorized) throw new HttpError(401, 'Unauthorized'); return { user: { id: 'owner' }, client: {} }; }, consumeUserRateLimit: async () => {}, readJsonRequest: req => req.json(), jsonError: e => Response.json({ error: e.message }, { status: e.status || 500 }) },
-  '@/lib/server/cache': { invalidateArenaPublic: () => { invalidations++; } },
+  '@/lib/server/cache': { invalidateProductCatalogue: () => { invalidations++; } },
 };
 const post = load('app/api/arena/products/route.ts', mocks);
 const patch = load('app/api/arena/products/[id]/route.ts', mocks);
