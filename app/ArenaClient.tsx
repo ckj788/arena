@@ -3271,6 +3271,21 @@ export default function ArenaClient({
               />
             </a>
             <a
+              href="https://submitaitools.org"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
+            >
+              <img
+                src="https://submitaitools.org/static_submitaitools/images/submitaitools.png"
+                alt="提交 AI 工具"
+                width={200}
+                height={60}
+                className="block h-[60px] w-[200px] rounded-[10px] object-contain"
+                loading="lazy"
+              />
+            </a>
+            <a
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
