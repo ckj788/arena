@@ -60,7 +60,7 @@ import PrimaryNavigation, { type MainPage } from "@/app/components/PrimaryNaviga
 import { PRICING_MODELS, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_GROUPS, feedCategoryLabel, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
-import { isVisibleProduct, productLinkRel } from "@/lib/productSafety";
+import { DUPLICATE_PRODUCT_MESSAGE, findProductWithSameDomain, isVisibleProduct, productLinkRel } from "@/lib/productSafety";
 import ScreenshotInput from "@/app/components/ScreenshotInput";
 import ProfileReadiness from "@/app/components/ProfileReadiness";
 import LaunchShareKit from "@/app/components/LaunchShareKit";
@@ -259,6 +259,12 @@ export default function ArenaClient({
   const [newLogo, setNewLogo] = useState("🚀");
   const [newScreenshot, setNewScreenshot] = useState<string[]>([]);
   const [preparingScreenshot, setPreparingScreenshot] = useState(false);
+  const trimmedProductUrl = newUrl.trim();
+  const normalizedProductUrl = publicHttpUrl(/^https?:\/\//i.test(trimmedProductUrl) ? trimmedProductUrl : `https://${trimmedProductUrl}`);
+  const duplicateProduct = useMemo(
+    () => normalizedProductUrl ? findProductWithSameDomain(products, normalizedProductUrl, editingProduct) : undefined,
+    [products, normalizedProductUrl, editingProduct],
+  );
   const [activeCardProduct, setActiveCardProduct] = useState<Product | null>(null);
 
   useEffect(() => {
@@ -1322,6 +1328,14 @@ export default function ArenaClient({
       setSubmitError(message);
       return;
     }
+    if (!normalizedProductUrl) {
+      setSubmitError("Please enter a valid public website URL, such as https://example.com.");
+      return;
+    }
+    if (duplicateProduct) {
+      setSubmitError(DUPLICATE_PRODUCT_MESSAGE);
+      return;
+    }
     if (newDescription.trim().length < 80) {
       setSubmitError("Please describe the product in at least 80 characters so visitors can understand what makes it useful.");
       return;
@@ -1335,7 +1349,7 @@ export default function ArenaClient({
     }
     const pricingDetails = pricingDraft ? normalizeProductPricing(pricingDraft) : null;
 
-    const normalizedUrl = newUrl.startsWith("http") ? newUrl : `https://${newUrl}`;
+    const normalizedUrl = normalizedProductUrl;
 
     isSyncLockedRef.current = true;
     publicRevisionRef.current += 1;
@@ -3386,9 +3400,22 @@ export default function ArenaClient({
                   placeholder="https://siteshot.net"
                   id="product-url"
                   value={newUrl}
-                  onChange={(e) => setNewUrl(e.target.value)}
+                  onChange={(e) => { setNewUrl(e.target.value); setSubmitError(null); }}
+                  aria-invalid={Boolean(duplicateProduct)}
+                  aria-describedby="product-url-hint"
                   className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                 />
+                {duplicateProduct ? (
+                  <p id="product-url-hint" role="alert" className="text-[11px] leading-5 text-red-700">
+                    {DUPLICATE_PRODUCT_MESSAGE}{" "}
+                    <Link href={`/products/${duplicateProduct.id}`} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2">
+                      View existing product ↗
+                    </Link>
+                    <span className="block">If this is yours, edit it in My Console instead. Changing www, the page path or URL parameters does not create a different website.</span>
+                  </p>
+                ) : (
+                  <p id="product-url-hint" className="text-[10px] leading-4 text-zinc-500">One profile per website, not per page. Changing www, the page path or URL parameters does not allow another submission.</p>
+                )}
               </div>
 
               <div className="flex flex-col gap-1">
@@ -3622,8 +3649,8 @@ export default function ArenaClient({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmittingProduct || preparingScreenshot}
-                  className="min-w-28 px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg text-xs shadow-xs transition duration-150 cursor-pointer disabled:cursor-wait disabled:bg-zinc-200 disabled:text-zinc-500"
+                  disabled={isSubmittingProduct || preparingScreenshot || Boolean(duplicateProduct)}
+                  className="min-w-28 px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg text-xs shadow-xs transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500"
                 >
                   {preparingScreenshot ? "Preparing image…" : isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : (editingProduct ? "Save Changes" : "Submit Project")}
                 </button>

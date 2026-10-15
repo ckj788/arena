@@ -9,6 +9,12 @@ WHERE to_regprocedure(signature) IS NULL
 UNION ALL
 SELECT 'domain_index_exists', to_jsonb(EXISTS(SELECT 1 FROM pg_indexes WHERE schemaname='public' AND indexname='shipandbattle_unique_product_domain'))
 UNION ALL
+SELECT 'domain_aliases_match', to_jsonb(
+  public.shipandbattle_product_domain_key('https://baidu.com') = 'baidu.com'
+  AND public.shipandbattle_product_domain_key('http://www.BAIDU.com/pricing?ref=launch#top') = 'baidu.com'
+  AND public.shipandbattle_product_domain_key('https://WWW.baidu.com.:8443/another') = 'baidu.com'
+  AND public.shipandbattle_product_domain_key('https://www.baidu.com/resources/launch/guides/first?utm_source=directory#details') = 'baidu.com')
+UNION ALL
 SELECT 'safety_trigger_exists', to_jsonb(EXISTS(SELECT 1 FROM pg_trigger WHERE tgname='shipandbattle_product_safety_guard' AND NOT tgisinternal AND tgenabled='O'))
 UNION ALL
 SELECT 'reports_are_private', to_jsonb(

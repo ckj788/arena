@@ -26,6 +26,11 @@ assert.equal((await one('SELECT count(*)::int n FROM shipandbattle_products')).n
 assert.equal((await one("SELECT shipandbattle_link_trust v FROM shipandbattle_products WHERE shipandbattle_id='old'")).v, 'trusted');
 await db.exec("UPDATE shipandbattle_products SET shipandbattle_description='Editable legacy product' WHERE shipandbattle_id='legacy-duplicate'");
 await assert.rejects(db.exec("INSERT INTO shipandbattle_products(shipandbattle_id,shipandbattle_url) VALUES ('duplicate','https://example.com/new')"), e => e.code === '23505');
+for (const url of ['https://www.EXAMPLE.com/', 'http://example.com/pricing?ref=launch', 'https://WWW.example.com.:8443/new#top',
+  'https://example.com/page', 'https://www.example.com/resource', 'https://example.com/resources/',
+  'https://www.example.com/resources/launch/guides/first?utm_source=directory#details']) {
+  await assert.rejects(db.query('INSERT INTO shipandbattle_products(shipandbattle_id,shipandbattle_url,shipandbattle_creator_uid) VALUES ($1,$2,$3)', ['alias-duplicate',url,'00000000-0000-4000-8000-000000000002']), e => e.code === '23505');
+}
 await db.exec("UPDATE shipandbattle_products SET shipandbattle_url='https://moved.example.org' WHERE shipandbattle_id='old'");
 await assert.rejects(db.exec("INSERT INTO shipandbattle_products(shipandbattle_id,shipandbattle_url) VALUES ('duplicate','https://example.com/new')"), e => e.code === '23505');
 await db.exec("INSERT INTO shipandbattle_products(shipandbattle_id,shipandbattle_title,shipandbattle_url,shipandbattle_screenshot,shipandbattle_arena_enqueued) VALUES ('new','New product','https://new.example.com','https://storage.example.com/screenshot.jpg',true)");

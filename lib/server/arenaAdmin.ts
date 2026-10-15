@@ -19,16 +19,20 @@ import type { Bracket, Match, Product } from "@/lib/mockData";
 import { DB_PREFIX } from "@/lib/supabaseClient";
 import { getMillisecondsToNextNYMidnight, getRoundEndAtIso, getRoundRemainingMs } from "@/lib/timeHelpers";
 import { getAdminClient, HttpError } from "./auth";
-import { productDomainKey } from "@/lib/productSafety";
+import { DUPLICATE_PRODUCT_MESSAGE, productDomainKey } from "@/lib/productSafety";
 
 type DbRow = Record<string, unknown>;
+
+function isDuplicateProductDomain(error: { message: string; code?: string }) {
+  return error.code === "23505" && error.message.toLowerCase().includes("domain");
+}
 
 function databaseError(context: string, error: { message: string; code?: string } | null): never {
   if ((error?.code === "42703" || error?.code === "PGRST204") && error.message.includes("pricing_details")) {
     throw new HttpError(503, "The optional pricing update is not installed yet. Please contact the site administrator.");
   }
-  if (error?.code === "23505" && error.message.includes("domain")) {
-    throw new HttpError(409, "This website already has a product profile. Edit the existing profile instead.");
+  if (error && isDuplicateProductDomain(error)) {
+    throw new HttpError(409, `${DUPLICATE_PRODUCT_MESSAGE} Open My Console to manage your existing products.`);
   }
   if (error?.code === "42703" && /domain_key|screenshot|moderation_status|link_trust/.test(error.message)) {
     throw new HttpError(503, "The product safety update is not installed yet. Please contact the site administrator.");
@@ -95,16 +99,17 @@ export interface NewProductInput {
 async function assertUniqueProductDomain(client: SupabaseClient, url: string, exceptId?: string): Promise<void> {
   const host = productDomainKey(url);
   if (!host) throw new HttpError(400, "Product URL must contain a valid public domain.");
-  const { data, error } = await client
+  let query = client
     .from(`${DB_PREFIX}products`)
     .select(`${DB_PREFIX}id`)
-    .eq(`${DB_PREFIX}domain_key`, host)
-    .limit(1);
+    .eq(`${DB_PREFIX}domain_key`, host);
+  if (exceptId) query = query.neq(`${DB_PREFIX}id`, exceptId);
+  const { data, error } = await query.limit(1);
   if (error) databaseError("checking product domain", error);
   const duplicate = ((data ?? []) as unknown as DbRow[]).find((row) => String(row[`${DB_PREFIX}id`] || "") !== exceptId);
   if (duplicate) {
     const id = String(duplicate[`${DB_PREFIX}id`] || "");
-    throw new HttpError(409, `This website already has a profile on Indie Clash${id ? ` (/products/${id})` : ""}.`);
+    throw new HttpError(409, `${DUPLICATE_PRODUCT_MESSAGE}${id ? ` View the existing profile: /products/${id}.` : ""}`);
   }
 }
 
@@ -161,6 +166,9 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     .insert(toDbProduct(product))
     .select("*")
     .single();
+  // Another request can submit the same domain after the initial check. The
+  // database rejects it; repeat the lookup to return the existing profile.
+  if (error && isDuplicateProductDomain(error)) await assertUniqueProductDomain(client, input.url);
   if (error || !data) databaseError("creating product", error);
   return fromDbProduct(data);
 }
@@ -205,6 +213,7 @@ export async function updateOwnedProduct(user: User, productId: string, input: N
     .eq(`${DB_PREFIX}creator_uid`, user.id)
     .select("*")
     .single();
+  if (error && isDuplicateProductDomain(error)) await assertUniqueProductDomain(client, input.url, productId);
   if (error || !data) databaseError("updating product profile", error);
   return fromDbProduct(data);
 }

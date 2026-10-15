@@ -26,6 +26,9 @@ Do not deploy this app version before the SQL. New submissions/edits require the
 - Open a known product's `/api/og/versus?slug=PRODUCT_ID`: expect 200 and an image content type. Test actual social previews separately; crawlers can cache old failures.
 - With an ordinary account, add a screenshot to a test product; verify it on the detail page and after reopening Edit. Remove it and verify the field is cleared.
 - Try the same website with `www`, a different path and repeated clicks: expect a helpful duplicate response, not another product.
+- The submit/edit form checks the loaded catalogue as the URL is entered, displays **This website has already been submitted to Indie Clash**, links to the existing profile and disables submission. It treats HTTP/HTTPS, `www`, case, ports, paths, query parameters and fragments as the same website. Different actual subdomains and different GitHub/GitLab repositories stay independent. Editing an existing profile without changing its domain remains allowed, including grandfathered historical duplicates.
+- The client warning is only an early convenience: authenticated create/update still checks the database. A concurrent database uniqueness conflict is returned as HTTP 409 with the same message and, when the domain representative is found, the existing profile path. This UI/API update requires no additional migration beyond the existing safety migration; it does not merge or delete old products.
+- Website uniqueness applies across accounts, not just per maker. `/page`, `/resource`, `/resources/` and nested `/resources/launch/guides/first` reserve the same domain; submitting a subpage first also prevents a second root-page submission. Existing owners may still edit their one profile, including its path. GitHub/GitLab remain repository-scoped exceptions for independent projects on shared hosting.
 - Report a test product; it must remain visible until an administrator acts. A non-admin cannot load `/api/arena/moderation` or execute its mutations.
 - Restrict the test product; verify directory disappearance, detail 404, disabled outbound links and preserved Console/history record. Restore it and confirm it reappears without changing its slug.
 
@@ -34,6 +37,8 @@ Use a staging project/test product for write tests. Do not restrict someone else
 ## Local verification
 
 - `node scripts/verify-product-safety.mjs`: input, trust, robots and mocked endpoint tests.
+- `node scripts/verify-product-duplicates.mjs`: domain alias matching, immediate-warning data, unchanged legacy edits, server-side duplicate rejection, concurrent-conflict messaging, authenticated submission and cache-invalidation boundaries; all writes are isolated in memory.
+- `UI_TEST_URL=http://127.0.0.1:3172 node scripts/verify-product-duplicates-ui.mjs` (set the variable using your shell's syntax): run against a local safety-fixture server only. Verifies live form warnings, disabled submission, links, mobile layout, server-conflict draft retention, new submissions and existing-profile editing. All mutations are intercepted. The read-only safety verification SQL now includes `domain_aliases_match` to confirm the live database treats `baidu.com` and `www.baidu.com` as the same website.
 - `node scripts/verify-product-safety-sql.mjs`: PostgreSQL/PGlite isolated migration tests. Install PGlite into a temporary npm cache and set `PGLITE_MODULE` to its `dist/index.js`, or make the package available locally. Does not connect to Supabase.
 - `node scripts/verify-reliability.mjs`: existing discovery/network resilience tests.
 - `node scripts/verify-api-boundaries.mjs`: local unauthenticated API checks.
