@@ -3256,6 +3256,21 @@ export default function ArenaClient({
               />
             </a>
             <a
+              href="https://fazier.com/launches/indieclash.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
+            >
+              <img
+                src="https://fazier.com/api/v1//public/badges/launch_badges.svg?badge_type=launched&theme=light"
+                alt="Indie Clash - Launched on Fazier"
+                width={120}
+                height={51}
+                className="block h-auto w-[120px]"
+                loading="lazy"
+              />
+            </a>
+            <a
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
