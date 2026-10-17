@@ -3286,6 +3286,21 @@ export default function ArenaClient({
               />
             </a>
             <a
+              href="https://dofollow.tools"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
+            >
+              <img
+                src="https://dofollow.tools/badge/badge_dark.svg"
+                alt="Featured on Dofollow.Tools"
+                width={200}
+                height={54}
+                className="block h-[54px] w-[200px] object-contain"
+                loading="lazy"
+              />
+            </a>
+            <a
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
