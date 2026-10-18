@@ -3344,6 +3344,23 @@ export default function ArenaClient({
               />
             </a>
             <a
+              href="https://daniellaunches.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+              aria-hidden="true"
+              tabIndex={-1}
+              className="hidden"
+            >
+              <img
+                src="https://daniellaunches.com/badge-light.svg"
+                alt="Featured on DanielLaunches"
+                width={220}
+                height={48}
+                loading="lazy"
+              />
+            </a>
+            <a
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
