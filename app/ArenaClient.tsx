@@ -3315,6 +3315,20 @@ export default function ArenaClient({
               />
             </a>
             <a
+              href="https://toolfame.com/item/indie-clash"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
+            >
+              <img
+                src="https://toolfame.com/badge-light.svg"
+                alt="Featured on toolfame.com"
+                height={54}
+                className="block h-[54px] w-auto"
+                loading="lazy"
+              />
+            </a>
+            <a
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
