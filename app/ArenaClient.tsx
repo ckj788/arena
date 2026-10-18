@@ -3329,6 +3329,21 @@ export default function ArenaClient({
               />
             </a>
             <a
+              href="https://www.betterlaunch.co/product/indie-clash"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
+            >
+              <img
+                src="https://www.betterlaunch.co/badge-live-dark.svg"
+                alt="Indie Clash on Better Launch"
+                width={200}
+                height={56}
+                className="block h-14 w-[200px] object-contain"
+                loading="lazy"
+              />
+            </a>
+            <a
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
