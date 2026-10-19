@@ -3361,6 +3361,40 @@ export default function ArenaClient({
               />
             </a>
             <a
+              href="https://saasfame.com/item/indie-clash"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+              aria-hidden="true"
+              tabIndex={-1}
+              className="hidden"
+            >
+              <img
+                src="https://saasfame.com/badge-light.svg"
+                alt="Featured on saasfame.com"
+                height={54}
+                className="h-[54px] w-auto"
+                loading="lazy"
+              />
+            </a>
+            <a
+              href="https://newtool.site/item/indie-clash"
+              target="_blank"
+              rel="noopener noreferrer"
+              hidden
+              aria-hidden="true"
+              tabIndex={-1}
+              className="hidden"
+            >
+              <img
+                src="https://newtool.site/badges/newtool-light.svg"
+                alt="Featured on NewTool.site"
+                height={54}
+                className="h-[54px] w-auto"
+                loading="lazy"
+              />
+            </a>
+            <a
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
