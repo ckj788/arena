@@ -3347,16 +3347,14 @@ export default function ArenaClient({
               href="https://daniellaunches.com"
               target="_blank"
               rel="noopener noreferrer"
-              hidden
-              aria-hidden="true"
-              tabIndex={-1}
-              className="hidden"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
             >
               <img
                 src="https://daniellaunches.com/badge-light.svg"
                 alt="Featured on DanielLaunches"
                 width={220}
                 height={48}
+                className="block h-12 w-[220px]"
                 loading="lazy"
               />
             </a>
@@ -3364,16 +3362,13 @@ export default function ArenaClient({
               href="https://saasfame.com/item/indie-clash"
               target="_blank"
               rel="noopener noreferrer"
-              hidden
-              aria-hidden="true"
-              tabIndex={-1}
-              className="hidden"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
             >
               <img
                 src="https://saasfame.com/badge-light.svg"
                 alt="Featured on saasfame.com"
                 height={54}
-                className="h-[54px] w-auto"
+                className="block h-[54px] w-auto"
                 loading="lazy"
               />
             </a>
@@ -3381,16 +3376,13 @@ export default function ArenaClient({
               href="https://newtool.site/item/indie-clash"
               target="_blank"
               rel="noopener noreferrer"
-              hidden
-              aria-hidden="true"
-              tabIndex={-1}
-              className="hidden"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
             >
               <img
                 src="https://newtool.site/badges/newtool-light.svg"
                 alt="Featured on NewTool.site"
                 height={54}
-                className="h-[54px] w-auto"
+                className="block h-[54px] w-auto"
                 loading="lazy"
               />
             </a>
@@ -3398,19 +3390,14 @@ export default function ArenaClient({
               href="https://twelve.tools"
               target="_blank"
               rel="noopener noreferrer"
-              hidden
-              aria-hidden="true"
-              tabIndex={-1}
-              className="hidden"
+              className="inline-flex rounded focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-violet-700"
             >
               <img
                 src="https://twelve.tools/badge0-white.svg"
                 alt="Featured on Twelve Tools"
                 width={148}
                 height={40}
-                hidden
-                aria-hidden="true"
-                className="hidden"
+                className="block h-10 w-[148px]"
                 loading="lazy"
               />
             </a>
