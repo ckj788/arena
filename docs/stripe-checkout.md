@@ -1,14 +1,16 @@
 # Stripe Checkout setup
 
-The current plan picker uses reusable Stripe Payment Links to open Stripe Hosted Checkout for a **one-time USD card payment**. No Stripe.js, publishable key, card fields, or secrets are sent to the browser. The Stripe npm SDK is pinned to 23.0.1 (API version `2026-09-30.endive`); its `allowed_payment_method_types: ["card"]` parameter filters the methods enabled in Stripe. Enable card payments in the Stripe account.
+The current plan picker prepares Checkout Sessions in the background to open Stripe Hosted Checkout for a **one-time USD card payment**. No Stripe.js, publishable key, card fields, or secrets are sent to the browser. The Stripe npm SDK is pinned to 23.0.1 (API version `2026-09-30.endive`); its `allowed_payment_method_types: ["card"]` parameter filters the methods enabled in Stripe. Enable card payments in the Stripe account.
 
 Submission entry requires sign-in first: anonymous Submit clicks open a shared login dialog on the source page; signed-in clicks go straight to `/submit`. Successful OAuth continues to the requested plan/details page; cancellation returns to the source page. The plan page is public; paid links are bound to the signed-in account when it opens. Details routes require sign-in. This is the UX gate; payment and publication APIs still independently authenticate every request. Receipts retain their separate private-order sign-in screen.
 
 ## Current boundary
 
-The plan page loads all three account-bound Payment Links once through `GET /api/payments/links`. This endpoint verifies signed session claims and computes HMAC references locally: no Stripe API call and no order/database query. Changing plans reuses these links. **Get Started is a native HTTPS anchor to buy.stripe.com**, with no fetch, order creation, rate-limit request or intermediate page on click. Stripe's own page still takes network time to load.
+The plan page prepares all three paid Checkout Sessions concurrently through authenticated POST /api/payments/checkout requests. Prices and account ownership come from the server. Preparation creates unpaid sessions in Stripe. Supabase orders are inserted only after verified payment. Get Started is a native anchor to the prepared URL. Clicking it only consumes the in-memory cached attempt and begins navigation.
 
-Paid orders are inserted by a verified webhook or the authenticated return-page reconciliation against Stripe. Account attribution comes from a signed `client_reference_id`, never a browser-supplied plain user ID or a Stripe billing email. The reference grants no access to data. Signing out or switching accounts removes the old links and receipt from the UI. An unavailable binding is shown before checkout, not as a hidden click-time spinner.
+Preparation is account-scoped, shared across remounts, and renewed after 15 minutes. Failed attempts retain their request IDs for idempotent retries. The selected plan becomes available as soon as its own session is ready. A user who clicks before preparation finishes must wait for readiness. Account changes immediately hide the previous account's URLs.
+
+Webhook delivery and authenticated receipt reconciliation use the same paid-order insertion RPC. Both verify server-written ownership, plan, amount, currency and mode. The return page also rejects refunded/disputed payments before recovering a missing order. Previously issued Payment Link sessions retain their existing validation path.
 
 The paid flow is **sign in → choose a plan → pay → add product details**. Free listings skip payment and use the existing publication form. Checkout requires no product text or image upload. Orders start with empty product/service snapshots. Only a verified paid order can accept complete product information, delivery email, prior submissions and fulfillment authorization. Until then, the receipt and Dashboard show **Paid · Awaiting product details**. Product information has a separate `details_submitted_at` completion marker; payment status is never changed by the details form. Browser drafts are scoped per order, and receipt/order-list links let customers resume without paying again.
 
@@ -24,20 +26,14 @@ The service is fulfilled manually. Purchasing for an existing product does not c
    STRIPE_SECRET_KEY=<Stripe sandbox secret key>
    STRIPE_WEBHOOK_SECRET=<signing secret for this endpoint>
    STRIPE_CHECKOUT_BASE_URL=http://localhost:3000
-   STRIPE_PAYMENT_LINK_SIGNING_SECRET=<stable random secret of at least 32 characters>
-   STRIPE_PAYMENT_LINKS=<JSON described below>
    ```
 
    Existing Supabase URL, anon key, and service role key must also be configured. Use the **exact same origin** in the browser and `STRIPE_CHECKOUT_BASE_URL`, including `localhost` versus `127.0.0.1`, to retain the session and draft on return. Production return URLs must use HTTPS.
 
-   The secret key determines test/live mode automatically from its sk_test_, rk_test_, sk_live_ or rk_live_ prefix. Configure matching Payment Links and webhook signing secret for that mode. No publishable key is needed for Hosted Checkout.
-   Provision the three test products/prices/links once with `node --require ./scripts/local-network.cjs scripts/setup-payment-links.mjs`. It only accepts test keys, verifies prices/return URLs, and writes the two new settings to ignored `.env.local`. It does not charge a card. Existing matching links are reused. A paid order is uniquely derived from the resulting Stripe Checkout Session ID; revisiting a reusable link may start a different session, so customers should resume paid orders from Dashboard.
+   The secret key determines test/live mode automatically from its sk_test_, rk_test_, sk_live_ or rk_live_ prefix. Configure the corresponding webhook signing secret for that mode. No publishable key is needed for Hosted Checkout.
+   New Checkout Sessions need only STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, STRIPE_CHECKOUT_BASE_URL and the existing Supabase settings. Test/live mode is inferred from the key. No manual products, price IDs, Payment Links JSON or link-signing secret are required. Switching the key also requires the matching webhook signing secret, followed by redeployment.
 
-   For a deployed environment, create matching Payment Links in the appropriate Stripe mode with fixed USD one-time prices ($99/$169/$259), quantity 1, card payment, no adjustable quantity, discounts or automatic tax. Each link needs metadata `application=indieclash-directory`, `flow=payment-link`, and `plan=starter|growth|pro`. Set after-completion redirect to `https://YOUR-SITE/submit/result?session_id={CHECKOUT_SESSION_ID}`. These link values go in server-only environment JSON:
-
-   `STRIPE_PAYMENT_LINKS={"mode":"test","baseUrl":"https://YOUR-SITE","links":{"starter":{"id":"plink_...","url":"https://buy.stripe.com/..."},"growth":{"id":"plink_...","url":"https://buy.stripe.com/..."},"pro":{"id":"plink_...","url":"https://buy.stripe.com/..."}}}`
-
-   Use `mode=live` with live keys/links for live sales. Do not copy localhost return URLs or test links into a live deployment. Keep link IDs and the signing secret stable across redeployments; replacing them needs reconciliation of outstanding sessions. A missing/tampered account reference is rejected by the webhook and must be reconciled manually from Stripe, never assigned using the payer's email.
+   If this deployment previously issued Payment Links, retain its existing STRIPE_PAYMENT_LINKS and STRIPE_PAYMENT_LINK_SIGNING_SECRET values until outstanding sessions are settled. They are used only for old-session compatibility. Existing saved orders remain accessible independently of those settings.
 
 3. Restart the local development server with `npm run dev`. If Node needs your local proxy, set `INDIECLASH_DEV_PROXY` to its HTTP proxy address in `.env.local`; the dev-only preload routes Node fetch through it. In this opt-in development process, Stripe uses Undici's fetch with the matching proxy dispatcher, avoiding Node 22's bundled-fetch incompatibility with explicit Content-Length headers. Build/start and Vercel do not load this adapter and Stripe retains its default Node HTTP transport.
 
@@ -56,7 +52,7 @@ Private payment endpoints verify signed session claims and enforce issuer, audie
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/payments/links` | Authenticated, no-store account-bound URLs for all three tiers; no Stripe or order database requests. |
+| `GET /api/payments/links` | Compatibility endpoint for previously deployed Payment Link clients. |
 | `GET /api/payments/config` | Reports configuration presence only; it does not check credentials, account eligibility, or database installation. Never returns keys. |
 | `POST /api/payments/checkout` | Requires a verified account, validates the plan and request ID, and returns a Stripe Checkout link. Existing legacy attempts can resume a stored order. |
 | `POST /api/payments/webhook` | Verifies the signature over the unmodified request body. A confirmed paid event creates the private order atomically. |
@@ -68,7 +64,7 @@ The legacy session endpoint takes `{ requestId, plan, resume }`. New request IDs
 
 After confirmed payment, the details endpoint accepts `{ product, serviceDetails }`. `product` follows the existing product submission validation. `serviceDetails` contains `email`, `history` (`none`, `provided`, `unsure`), `directories`, and `consent: true`. History is required; a provided list must be nonempty. Both the details page and the API enforce ownership/payment status; forging `plan` or `order` query parameters cannot unlock an unpaid order. A duplicate submission returns a conflict instead of overwriting details that may already be in fulfillment.
 
-For legacy session checkouts, the same account and request ID still reuse the original order/session. Existing receipts and cancellation URLs remain supported. New Payment Link checkouts do not use browser attempt IDs or persist unpaid orders. Each paid Stripe Session maps deterministically to one order; webhook retries reuse that order and deletion markers prevent restoring an administrator-deleted order.
+For legacy session checkouts, the same account and request ID still reuse the original order/session. Existing receipts and cancellation URLs remain supported. Prepared Checkout Sessions use account-scoped attempt IDs and persist orders only after payment. Each attempt maps deterministically to one order; webhook retries reuse that order and deletion markers prevent restoring an administrator-deleted order.
 
 Only signed events matching the stored order, account, plan, amount, currency, mode, and session can mark payment complete. The database locks the order, deduplicates events by Stripe event ID, and never downgrades a paid order when an older pending/expired event arrives. A return to `success_url`, a URL parameter, or an unpaid `checkout.session.completed` does **not** prove payment. The receipt polls the private endpoint for a bounded period and offers manual refresh. Webhook/store failures return non-2xx so Stripe can retry.
 
@@ -104,9 +100,7 @@ These intercept all payment/auth/store operations; they do not make a payment.
 
 ## Release acceptance
 
-- Set live Stripe keys, matching live Payment Links and stable signing secret;
-  HTTPS return URL must be the canonical production origin. Disable discounts,
-  adjustable quantity and automatic tax for the current fixed-price validation.
+- Configure the Stripe key, matching webhook signing secret and canonical HTTPS return origin. The server supplies all three fixed USD prices.
 - Register the live webhook on this application's `/api/payments/webhook` (not
   another project) and verify its signature secret through an actual delivery.
 - Test paid checkout and then close the browser before returning. Exactly one

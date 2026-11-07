@@ -5,6 +5,7 @@ import ts from 'typescript';
 import React from 'react';
 import * as jsx from 'react/jsx-runtime';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { randomUUID } from 'node:crypto';
 
 function load(file, mocks, react = React, runtime = {}) {
   const mod = { exports: {} };
@@ -73,7 +74,7 @@ const formRoutes = [], destinations = [];
 let selectedPlan = 'starter', href, signedOut = false;
 const picker = load('app/submit/PlanPicker.tsx', {
   '@/lib/submissionPlans': plans, 'next/navigation': { useRouter: () => ({ push: path => formRoutes.push(path) }) },
-  './DirectoryCheckout': { useDirectoryCheckout: () => ({ href, signedOut, signIn() {}, reload() {} }) },
+  './DirectoryCheckout': { useDirectoryCheckout: () => ({ href, signedOut, signIn() {}, reload() {}, consume() {} }) },
 }, { useState: () => [selectedPlan, () => {}] }, { window: { location: { assign: url => destinations.push(url) } } }).default;
 for (const plan of ['starter', 'growth', 'pro']) {
   selectedPlan = plan; href = 'https://buy.stripe.com/test_' + plan;
@@ -82,7 +83,8 @@ for (const plan of ['starter', 'growth', 'pro']) {
   const action = bar.props.children[1];
   assert.equal(action.type, 'a');
   assert.equal(action.props.href, href);
-  assert.equal(action.props.onClick, undefined, 'Native navigation cannot wait for an API');
+  assert.equal(typeof action.props.onClick, 'function');
+  action.props.onClick();
   form.props.onSubmit({ preventDefault() {} });
   assert.equal(destinations.at(-1), href, 'Keyboard submit also navigates synchronously');
 }
@@ -98,29 +100,64 @@ assert.equal(picker({}).props.children.find(child => child?.props?.className ===
 let linkSlots = [], linkIndex = 0, linkEffects = [], activeUser = 'owner', activeStatus = 'signed-in';
 const linkRequests = [];
 const linkHook = load('app/submit/DirectoryCheckout.tsx', {
-  '@/lib/arenaApi': { authenticatedJson: async (path, body, method) => {
-    linkRequests.push({ path, method });
-    return { configured: true, userId: activeUser, links: { starter: 'https://buy.stripe.com/test_starter', growth: 'https://buy.stripe.com/test_growth', pro: 'https://buy.stripe.com/test_pro' } };
-  } },
+  '@/lib/submissionPlans': plans,
+  '@/lib/preparedCheckout': {
+    CHECKOUT_PREPARATION_LIFETIME: 900000, consumePreparedCheckout() {},
+    prepareCheckout: async (userId, plan) => {
+      linkRequests.push({ userId, plan });
+      return { userId, url: 'https://buy.stripe.com/test_' + plan };
+    },
+  },
   '@/app/components/SubmissionAccess': { useSubmissionAccess: () => ({ status: activeStatus, userId: activeUser, requestSubmission() {} }) },
 }, {
   useState(initial) { const i = linkIndex++; if (!(i in linkSlots)) linkSlots[i] = initial; return [linkSlots[i], value => { linkSlots[i] = typeof value === 'function' ? value(linkSlots[i]) : value; }]; },
   useEffect(callback) { linkEffects.push(callback); },
-}).useDirectoryCheckout;
+}, { setTimeout: () => 1, clearTimeout() {} }).useDirectoryCheckout;
 function renderLinks(plan) { linkIndex = 0; linkEffects = []; return linkHook(plan); }
 assert.equal(renderLinks('starter').href, undefined);
 const cleanupLinks = linkEffects[0](); await new Promise(setImmediate);
 assert.equal(renderLinks('starter').href, 'https://buy.stripe.com/test_starter');
 assert.equal(renderLinks('pro').href, 'https://buy.stripe.com/test_pro');
-assert.equal(linkRequests.length, 1, 'One binding request covers every plan');
-assert.equal(linkRequests[0].path, '/api/payments/links');
-assert.equal(linkRequests[0].method, 'GET');
+assert.equal(linkRequests.length, 3, 'All paid plans prepare in the background');
+assert.deepEqual(linkRequests.map(request => request.plan), ['starter', 'growth', 'pro']);
 activeUser = 'different-owner';
 assert.equal(renderLinks('starter').href, undefined, 'Account switch must remove the previous payment link immediately');
 activeUser = 'owner'; activeStatus = 'signed-out';
 assert.equal(renderLinks('starter').href, undefined, 'Sign-out must remove payment link');
 cleanupLinks();
-console.log('PASS: native payment anchors, synchronous keyboard navigation, one initial link request, account isolation and free flow.');
+console.log('PASS: native payment anchors, synchronous keyboard navigation, background session preparation, account isolation and free flow.');
+
+let clock = Date.now(), replyOwner = 'owner', preparationFailure = false;
+const preparations = [];
+const prepared = load('lib/preparedCheckout.ts', {
+  './arenaApi': { authenticatedJson: async (path, body) => {
+    preparations.push({ path, body });
+    if (preparationFailure) throw new Error('Temporary network failure');
+    return { userId: replyOwner, orderId: 'fixture', url: 'https://checkout.stripe.com/fixture' };
+  } },
+}, React, { crypto: { randomUUID }, Date: { now: () => clock } });
+const firstPreparation = prepared.prepareCheckout('owner', 'starter');
+assert.equal(prepared.prepareCheckout('owner', 'starter'), firstPreparation, 'Remount shares the same in-flight request');
+await firstPreparation;
+await prepared.prepareCheckout('owner', 'starter');
+assert.equal(preparations.length, 1);
+prepared.consumePreparedCheckout('owner', 'starter');
+await prepared.prepareCheckout('owner', 'starter');
+assert.notEqual(preparations[0].body.requestId, preparations[1].body.requestId);
+clock += prepared.CHECKOUT_PREPARATION_LIFETIME;
+await prepared.prepareCheckout('owner', 'starter');
+assert.equal(preparations.length, 3, 'Old cached URLs are replaced');
+preparationFailure = true;
+await assert.rejects(prepared.prepareCheckout('owner', 'growth'), /Temporary network failure/);
+const retryRequest = preparations.at(-1).body;
+assert.equal(retryRequest.resume, false);
+preparationFailure = false;
+await prepared.prepareCheckout('owner', 'growth');
+assert.equal(preparations.at(-1).body.requestId, retryRequest.requestId);
+assert.equal(preparations.at(-1).body.resume, true);
+replyOwner = 'different-owner';
+await assert.rejects(prepared.prepareCheckout('owner', 'pro'), /account changed/);
+console.log('PASS: preparation deduplicates remounts, expires cached URLs, uses stable retry IDs, consumes used sessions and rejects account changes.');
 
 const Result = () => null;
 const resultPage = load('app/submit/result/page.tsx', {

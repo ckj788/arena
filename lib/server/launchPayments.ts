@@ -7,7 +7,7 @@ import { getSubmissionPlan } from "@/lib/submissionPlans";
 import { getAdminClient, HttpError } from "./auth";
 import { parseProductInput } from "./productInput";
 import { checkoutBaseUrl, getStripe, stripeMode, STRIPE_APPLICATION } from "./stripe";
-import { isCheckoutSessionId, paymentLinkOrderId, validatePaidPaymentLink } from "./paymentLinks";
+import { isCheckoutSessionId, validatePaidPaymentLink } from "./paymentLinks";
 
 const ordersTable = `${DB_PREFIX}launch_orders`;
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -16,6 +16,26 @@ function orderLiveMode() {
   const mode = stripeMode();
   if (mode !== "live" && mode !== "test") throw new HttpError(503, "Order mode is not configured.");
   return mode === "live";
+}
+
+function checkoutOrderId(userId: string, requestId: string) {
+  const digest = createHash("sha256").update(`${userId}:${requestId}`).digest("hex");
+  return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+}
+
+function paidCheckoutReference(session: Stripe.Checkout.Session) {
+  const { application, user_id: userId, order_id: orderId, request_id: requestId, input_hash: inputHash, plan: planId } = session.metadata ?? {};
+  const plan = getSubmissionPlan(planId);
+  const expectedHash = createHash("sha256").update(JSON.stringify({ flow: "pay-first", plan: planId, amount: session.amount_total })).digest("hex");
+  if (application !== STRIPE_APPLICATION || !userId || !UUID_PATTERN.test(userId)
+    || !requestId || !UUID_PATTERN.test(requestId) || requestId[14] !== "7"
+    || orderId !== checkoutOrderId(userId, requestId) || session.client_reference_id !== orderId
+    || !plan || plan.id === "free" || session.amount_total !== plan.price * 100
+    || inputHash !== expectedHash || session.currency !== "usd" || session.mode !== "payment"
+    || session.status !== "complete" || session.payment_status !== "paid" || session.livemode !== orderLiveMode()) {
+    throw new HttpError(400, "Payment details do not match the purchased plan.");
+  }
+  return { userId, orderId, requestId, inputHash, plan: plan.id };
 }
 
 export function parseCheckoutInput(body: unknown) {
@@ -73,8 +93,7 @@ export async function createLaunchCheckout(user: Pick<User, "id" | "email">, inp
   if (!process.env.STRIPE_WEBHOOK_SECRET?.trim()) throw new HttpError(503, "Payment verification is not configured. Checkout is unavailable.");
   if (input.payBeforeOrder) {
     // Stable across retries, unique to the authenticated owner and attempt.
-    const digest = createHash("sha256").update(`${user.id}:${input.requestId}`).digest("hex");
-    const orderId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+    const orderId = checkoutOrderId(user.id, input.requestId);
     const created = await openStripeCheckout(stripe, user, input, orderId, base);
     const session = input.resume ? await stripe.checkout.sessions.retrieve(created.id) : created;
     if (session.status === "complete") return { orderId, url: `${base}/submit/result?order=${orderId}&session_id=${session.id}` };
@@ -132,7 +151,7 @@ function openStripeCheckout(stripe: Stripe, user: Pick<User, "id" | "email">, in
   }, { idempotencyKey: `launch-order:${orderId}` });
 }
 
-async function recordPaidPaymentLink(session: Stripe.Checkout.Session, reference: ReturnType<typeof validatePaidPaymentLink>, eventId: string, eventType: string) {
+async function recordPaidCheckout(session: Stripe.Checkout.Session, reference: ReturnType<typeof validatePaidPaymentLink>, eventId: string, eventType: string) {
   const { error } = await getAdminClient().rpc(`${DB_PREFIX}record_launch_checkout_event`, {
     p_event_id: eventId, p_event_type: eventType, p_order_id: reference.orderId, p_user_id: reference.userId,
     p_session_id: session.id, p_plan: reference.plan, p_amount: session.amount_total,
@@ -144,7 +163,7 @@ async function recordPaidPaymentLink(session: Stripe.Checkout.Session, reference
 }
 
 export async function reconcilePaymentLink(userId: string, orderId: string, sessionId: unknown) {
-  if (!isCheckoutSessionId(sessionId) || paymentLinkOrderId(sessionId) !== orderId) {
+  if (!isCheckoutSessionId(sessionId) || !UUID_PATTERN.test(orderId)) {
     throw new HttpError(400, "Invalid checkout reference.");
   }
   if (sessionId.startsWith("cs_live_") !== orderLiveMode()) throw new HttpError(404, "Order not found.");
@@ -162,7 +181,10 @@ export async function reconcilePaymentLink(userId: string, orderId: string, sess
   if (session.status !== "complete" || session.payment_status !== "paid") {
     throw new HttpError(409, "Stripe has not confirmed payment yet.", "payment_pending");
   }
-  const reference = validatePaidPaymentLink(session, { livemode: session.livemode });
+  const reference = session.payment_link
+    ? validatePaidPaymentLink(session, { livemode: session.livemode })
+    : paidCheckoutReference(session);
+  if (reference.orderId !== orderId) throw new HttpError(400, "Invalid checkout reference.");
   if (reference.userId !== userId) throw new HttpError(403, "Sign in with the Indie Clash account that started this checkout.");
   const intent = session.payment_intent;
   const charge = intent && typeof intent !== "string" ? intent.latest_charge : null;
@@ -171,7 +193,7 @@ export async function reconcilePaymentLink(userId: string, orderId: string, sess
     throw new HttpError(409, "This payment needs a review. Contact support with your Stripe receipt.");
   }
   // The SQL uses the same order ID as the webhook and honors deletion markers.
-  await recordPaidPaymentLink(session, reference, `stripe-reconcile:${session.id}`, "checkout.session.completed");
+  await recordPaidCheckout(session, reference, `stripe-reconcile:${session.id}`, "checkout.session.completed");
   return getLaunchOrder(userId, orderId);
 }
 
@@ -186,7 +208,7 @@ export async function applyCheckoutEvent(event: Stripe.Event) {
   if (event.livemode !== orderLiveMode()) throw new HttpError(400, "Payment event mode does not match this environment.");
   if (session.payment_link) {
     if (!["checkout.session.completed", "checkout.session.async_payment_succeeded"].includes(event.type) || session.payment_status !== "paid") return { ignored: true };
-    await recordPaidPaymentLink(session, validatePaidPaymentLink(session, event), event.id, event.type);
+    await recordPaidCheckout(session, validatePaidPaymentLink(session, event), event.id, event.type);
     return { received: true };
   }
   const orderId = session.metadata.order_id;
@@ -202,6 +224,8 @@ export async function applyCheckoutEvent(event: Stripe.Event) {
     const expectedHash = createHash("sha256").update(JSON.stringify({ flow: "pay-first", plan, amount: session.amount_total })).digest("hex");
     if (!UUID_PATTERN.test(requestId) || requestId[14] !== "7" || inputHash !== expectedHash) throw new HttpError(400, "Invalid checkout reference.");
     if (status !== "paid" || (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded")) return { ignored: true };
+    await recordPaidCheckout(session, paidCheckoutReference(session), event.id, event.type);
+    return { received: true };
   }
   const { error } = await getAdminClient().rpc(`${DB_PREFIX}record_launch_checkout_event`, {
     p_event_id: event.id, p_event_type: event.type, p_order_id: orderId, p_user_id: userId,

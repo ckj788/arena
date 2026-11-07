@@ -24,7 +24,7 @@ export default function PlanPicker({ initialPlan = null, cancelled = false }: { 
     event.preventDefault();
     if (!selected) return;
     if (selected === "free") { router.push("/submit/details?plan=free"); return; }
-    if (payment.href) window.location.assign(payment.href);
+    if (payment.href) { payment.consume(); window.location.assign(payment.href); }
   }
 
   return <form onSubmit={submit} className="launch-plan-picker">
@@ -58,13 +58,13 @@ export default function PlanPicker({ initialPlan = null, cancelled = false }: { 
     <div className="launch-selection-bar">
       <div aria-live="polite"><span className="launch-eyebrow">Your starting point</span><p>{current ? `${current.name}${current.price ? ` · $${current.price} one-time` : " · $0"}` : "Choose a plan to continue."}</p></div>
       {selected !== "free" && payment.href
-        ? <a className="exhibition-button" href={payment.href}>Get Started <span aria-hidden="true">→</span></a>
+        ? <a className="exhibition-button" href={payment.href} onClick={payment.consume}>Get Started <span aria-hidden="true">→</span></a>
         : selected !== "free" && payment.signedOut
           ? <button type="button" className="exhibition-button" disabled={!selected} onClick={payment.signIn}>Get Started <span aria-hidden="true">→</span></button>
           : <button type="submit" className="exhibition-button" disabled={!selected || selected !== "free"}>{current?.id === "free" ? "Submit for free" : "Get Started"} <span aria-hidden="true">→</span></button>}
     </div>
     {cancelled && <p role="status" className="launch-checkout-note">Payment was not completed. Choose a plan when you are ready to continue.</p>}
-    {selected && selected !== "free" && !payment.href && !payment.signedOut && !payment.error && <p role="status" className="launch-checkout-note">{payment.missing ? "Payment is not available yet. You can still submit for free." : "Loading payment options…"}</p>}
+    {selected && selected !== "free" && !payment.href && !payment.signedOut && !payment.error && <p role="status" className="launch-checkout-note">Loading payment options…</p>}
     {payment.error && <p role="alert" className="mb-4 text-sm text-red-700">{payment.error}</p>}
     {payment.error && <button type="button" className="submission-back-link mb-4" onClick={payment.reload}>Reload payment options</button>}
     <p className="launch-checkout-note">Paid plans: pay securely with Stripe first, then add your product details. We submit within 10 business days of receiving your complete details. Free listings go straight to the submission form.</p>

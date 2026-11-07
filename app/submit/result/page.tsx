@@ -20,6 +20,6 @@ export default async function PaymentResultPage({ searchParams }: {
   if (!orderId) redirect("/submit");
   return <div className="arena-app launch-page min-h-screen px-5">
     <PublicSiteHeader actionHref="/products" actionLabel="Explore products" />
-    <PaymentResult orderId={orderId} sessionId={validSession} canReconcile={orderId === linkedOrderId} />
+    <PaymentResult orderId={orderId} sessionId={validSession} canReconcile={Boolean(validSession)} />
   </div>;
 }

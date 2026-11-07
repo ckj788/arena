@@ -274,7 +274,7 @@ const unpaidFast = event('checkout.session.completed', { id: calls.retrieved.at(
 assert.equal((await payments.applyCheckoutEvent(unpaidFast)).ignored, true);
 assert.equal(calls.rpc.length, beforeFast.rpc, 'Unpaid new checkout never reaches storage');
 await assert.rejects(payments.applyCheckoutEvent(event('checkout.session.completed', { ...unpaidFast.data.object, amount_total: 1, payment_status: 'paid' })), statusIs(400));
-const paidFast = event('checkout.session.completed', { ...unpaidFast.data.object, payment_status: 'paid' });
+const paidFast = event('checkout.session.completed', { ...unpaidFast.data.object, status: 'complete', payment_status: 'paid' });
 await payments.applyCheckoutEvent(paidFast);
 assert.equal(calls.rpc.at(-1).name, 'shipandbattle_record_launch_checkout_event');
 assert.equal(calls.rpc.at(-1).args.p_request_id, fastRequestId);
@@ -437,6 +437,31 @@ await reconcileRoute.POST(request(), context);
 await payments.applyCheckoutEvent({ id: 'evt_receipt_recovery', type: 'checkout.session.completed', livemode: false, data: { object: receiptSession } });
 assert.equal(orders.size, recoveredCount, 'Receipt recovery, retries and a late webhook share one order');
 console.log('PASS: receipt recovers a verified Stripe payment when webhook is missing, requires the same owner and rejects unpaid/refunded sessions.');
+
+// New Checkout Sessions must recover without either Payment Link setting.
+const previousLinkConfig = env.STRIPE_PAYMENT_LINKS;
+const previousSigningSecret = env.STRIPE_PAYMENT_LINK_SIGNING_SECRET;
+delete env.STRIPE_PAYMENT_LINKS;
+delete env.STRIPE_PAYMENT_LINK_SIGNING_SECRET;
+const preparedSession = [...sessions.values()].find(session => session.id === paidFast.data.object.id);
+Object.assign(preparedSession, paidFast.data.object, {
+  payment_intent: { id: 'pi_prepared', status: 'succeeded', latest_charge: { amount_refunded: 0, disputed: false } },
+});
+orders.delete(fast.orderId);
+await assert.rejects(payments.reconcilePaymentLink(otherUser, fast.orderId, preparedSession.id), statusIs(403));
+await assert.rejects(payments.reconcilePaymentLink(user.id, randomUUID(), preparedSession.id), statusIs(400));
+assert.equal((await payments.reconcilePaymentLink(user.id, fast.orderId, preparedSession.id)).status, 'paid');
+const restoredCount = orders.size;
+await payments.applyCheckoutEvent({ ...paidFast, id: 'evt_prepared_late' });
+await payments.reconcilePaymentLink(user.id, fast.orderId, preparedSession.id);
+assert.equal(orders.size, restoredCount);
+for (const patch of [{ amount_total: 1 }, { client_reference_id: randomUUID() }, { metadata: { ...preparedSession.metadata, user_id: otherUser } }]) {
+  const invalid = { ...preparedSession, ...patch };
+  await assert.rejects(payments.applyCheckoutEvent({ ...paidFast, id: randomUUID(), data: { object: invalid } }), statusIs(400));
+}
+env.STRIPE_PAYMENT_LINKS = previousLinkConfig;
+env.STRIPE_PAYMENT_LINK_SIGNING_SECRET = previousSigningSecret;
+console.log('PASS: prepared sessions reconcile missing orders and late webhooks without Payment Link configuration, reject forged ownership/amount/order references, and do not duplicate orders.');
 
 const sandboxOrder = orders.get(receiptOrderId);
 const liveOrderId = randomUUID();

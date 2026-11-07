@@ -1,14 +1,12 @@
 // Browser regression against a running local build, with all data/auth mocked.
 // Does not create an order, upload a file, charge a card or send mail.
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
 import puppeteer from 'puppeteer-core';
 
 const base = process.env.VERIFY_BASE_URL || 'http://localhost:3000';
 const owner = '11111111-1111-4111-8111-111111111111';
 const sessionId = 'cs_test_browserrecovery';
-const digest = createHash('sha256').update(`indieclash:payment-link:${sessionId}`).digest('hex');
-const orderId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-8${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+const orderId = '11111111-2222-8333-a444-555555555555';
 const key = `sb-${new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).hostname.split('.')[0]}-auth-token`;
 const expiry = Math.floor(Date.now() / 1000) + 3600;
 const session = { access_token: `e30.${Buffer.from(JSON.stringify({ sub: owner, exp: expiry })).toString('base64url')}.fixture`,
@@ -53,7 +51,7 @@ try {
   await page.waitForFunction(() => document.querySelector('#product-title')?.value === 'Saved incomplete product');
   assert.deepEqual(unnecessaryReads, [], 'Paid form must not read or poll public Arena/owned products');
   console.log('PASS: incomplete Save, cloud draft restoration and no Arena/product requests on the paid form.');
-  await page.goto(`${base}/submit/result?session_id=${sessionId}`, { waitUntil: 'networkidle0' });
+  await page.goto(`${base}/submit/result?order=${orderId}&session_id=${sessionId}`, { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => document.body.innerText.includes('Payment confirmed.'), { timeout: 30000 });
   assert.equal(reconciles, 2, 'Transient Stripe failure should recover automatically');
   await page.evaluate(key => {

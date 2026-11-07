@@ -34,6 +34,6 @@ export async function POST(request: Request) {
     const input = parseCheckoutInput(await readJsonRequest(request, 128_000));
     await timed("quota", () => input.payBeforeOrder ? checkCheckoutQuota(user.id) : consumeLaunchRateLimit(client, "checkout"));
     const result = await timed("checkout", () => createLaunchCheckout(user, input));
-    return respond(Response.json(result, { headers: { "Cache-Control": "no-store" } }));
+    return respond(Response.json({ ...result, userId: user.id }, { headers: { "Cache-Control": "private, no-store" } }));
   } catch (error) { return respond(jsonError(error)); }
 }
