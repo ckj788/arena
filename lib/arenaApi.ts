@@ -4,6 +4,14 @@ import { fetchJsonWithDeadline, withDeadline } from "./requestSafety";
 
 interface ApiErrorPayload {
   error?: string;
+  code?: string;
+}
+
+export class ApiRequestError extends Error {
+  constructor(public readonly status: number, message: string, public readonly code?: string) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
 }
 
 export class AuthSessionExpiredError extends Error {
@@ -75,7 +83,7 @@ export async function authenticatedJson<T>(path: string, body?: unknown, method 
 
   if (!payload || typeof payload !== "object") throw new Error("Invalid service response.");
   if (!response.ok) {
-    throw new Error(payload.error || `Request failed with status ${response.status}.`);
+    throw new ApiRequestError(response.status, payload.error || `Request failed with status ${response.status}.`, payload.code);
   }
   return payload;
 }
@@ -159,7 +167,7 @@ export async function uploadArenaLogo(logo: string): Promise<string> {
 
 export async function submitArenaProduct(input: ProductSubmission): Promise<Product> {
   const result = await authenticatedJson<{ product: Product }>("/api/arena/products", input);
-  if (!result.product?.id) throw new Error("Submission response was incomplete. Check your console before submitting again.");
+  if (!result.product?.id) throw new Error("Submission response was incomplete. Check your Dashboard before submitting again.");
   return result.product;
 }
 
@@ -186,7 +194,7 @@ export async function fetchOwnedArenaProducts(): Promise<{ productIds: string[];
 
 export async function enqueueArenaProduct(productId: string): Promise<{ bracketStarted: boolean }> {
   const result = await authenticatedJson<{ bracketStarted: boolean }>(`/api/arena/products/${encodeURIComponent(productId)}/queue`);
-  if (typeof result.bracketStarted !== "boolean") throw new Error("Queue response was incomplete. Check your console before retrying.");
+  if (typeof result.bracketStarted !== "boolean") throw new Error("Queue response was incomplete. Check your Dashboard before retrying.");
   return result;
 }
 

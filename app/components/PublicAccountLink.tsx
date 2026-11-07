@@ -27,5 +27,5 @@ export default function PublicAccountLink() {
     });
     return () => { active = false; data.subscription.unsubscribe(); };
   }, []);
-  return <Link href={signedIn ? "/?view=console" : "/?signin=1"} className="inline-flex min-h-10 shrink-0 items-center px-2 text-[11px] font-medium text-zinc-600 hover:text-zinc-950 sm:text-xs">{signedIn ? "My Console" : "Sign in"}</Link>;
+  return <Link href={signedIn ? "/?view=console" : "/?signin=1"} className="inline-flex min-h-10 shrink-0 items-center px-2 text-[11px] font-medium text-zinc-600 hover:text-zinc-950 sm:text-xs">{signedIn ? "Dashboard" : "Sign in"}</Link>;
 }

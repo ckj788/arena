@@ -8,6 +8,7 @@ export class HttpError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = "HttpError";
@@ -50,7 +51,7 @@ export async function consumeUserRateLimit(client: SupabaseClient, action: RateL
   throw new HttpError(503, "The abuse-protection service is unavailable.");
 }
 
-export async function authenticateRequest(request: Request): Promise<AuthenticatedRequest> {
+function authenticatedClient(request: Request) {
   const supabaseUrl = requireEnvironmentValue("NEXT_PUBLIC_SUPABASE_URL");
   const anonKey = requireEnvironmentValue("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   const accessToken = getBearerToken(request);
@@ -67,6 +68,46 @@ export async function authenticateRequest(request: Request): Promise<Authenticat
       },
     },
   });
+  return { client, accessToken, supabaseUrl };
+}
+
+export async function authenticatePaymentRequest(request: Request) {
+  const { client, accessToken, supabaseUrl } = authenticatedClient(request);
+  // Verify signatures using Supabase's cached JWKS. Unlike getUser(), ES256
+  // verification does not depend on an Auth network request for every payment.
+  let result: Awaited<ReturnType<typeof client.auth.getClaims>>;
+  // Check exp below after signature verification so an expired token yields
+  // 401 (and the browser can refresh it), rather than an SDK generic exception.
+  try { result = await client.auth.getClaims(accessToken, { allowExpired: true }); }
+  catch (error) {
+    if (error instanceof SyntaxError) throw new HttpError(401, "Invalid or expired session.");
+    throw new HttpError(503, "Payment authentication is temporarily unavailable. Your sign-in has not been changed. Please retry the same order.");
+  }
+  if (result.error) {
+    if (result.error.status === 0 || (result.error.status ?? 0) >= 500) {
+      throw new HttpError(503, "Payment authentication is temporarily unavailable. Your sign-in has not been changed. Please retry the same order.");
+    }
+    throw new HttpError(401, "Invalid or expired session.");
+  }
+  const claims = result.data?.claims;
+  if (!claims || claims.iss !== `${supabaseUrl.replace(/\/$/, "")}/auth/v1`
+    || !(claims.aud === "authenticated" || (Array.isArray(claims.aud) && claims.aud.includes("authenticated")))
+    || claims.role !== "authenticated" || typeof claims.sub !== "string"
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(claims.sub)
+    || typeof claims.exp !== "number" || claims.exp * 1000 <= Date.now()
+    || (typeof claims.nbf === "number" && claims.nbf * 1000 > Date.now())) {
+    throw new HttpError(401, "Invalid or expired session.");
+  }
+  const providers = [claims.app_metadata?.provider, ...(Array.isArray(claims.app_metadata?.providers) ? claims.app_metadata.providers : [])];
+  if (!providers.some(provider => provider === "google" || provider === "github")) {
+    throw new HttpError(403, "A verified Google or GitHub identity is required.");
+  }
+  const user: Pick<User, "id" | "email"> = { id: claims.sub, email: typeof claims.email === "string" ? claims.email : undefined };
+  return { user, client, accessToken };
+}
+
+export async function authenticateRequest(request: Request): Promise<AuthenticatedRequest> {
+  const { client, accessToken } = authenticatedClient(request);
 
   const { data, error } = await client.auth.getUser(accessToken);
   if (error) {
@@ -145,7 +186,7 @@ export async function requireAdmin(request: Request): Promise<User | null> {
 
 export function jsonError(error: unknown): Response {
   if (error instanceof HttpError) {
-    return Response.json({ error: error.message }, { status: error.status });
+    return Response.json({ error: error.message, code: error.code }, { status: error.status });
   }
 
   console.error("[ARENA API] Unexpected error:", error);

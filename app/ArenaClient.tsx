@@ -34,7 +34,9 @@ import {
   saveLocalPastChampions
 } from "@/lib/arenaStore";
 import {
+  ApiRequestError,
   AuthSessionExpiredError,
+  authenticatedJson,
   castArenaVote,
   enqueueArenaProduct,
   fetchOwnedArenaProducts,
@@ -60,11 +62,15 @@ import PrimaryNavigation, { type MainPage } from "@/app/components/PrimaryNaviga
 import { PRICING_MODELS, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_GROUPS, feedCategoryLabel, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
+import { normalizeProductWebsite } from "@/lib/productWebsite";
 import { DUPLICATE_PRODUCT_MESSAGE, findProductWithSameDomain, isVisibleProduct, productLinkRel } from "@/lib/productSafety";
 import ScreenshotInput from "@/app/components/ScreenshotInput";
 import ProfileReadiness from "@/app/components/ProfileReadiness";
 import LaunchShareKit from "@/app/components/LaunchShareKit";
-import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, safeOAuthReturnPath } from "@/lib/browserOAuth";
+import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, OAUTH_SUBMISSION_TARGET_KEY, oauthReturnDestination } from "@/lib/browserOAuth";
+import { EMPTY_SERVICE_DETAILS, getSubmissionPlan, launchOrderDashboardPath, SUBMISSION_PAGE_DRAFT_KEY, type SubmissionPlanId, type SubmissionServiceDetails } from "@/lib/submissionPlans";
+import ServiceFields from "@/app/submit/ServiceFields";
+import { useSubmissionAccess } from "@/app/components/SubmissionAccess";
 
 function firstOpenBracketMatch(bracket: Bracket): Match | null {
   const round = bracket.status === "active"
@@ -150,6 +156,9 @@ const OAUTH_SUBMIT_DRAFT_KEY = "indieclash_oauth_submit_draft_v1";
 
 interface ArenaClientProps {
   page?: MainPage;
+  submissionPlan?: SubmissionPlanId;
+  paidOrderId?: string;
+  initialSubmissionDraft?: Record<string, unknown> | null;
   initialProducts: Product[];
   initialPastChampions: Product[];
   initialBracket: Bracket | null;
@@ -176,11 +185,20 @@ function errorMessage(error: unknown) {
 
 export default function ArenaClient({
   page = "discover",
+  submissionPlan,
+  paidOrderId,
+  initialSubmissionDraft,
   initialProducts,
   initialPastChampions,
   initialBracket
 }: ArenaClientProps) {
   const router = useRouter();
+  const { requestSubmission } = useSubmissionAccess();
+  const selectedSubmissionPlan = getSubmissionPlan(submissionPlan);
+  const isSubmissionPage = Boolean(selectedSubmissionPlan);
+  const isPaidSubmission = Boolean(selectedSubmissionPlan?.price);
+  const submissionDraftKey = paidOrderId ? `${SUBMISSION_PAGE_DRAFT_KEY}:${paidOrderId}` : SUBMISSION_PAGE_DRAFT_KEY;
+  const SubmissionContainer = isSubmissionPage ? "main" : "div";
   const arenaRootRef = useRef<HTMLDivElement | null>(null);
   const submitDialogRef = useRef<HTMLDivElement | null>(null);
   const authDialogRef = useRef<HTMLDivElement | null>(null);
@@ -190,7 +208,7 @@ export default function ArenaClient({
   const [signingInProvider, setSigningInProvider] = useState<string | null>(null);
   const [products, setProducts] = useState<Product[]>(initialProducts);
   const [pastChampions, setPastChampions] = useState<Product[]>(initialPastChampions);
-  const { currentView, setCurrentView, showHomeSection } = useArenaNavigation();
+  const { currentView, focusedOrderId, setCurrentView, showHomeSection } = useArenaNavigation();
   const isMuted = false;
   const synthClick = (freq = 300, type: OscillatorType = "sine", duration = 0.06, vol = 0.02) => {
     if (!isMuted) {
@@ -229,9 +247,11 @@ export default function ArenaClient({
   const [isSwordsClashing, setIsSwordsClashing] = useState(false);
 
   // Submit Drawer State
-  const [isSubmitOpen, setIsSubmitOpen] = useState(false);
+  const [isSubmitOpen, setIsSubmitOpen] = useState(isSubmissionPage);
+  const [serviceDetails, setServiceDetails] = useState<SubmissionServiceDetails>({ ...EMPTY_SERVICE_DETAILS });
   const [submitSource, setSubmitSource] = useState<'home' | 'console'>('home');
   const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const submitPendingRef = useRef(false);
   const publicRevisionRef = useRef(0);
@@ -259,13 +279,81 @@ export default function ArenaClient({
   const [newLogo, setNewLogo] = useState("🚀");
   const [newScreenshot, setNewScreenshot] = useState<string[]>([]);
   const [preparingScreenshot, setPreparingScreenshot] = useState(false);
-  const trimmedProductUrl = newUrl.trim();
-  const normalizedProductUrl = publicHttpUrl(/^https?:\/\//i.test(trimmedProductUrl) ? trimmedProductUrl : `https://${trimmedProductUrl}`);
+  const normalizedProductUrl = normalizeProductWebsite(newUrl);
   const duplicateProduct = useMemo(
     () => normalizedProductUrl ? findProductWithSameDomain(products, normalizedProductUrl, editingProduct) : undefined,
     [products, normalizedProductUrl, editingProduct],
   );
   const [activeCardProduct, setActiveCardProduct] = useState<Product | null>(null);
+
+  const productFormDraft = () => ({
+    title: newTitle, tagline: newTagline, url: newUrl, description: newDescription,
+    category: newCategory, pricingModel: newPricingModel, pricingDetails: newPricingDetails,
+    editingProductId: editingProduct?.id, platforms: newPlatforms,
+    targetAudience: newTargetAudience, makerStory: newMakerStory, feedbackRequest: newFeedbackRequest,
+    maker: newMaker, twitter: newTwitter, logo: newLogo, screenshot: newScreenshot,
+    source: submitSource, serviceDetails, plan: submissionPlan,
+  });
+
+  const saveSubmissionDraft = () => {
+    try {
+      sessionStorage.setItem(submissionDraftKey, JSON.stringify(productFormDraft()));
+      return true;
+    } catch {
+      setSubmitError("This browser could not save your draft. Keep this page open, or remove large images and try again.");
+      return false;
+    }
+  };
+
+  const uploadSubmissionImages = async (draft: { logo: string; screenshot: string[] }) => {
+    const results = await Promise.allSettled([draft.logo, ...draft.screenshot].map(uploadArenaLogo));
+    // Preserve successful uploads even if another image failed, so retrying
+    // does not upload the same files again or overwrite edits made meanwhile.
+    const logoResult = results[0];
+    if (logoResult.status === "fulfilled") setNewLogo(current => current === draft.logo ? logoResult.value : current);
+    setNewScreenshot(current => current.map((image, index) => {
+      const result = results[index + 1];
+      return image === draft.screenshot[index] && result?.status === "fulfilled" ? result.value : image;
+    }));
+    const urls = results.map(result => {
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
+    });
+    return { logo: urls[0], screenshot: urls.slice(1) };
+  };
+
+  const savePaidDraft = async () => {
+    if (!paidOrderId || submitPendingRef.current || preparingScreenshot) return false;
+    submitPendingRef.current = true;
+    setIsSavingDraft(true);
+    setSubmitError(null);
+    try {
+      const draft = productFormDraft();
+      const { logo, screenshot } = await uploadSubmissionImages(draft);
+      await authenticatedJson(`/api/payments/orders/${paidOrderId}/draft`, { ...draft, logo, screenshot }, "PUT");
+      pushToast("Saved. You can continue in Dashboard.");
+      return true;
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : "Your draft could not be saved. Please retry.";
+      setSubmitError(message);
+      pushToast(message, "info");
+      return false;
+    } finally {
+      submitPendingRef.current = false;
+      setIsSavingDraft(false);
+    }
+  };
+
+  const returnToDashboard = async () => {
+    if (paidOrderId ? await savePaidDraft() : saveSubmissionDraft()) {
+      router.push(paidOrderId ? launchOrderDashboardPath(paidOrderId) : "/?view=console");
+    }
+  };
+
+  const changeSubmissionPlan = () => {
+    if (paidOrderId) void returnToDashboard();
+    else if (saveSubmissionDraft()) router.push("/submit");
+  };
 
   useEffect(() => {
     let restoreTimer: number | undefined;
@@ -279,10 +367,10 @@ export default function ArenaClient({
     const shouldSignIn = params.get("signin") === "1";
     const shouldRestoreConsole = params.get("view") === "console";
     let savedDraft: string | null = null;
-    try { savedDraft = sessionStorage.getItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Storage may be restricted. */ }
-    let restoredDraft: Record<string, unknown> | null = null;
+    try { savedDraft = sessionStorage.getItem(isSubmissionPage ? submissionDraftKey : OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Storage may be restricted. */ }
+    let restoredDraft: Record<string, unknown> | null = initialSubmissionDraft ?? null;
 
-    if (savedDraft) {
+    if (!restoredDraft && savedDraft) {
       try {
         restoredDraft = JSON.parse(savedDraft) as Record<string, unknown>;
       } catch {
@@ -290,7 +378,15 @@ export default function ArenaClient({
       }
     }
 
-    if (!shouldOpenFromQuery && !savedDraft && !shouldRestoreConsole && !shouldSignIn) return;
+    if (!shouldOpenFromQuery && !restoredDraft && !shouldRestoreConsole && !shouldSignIn) return;
+
+    if (!isSubmissionPage && shouldOpenFromQuery && !restoredDraft?.editingProductId) {
+      if (restoredDraft) {
+        try { sessionStorage.setItem(SUBMISSION_PAGE_DRAFT_KEY, JSON.stringify(restoredDraft)); sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Leave the original draft available. */ }
+      }
+      router.replace(restoredDraft ? "/submit/details?plan=free" : "/submit");
+      return;
+    }
 
     restoreTimer = window.setTimeout(() => {
       if (shouldSignIn) { setIsAuthOpen(true); params.delete("signin"); }
@@ -306,7 +402,7 @@ export default function ArenaClient({
           const savedPricing = draft.pricingDetails as Record<string, unknown>;
           setNewPricingDetails(Object.fromEntries(Object.keys(EMPTY_PRICING_DRAFT).map(key => [key, typeof savedPricing[key] === "string" ? savedPricing[key] : ""])) as unknown as PricingDraft);
         }
-        if (typeof draft.editingProductId === "string") setEditingProduct({ id: draft.editingProductId } as Product);
+        if (!paidOrderId && typeof draft.editingProductId === "string") setEditingProduct({ id: draft.editingProductId } as Product);
         setNewPlatforms(typeof draft.platforms === "string" ? draft.platforms : "");
         setNewTargetAudience(typeof draft.targetAudience === "string" ? draft.targetAudience : "");
         setNewMakerStory(typeof draft.makerStory === "string" ? draft.makerStory : "");
@@ -316,9 +412,20 @@ export default function ArenaClient({
         setNewLogo(typeof draft.logo === "string" ? draft.logo : "🚀");
         setNewScreenshot(Array.isArray(draft.screenshot) ? draft.screenshot.filter((item): item is string => typeof item === "string").slice(0, 5) : typeof draft.screenshot === "string" && draft.screenshot ? [draft.screenshot] : []);
         setSubmitSource(draft.source === "console" ? "console" : "home");
+        if (isSubmissionPage && draft.serviceDetails && typeof draft.serviceDetails === "object") {
+          const details = draft.serviceDetails as Record<string, unknown>;
+          setServiceDetails({
+            email: typeof details.email === "string" ? details.email : "",
+            history: details.history === "none" || details.history === "provided" || details.history === "unsure" ? details.history : "",
+            directories: typeof details.directories === "string" ? details.directories : "",
+            consent: details.consent === true,
+          });
+        }
       }
       if (shouldOpenFromQuery || savedDraft) setIsSubmitOpen(true);
-      try { sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Optional draft storage. */ }
+      if (!isSubmissionPage) {
+        try { sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Optional draft storage. */ }
+      }
     if (shouldOpenFromQuery) params.delete("submit");
 
     const remainingQuery = params.toString();
@@ -332,7 +439,7 @@ export default function ArenaClient({
       if (restoreTimer !== undefined) window.clearTimeout(restoreTimer);
       window.removeEventListener(OAUTH_RESTORE_EVENT, restoreUi);
     };
-  }, []);
+  }, [initialSubmissionDraft, isSubmissionPage, paidOrderId, router, submissionDraftKey]);
 
   const resetProductForm = () => {
     setNewTitle("");
@@ -352,22 +459,19 @@ export default function ArenaClient({
     setNewScreenshot([]);
   };
 
-  const openSubmitModal = (source: 'home' | 'console') => {
-    setEditingProduct(null);
-    resetProductForm();
-    setSubmitSource(source);
-    setSubmitError(null);
-    setIsSubmitOpen(true);
+  const openSubmissionPage = () => {
+    void requestSubmission();
   };
 
   const closeSubmitModal = () => {
     if (isSubmittingProduct) return;
+    if (isSubmissionPage) { changeSubmissionPlan(); return; }
     setSubmitError(null);
     setIsSubmitOpen(false);
     setEditingProduct(null);
   };
 
-  useModalAccessibility(isSubmitOpen, submitDialogRef, closeSubmitModal);
+  useModalAccessibility(isSubmitOpen && !isSubmissionPage, submitDialogRef, closeSubmitModal);
 
   const openEditProduct = (product: Product) => {
     setEditingProduct(product);
@@ -427,7 +531,7 @@ export default function ArenaClient({
     return () => window.removeEventListener("indieclash:auth-expired", onSessionExpired);
   }, []);
   useEffect(() => {
-    if (!supabase || !userSupabaseId || !userLoggedIn) return;
+    if (isPaidSubmission || !supabase || !userSupabaseId || !userLoggedIn) return;
     let active = true;
     void Promise.resolve().then(async () => {
       if (!active) return;
@@ -441,7 +545,7 @@ export default function ArenaClient({
       }
     });
     return () => { active = false; };
-  }, [userSupabaseId, userLoggedIn, ownershipRevision]);
+  }, [isPaidSubmission, userSupabaseId, userLoggedIn, ownershipRevision]);
 
   const consoleProducts = useMemo(() => {
     if (!supabase) return products;
@@ -526,11 +630,14 @@ export default function ArenaClient({
 
     const restoreAfterOAuth = (failureCode?: string) => {
       let requestedReturn: string | null = null;
+      let submissionTarget: string | null = null;
       try {
         requestedReturn = sessionStorage.getItem(OAUTH_RETURN_TO_KEY);
+        submissionTarget = sessionStorage.getItem(OAUTH_SUBMISSION_TARGET_KEY);
         sessionStorage.removeItem(OAUTH_RETURN_TO_KEY);
+        sessionStorage.removeItem(OAUTH_SUBMISSION_TARGET_KEY);
       } catch { /* A missing saved context must not hide the sign-in result. */ }
-      const destination = safeOAuthReturnPath(requestedReturn || `${url.pathname}${url.search}${url.hash}`, url.origin);
+      const destination = oauthReturnDestination(requestedReturn || `${url.pathname}${url.search}${url.hash}`, submissionTarget, Boolean(failureCode), url.origin);
       // OAuth may return through the homepage. Load the original route before
       // restoring its form or Console; changing the address alone leaves the
       // wrong page mounted when signing in from Arena or Champions.
@@ -651,7 +758,7 @@ export default function ArenaClient({
 
     if (isSubmitOpen) {
       try {
-        sessionStorage.setItem(OAUTH_SUBMIT_DRAFT_KEY, JSON.stringify({
+        sessionStorage.setItem(isSubmissionPage ? submissionDraftKey : OAUTH_SUBMIT_DRAFT_KEY, JSON.stringify({
           title: newTitle,
           tagline: newTagline,
           url: newUrl,
@@ -669,6 +776,8 @@ export default function ArenaClient({
           logo: newLogo,
           screenshot: newScreenshot,
           source: submitSource,
+          serviceDetails,
+          plan: submissionPlan,
         }));
       } catch {
         setSubmitError("Your draft is too large for this browser to preserve during sign-in. Remove the images, sign in, then add them again. Your current form has not been cleared.");
@@ -686,6 +795,7 @@ export default function ArenaClient({
     }
     const returnTo = `${returnUrl.pathname}${returnUrl.search}${returnUrl.hash}`;
     sessionStorage.setItem(OAUTH_RETURN_TO_KEY, returnTo);
+    sessionStorage.removeItem(OAUTH_SUBMISSION_TARGET_KEY);
     const callbackUrl = new URL("/auth/callback", window.location.origin);
 
     const { data, error } = await withDeadline(supabase.auth.signInWithOAuth({
@@ -804,6 +914,7 @@ export default function ArenaClient({
 
   // Sync products and bracket from cloud or local storage with Stale-While-Revalidate
   const syncCloudData = useCallback(async () => {
+    if (isPaidSubmission) return;
     if (isResettingRef.current || isSyncLockedRef.current || votePendingRef.current || publicSyncPendingRef.current) {
       console.log("ℹ️ [INDIE CLASH] syncCloudData bypassed because operation lock is active.");
       return;
@@ -904,10 +1015,11 @@ export default function ArenaClient({
       setIsPublicSyncPending(false);
       isInitialSyncDone.current = true;
     }
-  }, [setPastChampions]);
+  }, [isPaidSubmission, setPastChampions]);
 
   // Initial Load
   useEffect(() => {
+    if (isPaidSubmission) return;
     // Populate memory cache with fresh server initial props immediately on mount to prevent cache downgrade & redundant DB queries
     memoryCache.products = initialProducts;
     memoryCache.champs = initialPastChampions;
@@ -935,11 +1047,11 @@ export default function ArenaClient({
 
     });
     return () => window.cancelAnimationFrame(animationFrame);
-  }, [initialBracket, initialPastChampions, initialProducts, syncCloudData]);
+  }, [isPaidSubmission, initialBracket, initialPastChampions, initialProducts, syncCloudData]);
 
   // Poll safe public views instead of subscribing to private base-table WAL rows.
   useEffect(() => {
-    if (!supabase) return;
+    if (isPaidSubmission || !supabase) return;
     const refresh = () => {
       if (document.visibilityState === "visible") void syncCloudData();
     };
@@ -951,7 +1063,7 @@ export default function ArenaClient({
       window.removeEventListener("focus", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [syncCloudData]);
+  }, [isPaidSubmission, syncCloudData]);
 
   // Load critiques for the active match dynamically from Supabase or localStorage
   useEffect(() => {
@@ -1040,6 +1152,7 @@ export default function ArenaClient({
 
   // Master Clock & Settle & Simulated Votes Loop
   useEffect(() => {
+    if (isSubmissionPage) return;
     const timer = setInterval(() => {
       // A. Active bracket countdown and automatic round settlement
       if (bracket && bracket.status === "preparing") {
@@ -1131,7 +1244,7 @@ export default function ArenaClient({
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [bracket, activeMatch, syncCloudData, tryAutoRollover, userLoggedIn]);
+  }, [isSubmissionPage, bracket, activeMatch, syncCloudData, tryAutoRollover, userLoggedIn]);
 
   // Generate 20 Mock Showcase Products Helper
   const generateMockShowcaseProducts = (count = 20): Product[] => {
@@ -1315,6 +1428,40 @@ export default function ArenaClient({
     if (submitPendingRef.current || preparingScreenshot) return;
     setSubmitError(null);
 
+    if (isPaidSubmission) {
+      if (!(e.currentTarget as HTMLFormElement).reportValidity()) return;
+      if (!normalizedProductUrl) { setSubmitError("Please enter a valid public website URL."); return; }
+      if (newDescription.trim().length < 80) { setSubmitError("Please describe the product in at least 80 characters."); return; }
+      if (serviceDetails.history === "provided" && !serviceDetails.directories.trim()) { setSubmitError("Please include your previous directory submissions, or choose another answer."); return; }
+      const pricingError = productPricingError(pricingDraftValue(newPricingDetails), newPricingModel);
+      if (pricingError) { setSubmitError(pricingError); return; }
+      if (!paidOrderId) { setSubmitError("A confirmed paid order is required before adding product details."); return; }
+      submitPendingRef.current = true;
+      setIsSubmittingProduct(true);
+      try {
+        const { logo, screenshot: screenshots } = await uploadSubmissionImages({ logo: newLogo, screenshot: newScreenshot });
+        const input = {
+          title: newTitle, tagline: newTagline, url: normalizedProductUrl, description: newDescription,
+          makerName: newMaker || "Anonymous Maker", makerTwitter: newTwitter || "@anonymous",
+          logo, screenshots, category: newCategory || undefined, pricingModel: newPricingModel,
+          pricingDetails: pricingDraftValue(newPricingDetails) ? normalizeProductPricing(newPricingDetails) : null,
+          platforms: newPlatforms.split(",").map(item => item.trim()).filter(Boolean), targetAudience: newTargetAudience,
+          makerStory: newMakerStory, feedbackRequest: newFeedbackRequest,
+        };
+        await authenticatedJson(`/api/payments/orders/${paidOrderId}/details`, { product: input, serviceDetails }, "PUT");
+        try { sessionStorage.removeItem(submissionDraftKey); } catch { /* Optional browser draft. */ }
+        router.push(`/submit/result?order=${paidOrderId}`);
+      } catch (failure) {
+        if (failure instanceof ApiRequestError && failure.code === "details_already_received") {
+          try { sessionStorage.removeItem(submissionDraftKey); } catch { /* Optional browser draft. */ }
+          router.push(`/submit/result?order=${paidOrderId}`);
+          return;
+        }
+        setSubmitError(failure instanceof Error ? failure.message : "Could not save your details. Your paid order remains available in Dashboard.");
+      } finally { submitPendingRef.current = false; setIsSubmittingProduct(false); }
+      return;
+    }
+
     if (!userLoggedIn) {
       const message = "Please link and verify your Google or GitHub identity before submitting.";
       synthClick(150, "sawtooth", 0.12);
@@ -1456,12 +1603,15 @@ export default function ArenaClient({
       setSubmitError(null);
       setIsSubmitOpen(false);
       setEditingProduct(null);
-      if (wasEditing) {
+      if (isSubmissionPage) {
+        try { sessionStorage.removeItem(SUBMISSION_PAGE_DRAFT_KEY); } catch { /* Optional browser draft. */ }
+        router.push(`/products/${encodeURIComponent(newProd.id)}`);
+      } else if (wasEditing) {
         pushToast("Product profile updated!", "success");
       } else {
         setPublishedProduct(newProd);
         setSuccessModalTitle("Your product is live");
-        setSuccessModalText("Share your profile with people who could use it. You can join the Arena from My Console.");
+        setSuccessModalText("Share your profile with people who could use it. You can join the Arena from Dashboard.");
         setIsSuccessOpen(true);
       }
     } catch (error) {
@@ -2159,7 +2309,7 @@ export default function ArenaClient({
   }, [isSwordsClashing]);
 
   return (
-    <div ref={arenaRootRef} data-main-page={page} className={`arena-app min-h-screen bg-[#fafafa] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white antialiased relative overflow-x-hidden ${isShaking ? "animate-arena-shake" : ""}`}>
+    <div ref={arenaRootRef} data-main-page={page} className={`arena-app min-h-screen bg-[#fafafa] text-zinc-900 font-sans selection:bg-zinc-900 selection:text-white antialiased relative ${isPaidSubmission ? "overflow-x-clip" : "overflow-x-hidden"} ${isShaking ? "animate-arena-shake" : ""}`}>
       
       {/* HIGH PERFORMANCE DYNAMIC CANVAS BACKGROUND */}
       <InteractiveGrid />
@@ -2193,7 +2343,7 @@ export default function ArenaClient({
               </span>
             </Link>
 
-            <PrimaryNavigation activePage={currentView === "home" ? page : undefined} className="hidden lg:flex" />
+            <PrimaryNavigation activePage={!isSubmissionPage && currentView === "home" ? page : undefined} className="hidden lg:flex" />
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3">
@@ -2202,7 +2352,9 @@ export default function ArenaClient({
               <button
                 onClick={() => {
                   synthClick(300, "sine", 0.05);
-                  if (currentView === "console") {
+                  if (isSubmissionPage) {
+                    void returnToDashboard();
+                  } else if (currentView === "console") {
                     showHomeSection("arena-section");
                   } else {
                     setCurrentView("console");
@@ -2210,7 +2362,7 @@ export default function ArenaClient({
                 }}
                 className="hidden sm:block py-1.5 px-3 bg-white text-zinc-800 border border-zinc-200 hover:bg-zinc-50 shadow-2xs text-[10px] font-mono uppercase tracking-wider rounded-md cursor-pointer transition mr-2"
               >
-                {currentView === 'console' ? "Return to Arena ➔" : "My Console"}
+                {currentView === 'console' ? "Return to Arena ➔" : "Dashboard"}
               </button>
             )}
 
@@ -2234,7 +2386,7 @@ export default function ArenaClient({
                 onClick={() => setIsAuthOpen(true)}
                 className="whitespace-nowrap bg-white text-zinc-800 border border-zinc-200 hover:bg-zinc-50 shadow-2xs text-[11px] sm:text-xs font-semibold px-2 sm:px-3 py-2 rounded-md transition-all cursor-pointer"
               >
-                {authReady ? "Sign in" : "Checking sign-in…"}
+                {authReady ? "Sign in" : "Loading…"}
               </button>
             )}
 
@@ -2244,11 +2396,12 @@ export default function ArenaClient({
                 type="button"
                 onClick={() => {
                   synthClick(420, "sine", 0.08, 0.04);
-                  openSubmitModal('home');
+                  if (isSubmissionPage) changeSubmissionPlan();
+                  else openSubmissionPage();
                 }}
                 className="exhibition-button whitespace-nowrap max-sm:min-h-10 max-sm:px-3"
               >
-                Submit Product
+                {isSubmissionPage ? paidOrderId ? "Dashboard" : "Change plan" : "Submit Product"}
               </button>
             )}
 
@@ -2256,9 +2409,9 @@ export default function ArenaClient({
 
         </div>
         <div className="flex flex-wrap items-center justify-between gap-x-2 border-t border-zinc-200/80 px-3 lg:hidden">
-          <PrimaryNavigation activePage={currentView === "home" ? page : undefined} className="flex" />
+          <PrimaryNavigation activePage={!isSubmissionPage && currentView === "home" ? page : undefined} className="flex" />
           {userLoggedIn && <div className="flex items-center gap-3 px-3">
-            <button type="button" onClick={() => currentView === "console" ? showHomeSection("arena-section") : setCurrentView("console")} className="min-h-11 whitespace-nowrap text-xs text-violet-700 sm:hidden">{currentView === "console" ? "Back to Arena" : "My Console"}</button>
+            <button type="button" onClick={() => { if (isSubmissionPage) void returnToDashboard(); else if (currentView === "console") showHomeSection("arena-section"); else setCurrentView("console"); }} className="min-h-11 whitespace-nowrap text-xs text-violet-700 sm:hidden">{currentView === "console" ? "Back to Arena" : "Dashboard"}</button>
             <button type="button" onClick={handleLogout} disabled={isLoggingOut} aria-busy={isLoggingOut} className="min-h-11 whitespace-nowrap text-xs text-zinc-500">{isLoggingOut ? "Signing out…" : "Sign out"}</button>
           </div>}
         </div>
@@ -2280,11 +2433,11 @@ export default function ArenaClient({
         {authError}
       </div>}
 
-      {currentView === "console" ? (
+      {!isSubmissionPage && (currentView === "console" ? (
         <MakerConsole 
           isOpen={true}
           products={consoleProducts}
-          ownershipStatus={!supabase ? "ready" : !userLoggedIn ? "reauth" : ownership.userId === userSupabaseId ? ownership.status : "loading"}
+          ownershipStatus={!supabase ? "ready" : !authReady ? "loading" : !userLoggedIn ? "reauth" : ownership.userId === userSupabaseId ? ownership.status : "loading"}
           ownershipError={ownership.error}
           onRetryOwnership={retryOwnership}
           onSignIn={() => setIsAuthOpen(true)}
@@ -2292,11 +2445,12 @@ export default function ArenaClient({
           activeBracket={bracket}
           userTwitter={mockUserTwitter}
           userSubId={userSupabaseId}
+          focusedOrderId={focusedOrderId}
           onPushToQueue={handlePushToQueue}
           renderLogo={renderLogo}
           onExportCsv={handleExportCritiquesCsv}
           onSubmitProductClick={() => {
-            openSubmitModal('console');
+            openSubmissionPage();
           }}
           onEditProduct={openEditProduct}
         />
@@ -2317,7 +2471,7 @@ export default function ArenaClient({
                   Launch for free. Discover overlooked indie products. Join optional Arena battles for honest feedback.
                 </p>
                 <div className="exhibition-hero-actions hero-stats">
-                  <button type="button" className="exhibition-button" onClick={() => openSubmitModal('home')}>
+                  <button type="button" className="exhibition-button" onClick={openSubmissionPage}>
                     Launch your product <span aria-hidden="true">↗</span>
                   </button>
                   <a href="#new-and-unseen-section" className="exhibition-text-link">Find your next discovery <span aria-hidden="true">↓</span></a>
@@ -3155,7 +3309,7 @@ export default function ArenaClient({
                   JOIN THE ARENA
                 </h3>
                 <p className="text-xs text-zinc-600 leading-relaxed font-sans font-medium">
-                  Opt in from My Console. Sixteen products lock a Championship roster; otherwise the daily cutoff starts the largest ready 8, 4, or 2-product run. Earlier queue entries go first.
+                  Opt in from Dashboard. Sixteen products lock a Championship roster; otherwise the daily cutoff starts the largest ready 8, 4, or 2-product run. Earlier queue entries go first.
                 </p>
               </div>
               <div className="mt-8 pt-4 border-t border-zinc-100 text-[9px] font-mono text-emerald-700 uppercase tracking-widest font-semibold">
@@ -3405,23 +3559,29 @@ export default function ArenaClient({
         )}
       </footer>
       </div>
-      )}
+      ))}
 
       {/* ========================================================
-          Tactile Slide-over Drawer for new submissions
+          Full-page submission; the existing modal remains for profile editing.
          ======================================================== */}
       {isSubmitOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div 
+        <SubmissionContainer className={isSubmissionPage ? "submission-page-shell relative z-10" : "fixed inset-0 z-[100] flex items-center justify-center p-4"}>
+          {isSubmissionPage && <div className="submission-page-heading">
+            <button type="button" onClick={changeSubmissionPlan} className="submission-back-link">{paidOrderId ? "← Dashboard" : "← Choose your plan"}</button>
+            <p className="exhibition-kicker">{paidOrderId ? "03" : "02"} / Your product, properly introduced</p>
+            <h1>Tell us what you’re building<span>.</span></h1>
+            <p>{isPaidSubmission ? "Your payment is confirmed. Add your product details and previous directory submissions to prepare your launch. You can save a draft and finish later." : "Create your free Indie Clash product profile. You can join the Arena later, on your terms."}</p>
+          </div>}
+          {!isSubmissionPage && <div
             className="absolute inset-0 bg-black/45 backdrop-blur-sm animate-fade-in"
             onClick={closeSubmitModal}
-          />
-          <div ref={submitDialogRef} role="dialog" aria-modal="true" aria-labelledby="product-form-title" tabIndex={-1} className="product-form-dialog max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-zinc-200/90 bg-white p-4 sm:p-6 text-sm text-zinc-900 shadow-xl relative z-10 space-y-4">
+          />}
+          <div ref={submitDialogRef} role={isSubmissionPage ? undefined : "dialog"} aria-modal={isSubmissionPage ? undefined : true} aria-labelledby="product-form-title" tabIndex={isSubmissionPage ? undefined : -1} className={isSubmissionPage ? "submission-page-form space-y-6" : "product-form-dialog max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto overscroll-contain rounded-2xl border border-zinc-200/90 bg-white p-4 sm:p-6 text-sm text-zinc-900 shadow-xl relative z-10 space-y-4"}>
             <div className="flex items-center justify-between border-b border-zinc-200/80 pb-3">
               <h3 id="product-form-title" className="text-base font-semibold text-zinc-950 tracking-tight font-sans flex items-center gap-2 uppercase">
-                <PlusIcon className="w-4 h-4 text-violet-700" /> {editingProduct ? "EDIT PRODUCT PROFILE" : "SUBMIT PROJECT"}
+                <PlusIcon className="w-4 h-4 text-violet-700" /> {editingProduct ? "EDIT PRODUCT PROFILE" : isSubmissionPage ? "Product details" : "SUBMIT PROJECT"}
               </h3>
-              <button 
+              {!isSubmissionPage && <button
                 type="button"
                 onClick={closeSubmitModal}
                 disabled={isSubmittingProduct}
@@ -3429,18 +3589,19 @@ export default function ArenaClient({
                 aria-label={editingProduct ? "Close product editor" : "Close product submission"}
               >
                 <XIcon className="w-3.5 h-3.5" />
-              </button>
+              </button>}
             </div>
 
             <p className="text-zinc-600 font-sans text-[11px] leading-relaxed">
               {editingProduct
                 ? "Complete this permanent profile without changing its URL, submission date, votes, or Arena history."
-                : "Publish a permanent product profile first. Arena participation is optional and can be enabled from your console after submission."}
+                : isPaidSubmission ? "This form completes your paid order. No further payment is required."
+                : "Publish a permanent product profile first. Arena participation is optional and can be enabled from your Dashboard after submission."}
             </p>
 
             {/* Auth Status Segment */}
             {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
-            <div className="p-4 bg-zinc-50/80 border border-zinc-200/80 rounded-xl flex flex-col gap-3 text-left">
+            {!isPaidSubmission && <div className="p-4 bg-zinc-50/80 border border-zinc-200/80 rounded-xl flex flex-col gap-3 text-left">
               <div className="flex items-center space-x-3">
                 <span className="w-8 h-8 bg-white border border-zinc-200 shadow-2xs flex items-center justify-center text-sm rounded-lg">
                   {userAuthType === "github" ? "🐙" : "🔑"}
@@ -3452,7 +3613,7 @@ export default function ArenaClient({
                       {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                     </span>
                   ) : (
-                    <span className="text-xs text-zinc-950 font-bold uppercase">{authReady ? "Sign in to publish" : "Checking sign-in…"}</span>
+                    <span className="text-xs text-zinc-950 font-bold uppercase">{authReady ? "Sign in to publish" : "Loading…"}</span>
                   )}
                 </div>
               </div>
@@ -3470,7 +3631,7 @@ export default function ArenaClient({
                   Disconnect
                 </button>
               )}
-            </div>
+            </div>}
 
             {submitError && (
               <div
@@ -3488,7 +3649,9 @@ export default function ArenaClient({
               aria-busy={isSubmittingProduct}
               className="space-y-4 text-left"
             >
-              <ProfileReadiness product={{ description: newDescription, logo: newLogo, screenshots: newScreenshot, makerName: newMaker, targetAudience: newTargetAudience, pricingModel: newPricingModel, makerStory: newMakerStory, feedbackRequest: newFeedbackRequest }} />
+              <fieldset disabled={isSubmittingProduct} className="submission-form-fields">
+              {isPaidSubmission && <ServiceFields value={serviceDetails} onChange={setServiceDetails} />}
+              {!isPaidSubmission && <ProfileReadiness product={{ description: newDescription, logo: newLogo, screenshots: newScreenshot, makerName: newMaker, targetAudience: newTargetAudience, pricingModel: newPricingModel, makerStory: newMakerStory, feedbackRequest: newFeedbackRequest }} />}
               <div className="flex flex-col gap-1">
                 <label htmlFor="product-title" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
                 <input
@@ -3496,6 +3659,8 @@ export default function ArenaClient({
                   required
                   placeholder="e.g. SiteShot 📸"
                   id="product-title"
+                  minLength={2}
+                  maxLength={80}
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
                   className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
@@ -3510,6 +3675,8 @@ export default function ArenaClient({
                   required
                   placeholder="e.g. High-def screenshot API with full-page scrolling..."
                   id="product-tagline"
+                  minLength={10}
+                  maxLength={240}
                   value={newTagline}
                   onChange={(e) => setNewTagline(e.target.value)}
                   className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
@@ -3519,25 +3686,28 @@ export default function ArenaClient({
               <div className="flex flex-col gap-1">
                 <label htmlFor="product-url" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product website *</label>
                 <input
-                  type="url"
+                  type="text"
                   inputMode="url"
                   autoCapitalize="none"
                   required
                   placeholder="https://siteshot.net"
                   id="product-url"
                   value={newUrl}
+                  onBlur={() => { if (normalizedProductUrl) setNewUrl(normalizedProductUrl); }}
                   onChange={(e) => { setNewUrl(e.target.value); setSubmitError(null); }}
-                  aria-invalid={Boolean(duplicateProduct)}
+                  aria-invalid={!isPaidSubmission && Boolean(duplicateProduct)}
                   aria-describedby="product-url-hint"
                   className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
                 />
-                {duplicateProduct ? (
+                {duplicateProduct && isPaidSubmission ? (
+                  <p id="product-url-hint" className="text-sm leading-6 text-zinc-600">This website already has an Indie Clash profile. A directory service can use the existing profile; no duplicate product will be created. <Link href={`/products/${duplicateProduct.id}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">View profile ↗</Link></p>
+                ) : duplicateProduct ? (
                   <p id="product-url-hint" role="alert" className="text-[11px] leading-5 text-red-700">
                     {DUPLICATE_PRODUCT_MESSAGE}{" "}
                     <Link href={`/products/${duplicateProduct.id}`} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2">
                       View existing product ↗
                     </Link>
-                    <span className="block">If this is yours, edit it in My Console instead. Changing www, the page path or URL parameters does not create a different website.</span>
+                    <span className="block">If this is yours, edit it in Dashboard instead. Changing www, the page path or URL parameters does not create a different website.</span>
                   </p>
                 ) : (
                   <p id="product-url-hint" className="text-[10px] leading-4 text-zinc-500">One profile per website, not per page. Changing www, the page path or URL parameters does not allow another submission.</p>
@@ -3764,26 +3934,40 @@ export default function ArenaClient({
 
               <ScreenshotInput value={newScreenshot} onChange={setNewScreenshot} onBusy={setPreparingScreenshot} disabled={isSubmittingProduct} />
 
-              <div className="sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-zinc-200/80 bg-white py-4">
+              <div className={isPaidSubmission ? "sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white py-4" : isSubmissionPage ? "flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white pt-6" : "sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-zinc-200/80 bg-white py-4"}>
                 <button
                   type="button"
-                  onClick={closeSubmitModal}
-                  disabled={isSubmittingProduct}
+                  onClick={() => { if (paidOrderId) void savePaidDraft(); else if (isSubmissionPage) { if (saveSubmissionDraft()) pushToast("Draft saved in this browser session."); } else closeSubmitModal(); }}
+                  disabled={isSubmittingProduct || isSavingDraft || preparingScreenshot}
+                  aria-busy={isSavingDraft}
                   className="px-4 py-2 border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 rounded-lg text-xs font-medium shadow-2xs transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  Cancel
+                  {isSubmissionPage ? "Save" : "Cancel"}
                 </button>
+                {isSavingDraft && <span role="status" className="text-xs text-zinc-500">Saving…</span>}
                 <button
                   type="submit"
-                  disabled={isSubmittingProduct || preparingScreenshot || Boolean(duplicateProduct)}
+                  disabled={isSubmittingProduct || isSavingDraft || preparingScreenshot || (!isPaidSubmission && Boolean(duplicateProduct))}
                   className="min-w-28 px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg text-xs shadow-xs transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500"
                 >
-                  {preparingScreenshot ? "Preparing image…" : isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : (editingProduct ? "Save Changes" : "Submit Project")}
+                  {preparingScreenshot ? "Preparing image…" : isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : editingProduct ? "Save Changes" : isPaidSubmission ? "Send product details →" : isSubmissionPage ? "Publish for free →" : "Submit Project"}
                 </button>
               </div>
+              </fieldset>
             </form>
           </div>
-        </div>
+          {isSubmissionPage && selectedSubmissionPlan && <aside id="submission-summary" className="submission-summary" aria-label="Selected plan">
+            <p className="launch-eyebrow">Your launch plan</p>
+            <div className="submission-summary-name"><h2>{selectedSubmissionPlan.name}</h2><span>${selectedSubmissionPlan.price}</span></div>
+            <p>{isPaidSubmission ? `${selectedSubmissionPlan.directories}+ directory submissions · One-time payment` : "Your product profile on Indie Clash. No payment required."}</p>
+            <button type="button" onClick={changeSubmissionPlan} className="submission-back-link">{paidOrderId ? "Return to Dashboard ↗" : "Change plan ↗"}</button>
+            <div className="submission-summary-total"><span>{isPaidSubmission ? "Paid" : "Total today"}</span><strong>${selectedSubmissionPlan.price} USD</strong></div>
+            {isPaidSubmission ? <>
+              <p className="submission-preview-note">Payment confirmed · Awaiting product details. Your order remains in Dashboard if you leave this page. Work starts after these details are submitted and reviewed.</p>
+              <p className="submission-preview-note">Order reference: {paidOrderId}</p>
+            </> : <p className="submission-preview-note">Your profile is free. Sign in before publishing to keep control of your product. Arena participation is always optional.</p>}
+          </aside>}
+        </SubmissionContainer>
       )}
 
       {/* ========================================================
@@ -3846,7 +4030,7 @@ export default function ArenaClient({
                         {mockUserTwitter} <span className="text-zinc-500 font-mono">({userAuthType === "github" ? "GitHub" : "Google"})</span>
                       </span>
                     ) : (
-                      <span className="text-xs text-zinc-950 font-bold uppercase">{authReady ? "Sign in to vote" : "Checking sign-in…"}</span>
+                      <span className="text-xs text-zinc-950 font-bold uppercase">{authReady ? "Sign in to vote" : "Loading…"}</span>
                     )}
                   </div>
                 </div>
@@ -3944,7 +4128,7 @@ export default function ArenaClient({
       {/* ========================================================
           Developer testing console (PM control panel)
          ======================================================== */}
-      {process.env.NODE_ENV === "development" && (
+      {process.env.NODE_ENV === "development" && !isSubmissionPage && (
         <div className="fixed bottom-4 right-4 z-40 bg-white/95 backdrop-blur-md border border-zinc-200/90 shadow-lg rounded-xl p-4 max-w-xs transition-all text-zinc-900 text-xs space-y-3" style={{ willChange: "transform" }}>
           <div className="flex justify-between items-center pb-2 border-b border-zinc-200/80">
             <span className="font-mono text-[9px] text-zinc-500 uppercase tracking-widest font-semibold">
@@ -4099,7 +4283,7 @@ export default function ArenaClient({
                 }}
                 className="w-full py-2.5 bg-zinc-900 text-white hover:bg-zinc-800 text-xs font-semibold rounded-lg shadow-xs transition duration-150 cursor-pointer"
               >
-                My Console →
+                Dashboard →
               </button>
               </div>
             ) : (

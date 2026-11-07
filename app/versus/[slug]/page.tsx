@@ -267,7 +267,7 @@ export default async function VersusPage({ params }: Props) {
             <h2 className="text-2xl font-bold text-zinc-950">Put your product in the arena</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Publish a real product profile, face other builders, and collect actionable feedback.</p>
           </div>
-          <Link href="/?submit=1" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-zinc-950 hover:bg-[#e0a612] shadow-xs">Submit a product</Link>
+          <Link href="/submit" className="shrink-0 rounded-xl bg-[#ffbe18] px-6 py-3 text-sm font-semibold text-zinc-950 hover:bg-[#e0a612] shadow-xs">Submit a product</Link>
         </section>
       </main>
 

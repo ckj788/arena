@@ -9,6 +9,7 @@ import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
 import useSurfaceMotion from "./useSurfaceMotion";
 import { supabase } from "@/lib/supabaseClient";
 import ModerationLink from "./ModerationLink";
+import LaunchOrders from "./LaunchOrders";
 
 interface MakerConsoleProps {
   isOpen: boolean;
@@ -17,6 +18,7 @@ interface MakerConsoleProps {
   activeBracket: Bracket | null;
   userTwitter: string;
   userSubId: string;
+  focusedOrderId?: string;
   ownershipStatus: "loading" | "ready" | "error" | "reauth";
   ownershipError?: string;
   onRetryOwnership: () => void;
@@ -35,6 +37,7 @@ export default function MakerConsole({
   activeBracket,
   userTwitter,
   userSubId,
+  focusedOrderId,
   ownershipStatus,
   ownershipError,
   onRetryOwnership,
@@ -113,12 +116,13 @@ export default function MakerConsole({
         <div>
           <h1 className="text-3xl font-extrabold tracking-tight text-zinc-950 flex items-center gap-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="text-[#ffbe18]"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/></svg>
-            YOUR PRODUCTS
+            DASHBOARD
           </h1>
           <p className="text-zinc-500 text-[10px] mt-1.5 font-mono uppercase tracking-wider">
             {ownershipStatus === "reauth" ? "Sign in to view your products" : <>Connected account: <span className="text-zinc-950 font-bold">{userTwitter || "Indie Mode"}</span></>}
           </p>
           <ModerationLink userId={userSubId} />
+          {supabase && userSubId && <a href="#order-history" className="submission-back-link mt-3">Order history ↓</a>}
         </div>
       </div>
 
@@ -132,6 +136,13 @@ export default function MakerConsole({
           <strong className="mt-2 block text-3xl font-semibold text-zinc-950">{value}</strong>
         </div>)}
       </div>
+
+      {supabase && userSubId && <LaunchOrders key={`${userSubId}:${focusedOrderId ?? ""}`} userId={userSubId} focusedOrderId={focusedOrderId} />}
+      {focusedOrderId && !userSubId && ownershipStatus === "reauth" && <section data-console-section className="glass-panel border border-zinc-200/80 bg-white p-5 md:p-7">
+        <h2 className="text-xl font-semibold tracking-tight">Your launch order</h2>
+        <p className="my-3 text-sm text-zinc-600">Sign in with the account you used to pay for this order.</p>
+        <button type="button" className="exhibition-button" onClick={onSignIn}>Sign in to view order</button>
+      </section>}
 
       {/* Main List */}
       <div data-console-section className="glass-panel p-5 md:p-7 space-y-6 bg-white border border-zinc-200/80 shadow-xs" aria-busy={ownershipStatus === "loading"}>
@@ -155,7 +166,7 @@ export default function MakerConsole({
           {ownershipStatus === "loading" ? (
             <div role="status" className="space-y-3 py-6"><span className="text-sm text-zinc-500">Loading your products…</span><div className="h-24 rounded-xl bg-zinc-100 animate-pulse" /></div>
           ) : ownershipStatus === "reauth" ? (
-            <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-700">Your sign-in could not be verified. This does not delete your products.</p><button type="button" onClick={onSignIn} className="mt-4 rounded-lg bg-[#ffbe18] px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-xs">Sign in again</button></div>
+            <div className="py-10 text-center"><p className="text-sm text-zinc-700">Sign in to view your products and orders.</p><button type="button" onClick={onSignIn} className="mt-4 rounded-lg bg-[#ffbe18] px-4 py-2.5 text-sm font-semibold text-zinc-950 shadow-xs">Sign in</button></div>
           ) : ownershipStatus === "error" ? (
             <div role="alert" className="py-10 text-center"><p className="text-sm text-zinc-700">Your products couldn&apos;t load.</p>{ownershipError && <p className="mt-2 text-xs text-zinc-500">{ownershipError}</p>}<button type="button" onClick={onRetryOwnership} className="mt-3 rounded-lg border border-zinc-200 px-4 py-2 text-sm text-zinc-800 bg-white hover:bg-zinc-50 shadow-2xs">Retry</button></div>
           ) : myProducts.length === 0 ? (

@@ -38,7 +38,8 @@ let currentPage;
 let diagnostics = () => ({});
 
 try {
-  for (const scenario of ['success', 'submit-draft', 'arena-success', 'champions-success', 'arena-submit-draft', 'arena-cancel', 'cancel', 'cancel-fragment', 'expired', 'missing-verifier']) {
+  for (const scenario of ['success', 'email-order-success', 'submit-draft', 'arena-success', 'champions-success', 'arena-submit-draft', 'arena-cancel', 'cancel', 'cancel-fragment', 'expired', 'missing-verifier'].filter(value => !process.env.AUTH_TEST_SCENARIO || value === process.env.AUTH_TEST_SCENARIO)) {
+    const emailOrderId = '11111111-1111-4111-8111-111111111111';
     const startPath = scenario.startsWith('arena-') ? '/arena' : scenario.startsWith('champions-') ? '/champions' : '/';
     const draftScenario = scenario.endsWith('submit-draft');
     const cancelScenario = scenario.endsWith('cancel');
@@ -79,12 +80,18 @@ try {
       }
       if (url.pathname === '/auth/v1/user') return request.respond({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': base }, body: JSON.stringify(user) });
       if (url.pathname === '/api/arena/products/mine') return request.respond({ status: 200, contentType: 'application/json', body: '{"productIds":[]}' });
+      if (url.pathname === '/api/payments/orders') return request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ orders: [{ id: emailOrderId, plan: 'growth', status: 'paid', amount_total: 16900, currency: 'usd', details_submitted_at: '2026-11-07T00:00:00Z', product_name: 'Email order fixture' }] }) });
       if (!['GET', 'HEAD'].includes(request.method())) return request.respond({ status: 200, contentType: 'application/json', body: '{}' });
       if (url.hostname.endsWith('.supabase.co') || url.pathname.startsWith('/_vercel/')) return request.abort();
       return request.continue();
     });
 
-    await page.goto(scenario === 'missing-verifier' ? `${base}/?code=fixture-missing` : `${base}${startPath}`, { waitUntil: 'domcontentloaded' });
+    const entry = scenario === 'email-order-success' ? `/?view=console&order=${emailOrderId}` : startPath;
+    await page.goto(scenario === 'missing-verifier' ? `${base}/?code=fixture-missing` : `${base}${entry}`, { waitUntil: 'domcontentloaded' });
+    if (scenario === 'email-order-success') {
+      await page.waitForFunction(() => document.body.textContent.includes('Sign in to view order'));
+      assert(!(await page.content()).includes('Your sign-in could not be verified'));
+    }
     if (scenario !== 'missing-verifier') {
       if (draftScenario) {
         await clickText(page, 'Submit Product');
@@ -99,6 +106,12 @@ try {
       await page.waitForFunction((path) => location.pathname === path && document.querySelector('[data-main-page]')?.getAttribute('data-main-page') === (path === '/' ? 'discover' : path.slice(1)), {}, startPath);
       assert.equal(exchanges, 1);
       assert.equal(homeDocuments, startPath === '/' ? 2 : 1, 'Completing sign-in must not reload home a second time');
+      if (scenario === 'email-order-success') {
+        await page.waitForSelector(`#launch-order-${emailOrderId}`);
+        assert.equal(new URL(page.url()).searchParams.get('order'), emailOrderId);
+        assert.equal(new URL(page.url()).searchParams.get('view'), 'console');
+        assert(await page.$eval(`#launch-order-${emailOrderId}`, element => element.textContent.includes('Email order fixture')));
+      }
       if (draftScenario) {
         await page.waitForSelector('[aria-labelledby="product-form-title"]');
         assert.equal(await page.$eval('#product-title', (el) => el.value), 'Keep this product draft');

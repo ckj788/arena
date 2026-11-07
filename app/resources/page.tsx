@@ -29,7 +29,7 @@ export default function ResourcesPage() {
       <h1 className="mt-4 max-w-3xl text-4xl font-semibold tracking-tight sm:text-6xl">Give your launch a better starting point.</h1>
       <p className="mt-6 max-w-2xl text-lg leading-8 text-zinc-600">Find the right places to share your work. Show what it does. Start conversations with people who might actually use it.</p>
       <Link href={RESOURCE_PATH} className="exhibition-resource-feature mt-12 block border p-8 transition hover:border-amber-400 sm:p-10">
-        <span className="text-xs font-medium uppercase tracking-wider text-amber-800">The launch directory · {LAUNCH_RESOURCES.length} platforms</span>
+        <span className="text-xs font-medium uppercase tracking-wider text-brand-gold">The launch directory · {LAUNCH_RESOURCES.length} platforms</span>
         <h2 className="mt-4 text-3xl font-semibold tracking-tight">Where to launch your startup</h2>
         <p className="mt-4 max-w-2xl leading-7 text-zinc-600">Compare submission costs, launch timing and audience fit. Includes free options, Product Hunt alternatives and links to each platform’s official rules.</p>
         <span className="mt-6 inline-block font-semibold">Explore launch platforms →</span>
@@ -41,7 +41,7 @@ export default function ResourcesPage() {
         </div>
         <div className="mt-6 grid gap-5 md:grid-cols-3">
           {RESOURCE_GUIDES.map(guide => <Link key={guide.slug} href={`/resources/${guide.slug}`} className="exhibition-resource-card flex flex-col border p-6 transition hover:border-amber-400">
-            <p className="text-xs font-medium uppercase tracking-wider text-amber-800">{guide.category}</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-brand-gold">{guide.category}</p>
             <h3 className="mt-4 text-xl font-semibold leading-snug tracking-tight">{guide.title}</h3>
             <p className="mt-4 flex-1 text-sm leading-7 text-zinc-600">{guide.description}</p>
             <span className="mt-6 text-sm font-semibold">Read the guide →</span>
@@ -58,7 +58,7 @@ export default function ResourcesPage() {
           ].map(([number, title, copy]) => <article key={number} className="exhibition-resource-card border p-6"><span className="font-mono text-sm text-amber-700">{number}</span><h3 className="mt-4 font-semibold">{title}</h3><p className="mt-3 text-sm leading-7 text-zinc-600">{copy}</p></article>)}
         </div>
       </section>
-      <div className="mt-14 flex flex-wrap items-center gap-5 border-t border-zinc-200 pt-8"><Link href="/?submit=1" className="rounded-lg bg-amber-400 px-5 py-3 font-semibold hover:bg-amber-300">Publish your product for free →</Link><Link href="/products" className="text-sm text-zinc-600 hover:text-zinc-950">See what other makers are building →</Link></div>
+      <div className="mt-14 flex flex-wrap items-center gap-5 border-t border-zinc-200 pt-8"><Link href="/submit" className="rounded-lg bg-amber-400 px-5 py-3 font-semibold hover:bg-amber-300">Publish your product for free →</Link><Link href="/products" className="text-sm text-zinc-600 hover:text-zinc-950">See what other makers are building →</Link></div>
     </main>
   </div>;
 }

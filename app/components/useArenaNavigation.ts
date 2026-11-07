@@ -35,7 +35,10 @@ export default function useArenaNavigation() {
   const router = useRouter();
   const pathname = usePathname();
   const location = useSyncExternalStore(subscribe, snapshot, serverSnapshot);
-  const view: View = new URLSearchParams(location.split("#")[0]).get("view") === "console" ? "console" : "home";
+  const params = new URLSearchParams(location.split("#")[0]);
+  const view: View = params.get("view") === "console" ? "console" : "home";
+  const orderId = params.get("order");
+  const focusedOrderId = view === "console" && orderId && /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/i.test(orderId) ? orderId.toLowerCase() : undefined;
 
   useLayoutEffect(() => {
     // Fragments never reach the server. Preserve previously shared homepage
@@ -66,7 +69,10 @@ export default function useArenaNavigation() {
   const navigate = useCallback((nextView: View, target = "page-top", replace = false) => {
     const url = new URL(window.location.href);
     if (nextView === "console") url.searchParams.set("view", "console");
-    else url.searchParams.delete("view");
+    else {
+      url.searchParams.delete("view");
+      url.searchParams.delete("order");
+    }
     url.hash = nextView === "home" && target !== "page-top" ? target : "";
     const destination = `${url.pathname}${url.search}${url.hash}`;
     const current = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -94,5 +100,5 @@ export default function useArenaNavigation() {
     if (window.location.pathname === route) navigate("home", section);
     else router.push(`${route}${section === "page-top" ? "" : `#${section}`}`);
   }, [navigate, router]);
-  return { currentView: view, setCurrentView: setView, showHomeSection };
+  return { currentView: view, focusedOrderId, setCurrentView: setView, showHomeSection };
 }

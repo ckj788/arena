@@ -100,12 +100,12 @@ export default async function GuidePage({ params }: { params: Promise<{ slug: st
       <section className="mt-14 border-t border-zinc-200 pt-10" aria-labelledby="next-guide">
         <h2 id="next-guide" className="text-2xl font-semibold">Keep building your launch plan</h2>
         <div className="mt-6 grid gap-5 md:grid-cols-3">
-          <Link href={RESOURCE_PATH} className="exhibition-resource-card border p-6"><p className="text-xs uppercase tracking-wider text-amber-800">Choose a channel</p><h3 className="mt-3 text-lg font-semibold">Startup directories and listing sites</h3><p className="mt-3 text-sm leading-7 text-zinc-600">Compare audience, submission cost and timing.</p><span className="mt-4 block text-sm font-semibold">Read the directory →</span></Link>
-          {RESOURCE_GUIDES.filter(item => item.slug !== guide.slug).map(item => <Link key={item.slug} href={`/resources/${item.slug}`} className="exhibition-resource-card border p-6"><p className="text-xs uppercase tracking-wider text-amber-800">{item.category}</p><h3 className="mt-3 text-lg font-semibold">{item.title}</h3><p className="mt-3 text-sm leading-7 text-zinc-600">{item.description}</p><span className="mt-4 block text-sm font-semibold">Read the guide →</span></Link>)}
+          <Link href={RESOURCE_PATH} className="exhibition-resource-card border p-6"><p className="text-xs uppercase tracking-wider text-brand-gold">Choose a channel</p><h3 className="mt-3 text-lg font-semibold">Startup directories and listing sites</h3><p className="mt-3 text-sm leading-7 text-zinc-600">Compare audience, submission cost and timing.</p><span className="mt-4 block text-sm font-semibold">Read the directory →</span></Link>
+          {RESOURCE_GUIDES.filter(item => item.slug !== guide.slug).map(item => <Link key={item.slug} href={`/resources/${item.slug}`} className="exhibition-resource-card border p-6"><p className="text-xs uppercase tracking-wider text-brand-gold">{item.category}</p><h3 className="mt-3 text-lg font-semibold">{item.title}</h3><p className="mt-3 text-sm leading-7 text-zinc-600">{item.description}</p><span className="mt-4 block text-sm font-semibold">Read the guide →</span></Link>)}
         </div>
       </section>
       <div className="mt-10 flex flex-wrap items-center gap-5">
-        <Link href="/?submit=1" className="rounded-lg bg-amber-400 px-5 py-3 font-semibold hover:bg-amber-300">Publish your product for free →</Link>
+        <Link href="/submit" className="rounded-lg bg-amber-400 px-5 py-3 font-semibold hover:bg-amber-300">Publish your product for free →</Link>
         <Link href="/products" className="text-sm text-zinc-600 hover:underline">Discover new indie products →</Link>
       </div>
     </main>

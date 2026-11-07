@@ -120,7 +120,7 @@ try {
   assert.equal(created.category, 'launch-tools');
   const shareUrl = await page.$eval('[role=dialog] a[href*="x.com/intent"]', el => el.href);
   assert(new URL(shareUrl).searchParams.get('text').includes('/products/resource-test'));
-  await clickButton('My Console →');
+  await clickButton('Dashboard →');
   await page.waitForFunction(() => document.body.innerText.includes('Share & improve profile'));
   assert.equal(errors.length, 0, errors.join('\n'));
   const noJs = await browser.newPage();

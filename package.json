@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "verify:payments": "node scripts/verify-launch-flow.mjs",
+    "dev": "node --require ./scripts/local-network.cjs node_modules/next/dist/bin/next dev",
+    "stripe:listen": "node scripts/stripe-listen.cjs",
     "prebuild": "node scripts/clean-next-dev.mjs",
     "build": "next build",
     "start": "next start",
@@ -17,9 +19,13 @@
     "next": "^16.3.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "swr": "^2.4.1"
+    "stripe": "23.0.1",
+    "swr": "^2.4.1",
+    "undici": "7.30.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.14",
+    "@stripe/cli": "1.55.3",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

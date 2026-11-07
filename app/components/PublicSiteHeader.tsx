@@ -4,7 +4,7 @@ import PrimaryNavigation, { type MainPage } from "./PrimaryNavigation";
 import PublicAccountLink from "./PublicAccountLink";
 
 /** The same navigation on public profiles, directories, and matchup pages. */
-export default function PublicSiteHeader({ actionHref = "/?submit=1", actionLabel = "Submit Product", activePage }: {
+export default function PublicSiteHeader({ actionHref = "/submit", actionLabel = "Submit Product", activePage }: {
   activePage?: MainPage;
   actionHref?: string;
   actionLabel?: string;

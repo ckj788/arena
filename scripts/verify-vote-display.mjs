@@ -99,7 +99,7 @@ try {
   const scores=await page.$eval('#arena-section',el=>el.innerText);
   assert(/11/.test(scores),'Backend total 11 must be visible');
   console.log('PASS: failed vote retains feedback, repeated submit sends once, retry renders API total 11 (not stale local 8).');
-  await page.evaluate(()=>[...document.querySelectorAll('button,a')].find(el=>el.textContent.trim().toLowerCase()==='my console').click());
+  await page.evaluate(()=>[...document.querySelectorAll('button,a')].find(el=>el.textContent.trim().toLowerCase()==='dashboard').click());
   await page.waitForSelector('.maker-console .console-stat');
   // Console ownership is revalidated on entry; a loading placeholder is not
   // the vote total. Assert the confirmed total once that request completes.

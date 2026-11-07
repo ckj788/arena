@@ -14,7 +14,7 @@ export default function PricingFields({ value, onChange, disabled }: {
     <details open={expanded} onToggle={event => setExpanded(event.currentTarget.open)} className="rounded-xl border border-zinc-200 bg-zinc-50/60">
       <summary className="cursor-pointer px-4 py-3 text-xs font-semibold text-zinc-800">Add a plan &amp; price <span className="font-normal text-zinc-500">(optional)</span></summary>
       <fieldset disabled={disabled} className="space-y-4 border-t border-zinc-200/70 p-4 disabled:opacity-60">
-        <p id="product-price-hint" className="text-[11px] leading-5 text-zinc-500">Skip this for now, or add one real plan from your official pricing page. You can update it later in your console.</p>
+        <p id="product-price-hint" className="text-[11px] leading-5 text-zinc-500">Skip this for now, or add one real plan from your official pricing page. You can update it later in your Dashboard.</p>
         <div>
           <label htmlFor="product-plan-name" className={labelClass}>Plan name</label>
           <input id="product-plan-name" value={value.planName} onChange={e => update("planName", e.target.value)} maxLength={80} placeholder="e.g. Starter, Pro, or Free plan" className={fieldClass} />

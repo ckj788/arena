@@ -6,7 +6,7 @@
 2. Run **`lib/migrations/20260919_product_safety.sql`** in the Supabase SQL editor, in full. It is transactional and repeatable; do not run only its final statements. This task has NOT executed it on production.
 3. Run **`lib/migrations/20260919_product_safety_verify.sql`**. Missing lists must be `[]`; index, trigger and privacy checks must be `true`. Check the product counts against your pre-migration count.
 4. Deploy the matching application. No additional environment variables are needed: existing `SUPABASE_SERVICE_ROLE_KEY` and comma-separated `ADMIN_EMAILS` are used. Never prefix these with `NEXT_PUBLIC_`.
-5. Sign in using an administrator email. My Console shows **Moderation**; the direct path is `/moderation`. The page is noindex, and its API independently enforces administrator authorization.
+5. Sign in using an administrator email. Dashboard shows **Moderation**; the direct path is `/moderation`. The page is noindex, and its API independently enforces administrator authorization.
 
 Do not deploy this app version before the SQL. New submissions/edits require the new columns and duplicate-domain index. The existing `product-logos` bucket is reused; screenshots are resized in the browser and remain under the bucket's existing 1,000,000-byte limit. No new bucket is needed.
 

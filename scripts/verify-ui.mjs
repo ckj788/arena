@@ -162,16 +162,16 @@ try {
     const session = { access_token: token, refresh_token: 'test-only', expires_at: exp, expires_in: 3600, token_type: 'bearer', user: fixtureUser };
     const key = `sb-${new URL(publicUrl).hostname.split('.')[0]}-auth-token`;
     await page.evaluateOnNewDocument(({ key, session }) => localStorage.setItem(key, JSON.stringify(session)), { key, session });
-    // Reproduce the reported history: Terms -> Home -> My Console -> Back.
+    // Reproduce the reported history: Terms -> Home -> Dashboard -> Back.
     await page.goto(`${base}/terms`, { waitUntil: 'domcontentloaded' });
     await openHome();
-    await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.textContent.trim() === 'My Console'));
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some((el) => el.textContent.trim() === 'Dashboard'));
     await page.evaluate(() => window.scrollTo({ top: 420, behavior: 'instant' }));
     const homeScroll = await page.evaluate(() => scrollY);
     const beforeConsole = await page.evaluate(() => history.length);
     // Do not let Puppeteer scroll an off-screen header button before clicking:
     // this assertion specifically checks the position saved by navigation.
-    await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.textContent.trim() === 'My Console').click());
+    await page.evaluate(() => [...document.querySelectorAll('button')].find((el) => el.textContent.trim() === 'Dashboard').click());
     await page.waitForSelector('.maker-console');
     assert.equal(new URL(page.url()).searchParams.get('view'), 'console');
     assert.equal(await page.evaluate(() => history.length), beforeConsole + 1);
@@ -229,7 +229,7 @@ try {
     results.push('Simulated signed-in console: returning to Discover preserves discovery/feed');
     ownedReplyMode = 'error';
     await openHome();
-    await clickText('My Console');
+    await clickText('Dashboard');
     await page.waitForFunction(() => document.querySelector('.maker-console [role="alert"]')?.textContent.includes("couldn't load"));
     assert(!(await page.$eval('.maker-console', (el) => el.textContent)).includes('No products linked'));
     ownedReplyMode = 'success';
@@ -240,12 +240,12 @@ try {
     ownedReplyMode = 'empty';
     await page.evaluate((id) => localStorage.setItem('my_arena_products', JSON.stringify([id])), ownedProductId);
     await openHome();
-    await clickText('My Console');
+    await clickText('Dashboard');
     await page.waitForFunction(() => document.querySelector('.maker-console')?.textContent.includes('No products linked'));
     assert.equal(await page.$('.maker-console a[href^="/products/"]'), null);
     results.push('Cloud ownership ignores stale/forged local product IDs');
     await openHome(390, 844);
-    await clickText('My Console');
+    await clickText('Dashboard');
     await page.waitForSelector('.maker-console');
     await page.goBack({ waitUntil: 'domcontentloaded' });
     await page.waitForSelector('#launches-section');

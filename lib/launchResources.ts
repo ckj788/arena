@@ -65,7 +65,7 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
     listing: "Permanent product profile, subject to moderation.",
     links: "Followed official-site links for unrestricted products under our current policy.",
     note: "This is our platform. Fair discovery prioritizes products with fewer recorded views; it cannot guarantee a visitor count. Arena votes require feedback on both products.",
-    url: "/?submit=1",
+    url: "/submit",
     sources: [{ label: "How Indie Clash works", url: "/champions#how-it-works-section" }, { label: "Browse profiles", url: "/products" }],
   },
   {

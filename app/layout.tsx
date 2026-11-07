@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/react";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 import "./exhibition.css";
+import SubmissionAccessProvider from "./components/SubmissionAccess";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -77,7 +78,7 @@ export default function RootLayout({
       className={`${inter.variable} ${outfit.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        {children}
+        <SubmissionAccessProvider>{children}</SubmissionAccessProvider>
         <Analytics />
       </body>
     </html>

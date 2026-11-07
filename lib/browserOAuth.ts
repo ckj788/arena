@@ -1,7 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export const OAUTH_RETURN_TO_KEY = "indieclash_oauth_return_to_v1";
+export const OAUTH_SUBMISSION_TARGET_KEY = "indieclash_oauth_submission_target_v1";
 export const OAUTH_RESTORE_EVENT = "indieclash:restore-after-auth";
+
+export function isSubmissionPath(path: string) {
+  return ["/submit", "/submit/details", "/submit/checkout"].some(route => path === route || path.startsWith(`${route}?`));
+}
+
+export function oauthReturnDestination(returnTo: string | null, submissionTarget: string | null, failed: boolean, origin: string) {
+  return safeOAuthReturnPath(!failed && submissionTarget && isSubmissionPath(submissionTarget) ? submissionTarget : returnTo, origin);
+}
 
 // Both React Strict Mode and a remount may ask for the same one-use code.
 // Keep one in-flight/result promise per client, without enabling the SDK's

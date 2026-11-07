@@ -32,7 +32,7 @@ function databaseError(context: string, error: { message: string; code?: string 
     throw new HttpError(503, "The optional pricing update is not installed yet. Please contact the site administrator.");
   }
   if (error && isDuplicateProductDomain(error)) {
-    throw new HttpError(409, `${DUPLICATE_PRODUCT_MESSAGE} Open My Console to manage your existing products.`);
+    throw new HttpError(409, `${DUPLICATE_PRODUCT_MESSAGE} Open Dashboard to manage your existing products.`);
   }
   if (error?.code === "42703" && /domain_key|screenshot|moderation_status|link_trust/.test(error.message)) {
     throw new HttpError(503, "The product safety update is not installed yet. Please contact the site administrator.");
