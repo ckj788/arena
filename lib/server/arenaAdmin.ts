@@ -113,10 +113,7 @@ async function assertUniqueProductDomain(client: SupabaseClient, url: string, ex
   }
 }
 
-export async function createProductForUser(user: User, input: NewProductInput): Promise<Product> {
-  const client = getAdminClient();
-  await assertUniqueProductDomain(client, input.url);
-  const id = await uniqueProductSlug(client, normalizeSlug(input.url, input.title));
+export function buildProductForUser(user: Pick<User, "id"> & Partial<Pick<User, "user_metadata">>, input: NewProductInput, id = normalizeSlug(input.url, input.title)): Product {
   const username = String(
     user.user_metadata?.preferred_username ||
       user.user_metadata?.user_name ||
@@ -128,7 +125,7 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     ? avatarCandidate
     : "https://www.indieclash.com/og-image.png";
 
-  const product: Product = {
+  return {
     id,
     title: input.title,
     tagline: input.tagline,
@@ -160,7 +157,13 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     moderationStatus: "unreviewed",
     linkTrust: "ugc",
   };
+}
 
+export async function createProductForUser(user: User, input: NewProductInput): Promise<Product> {
+  const client = getAdminClient();
+  await assertUniqueProductDomain(client, input.url);
+  const id = await uniqueProductSlug(client, normalizeSlug(input.url, input.title));
+  const product = buildProductForUser(user, input, id);
   const { data, error } = await client
     .from(`${DB_PREFIX}products`)
     .insert(toDbProduct(product))

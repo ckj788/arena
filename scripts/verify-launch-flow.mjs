@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 const checks = [
   'verify-launch-plans', 'verify-product-website', 'verify-submission-auth',
   'verify-payment-auth', 'verify-stripe-payments', 'verify-pay-first-ui',
-  'verify-launch-rate-limits', 'verify-confirmation-emails',
+  'verify-launch-rate-limits', 'verify-confirmation-emails', 'verify-paid-publication',
 ];
 for (const check of checks) {
   const result = spawnSync(process.execPath, [`scripts/${check}.mjs`], { stdio: 'inherit' });

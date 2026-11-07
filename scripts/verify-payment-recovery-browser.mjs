@@ -20,7 +20,7 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.evaluateOnNewDocument((key, session) => localStorage.setItem(key, JSON.stringify(session)), key, session);
-  let draft = null, saves = 0, reconciles = 0;
+  let draft = null, saves = 0, reconciles = 0, submitted = null;
   const unnecessaryReads = [];
   await page.setRequestInterception(true);
   page.on('request', request => {
@@ -30,7 +30,13 @@ try {
       if (request.method() === 'PUT') { draft = JSON.parse(request.postData()); saves++; return respond({ orderId }); }
       return respond({ order, draft });
     }
-    if (url.pathname === `/api/payments/orders/${orderId}`) return respond({ error: 'Order not found.' }, 404);
+    if (url.pathname === `/api/payments/orders/${orderId}/details` && request.method() === 'PUT') {
+      submitted = JSON.parse(request.postData());
+      order.product_id = 'browser-published-product';
+      order.details_submitted_at = new Date().toISOString();
+      return respond({ orderId, productId: order.product_id });
+    }
+    if (url.pathname === `/api/payments/orders/${orderId}`) return submitted ? respond({ order }) : respond({ error: 'Order not found.' }, 404);
     if (url.pathname === `/api/payments/orders/${orderId}/reconcile`) {
       reconciles++;
       return reconciles === 1 ? respond({ error: 'Temporary Stripe outage' }, 503) : respond({ order });
@@ -54,7 +60,24 @@ try {
   await page.goto(`${base}/submit/result?order=${orderId}&session_id=${sessionId}`, { waitUntil: 'networkidle0' });
   await page.waitForFunction(() => document.body.innerText.includes('Payment confirmed.'), { timeout: 30000 });
   assert.equal(reconciles, 2, 'Transient Stripe failure should recover automatically');
+  await page.goto(`${base}/submit/details?order=${orderId}`, { waitUntil: 'networkidle0' });
+  await page.waitForSelector('#product-title');
+  await page.type('#product-tagline', 'A complete product for normal discovery');
+  await page.type('#product-url', 'example.com/resources');
+  await page.type('#product-description', 'This product helps independent founders prepare their launch and organize their product information for discovery across useful platforms.');
+  await page.type('#delivery-email', 'fixture@example.invalid');
+  await page.click('input[name="directory-history"][value="none"]');
+  await page.click('.submission-consent input');
+  await page.evaluate(() => [...document.querySelectorAll('button')].find(button => button.textContent.includes('Send product details')).click());
+  await page.waitForSelector('a[href="/products/browser-published-product"]');
+  assert.equal(submitted.product.title, 'Saved incomplete product');
+  assert.equal(submitted.product.url, 'https://example.com/resources');
+  assert.equal(submitted.serviceDetails.email, 'fixture@example.invalid');
+  assert.equal(submitted.serviceDetails.consent, true);
+  assert.equal(await page.$('a[href*="/submit/details?order="]'), null, 'Final order must no longer offer incomplete details');
+  console.log('PASS: final paid form submits normal product information plus private service details and opens its linked public profile from the receipt.');
   await page.evaluate(key => {
+    localStorage.removeItem(key);
     const channel = new BroadcastChannel(key);
     channel.postMessage({ event: 'SIGNED_OUT', session: null });
     setTimeout(() => channel.close(), 200);

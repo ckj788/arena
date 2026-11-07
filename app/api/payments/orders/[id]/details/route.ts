@@ -2,6 +2,7 @@ import { authenticatePaymentRequest, jsonError, readJsonRequest } from "@/lib/se
 import { consumeLaunchRateLimit, parseLaunchDetails, saveLaunchDetails } from "@/lib/server/launchPayments";
 import { after } from "next/server";
 import { deliverSubmissionConfirmation } from "@/lib/server/confirmationEmails";
+import { invalidateProductCatalogue } from "@/lib/server/cache";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,6 +13,7 @@ export async function PUT(request: Request, context: { params: Promise<{ id: str
     await consumeLaunchRateLimit(client, "launch_details");
     const result = await saveLaunchDetails(user.id, (await context.params).id, input);
     after(() => deliverSubmissionConfirmation(result.orderId));
+    invalidateProductCatalogue(result.productId);
     return Response.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) { return jsonError(error); }
 }

@@ -106,6 +106,15 @@ const db = {
     calls.rpc.push({ name, args });
     if (name === 'shipandbattle_consume_launch_rate_limit') return { error: launchLimitError };
     if (storeFailure) return { error: { message: 'offline store failure' } };
+    if (name === 'shipandbattle_submit_launch_product') {
+      const order = orders.get(args.p_order_id);
+      if (!order || order.user_id !== args.p_user_id || order.livemode !== args.p_livemode || order.status !== 'paid') return { error: { code: 'P0002' } };
+      order.product = args.p_product;
+      order.service_details = args.p_service_details;
+      order.product_id = args.p_profile.id;
+      order.details_submitted_at = new Date().toISOString();
+      return { data: order.product_id, error: null };
+    }
     if (args.p_request_id && args.p_status === 'paid' && !orders.has(args.p_order_id)) {
       orders.set(args.p_order_id, { id: args.p_order_id, user_id: args.p_user_id, request_id: args.p_request_id, plan: args.p_plan, amount_total: args.p_amount, currency: args.p_currency, livemode: args.p_livemode });
     }
@@ -141,6 +150,8 @@ const payments = load('lib/server/launchPayments.ts', {
   '@/lib/submissionPlans': plans, './auth': auth, './productInput': productInput,
   './stripe': { ...configuration, getStripe: () => stripeMock },
   './paymentLinks': paymentLinks,
+  './arenaAdmin': { buildProductForUser: (user, product) => ({ ...product, id: 'published-fixture', creator_uid: user.id }) },
+  '@/lib/arenaStore': { toDbProduct: product => product },
 });
 const body = { requestId: randomUUID(), plan: 'starter', amount: 1,
   product: { title: 'Offline launch test', tagline: 'An isolated payment integration fixture.', url: 'https://example.com', makerName: 'Maker', makerTwitter: '@maker', logo: '🚀', description: 'A'.repeat(100), pricingModel: 'unspecified' },
@@ -283,7 +294,9 @@ await assert.rejects(payments.getLaunchOrder(otherUser, fast.orderId), statusIs(
 const orderRoute = load('app/api/payments/orders/[id]/route.ts', { '@/lib/server/auth': routeAuth, '@/lib/server/launchPayments': payments });
 assert.equal((await orderRoute.GET(new Request('http://localhost/api/order'), { params: Promise.resolve({ id: firstOrder.id }) })).status, 401);
 const deferred = [];
+const invalidatedProducts = [];
 const detailsRoute = load('app/api/payments/orders/[id]/details/route.ts', { '@/lib/server/auth': routeAuth, '@/lib/server/launchPayments': payments,
+  '@/lib/server/cache': { invalidateProductCatalogue: id => invalidatedProducts.push(id) },
   'next/server': { after: callback => deferred.push(callback) }, '@/lib/server/confirmationEmails': { deliverSubmissionConfirmation: async () => {} } });
 const detailsRequest = authorized => new Request('http://localhost/api/order/details', { method: 'PUT', headers: { 'content-type': 'application/json', ...(authorized ? { authorization: 'Bearer fixture' } : {}) }, body: JSON.stringify(body) });
 const thirdOrder = [...orders.values()][2];
@@ -292,7 +305,9 @@ assert.equal((await detailsRoute.PUT(detailsRequest(true), { params: Promise.res
 thirdOrder.status = 'paid';
 assert.equal((await detailsRoute.PUT(detailsRequest(true), { params: Promise.resolve({ id: thirdOrder.id }) })).status, 200);
 assert.equal(deferred.length, 1, 'Email is deferred until after submission succeeds');
-assert.deepEqual(JSON.parse(JSON.stringify(calls.rpc.at(-1))), { name: 'shipandbattle_consume_launch_rate_limit', args: { p_action: 'launch_details' } });
+assert.equal(calls.rpc.at(-1).name, 'shipandbattle_submit_launch_product');
+assert.equal(invalidatedProducts.at(-1), 'published-fixture');
+assert.equal(thirdOrder.product_id, 'published-fixture');
 assert.equal((await detailsRoute.PUT(detailsRequest(true), { params: Promise.resolve({ id: thirdOrder.id }) })).status, 409);
 
 let dispatched = 0;

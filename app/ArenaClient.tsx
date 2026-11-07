@@ -3595,7 +3595,7 @@ export default function ArenaClient({
             <p className="text-zinc-600 font-sans text-[11px] leading-relaxed">
               {editingProduct
                 ? "Complete this permanent profile without changing its URL, submission date, votes, or Arena history."
-                : isPaidSubmission ? "This form completes your paid order. No further payment is required."
+                : isPaidSubmission ? "Publish your product profile and provide the details for your directory submission service."
                 : "Publish a permanent product profile first. Arena participation is optional and can be enabled from your Dashboard after submission."}
             </p>
 

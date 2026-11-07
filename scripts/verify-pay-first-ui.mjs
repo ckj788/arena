@@ -192,10 +192,11 @@ assert(renderToStaticMarkup(React.createElement(ordersView, { userId: 'owner' })
 consoleOrder = { ...consoleOrder, draft_saved_at: '2026-10-31T00:00:00Z' };
 const draftHtml = renderToStaticMarkup(React.createElement(ordersView, { userId: 'owner', focusedOrderId: consoleOrder.id }));
 assert(draftHtml.includes('Draft saved') && draftHtml.includes('Continue editing') && draftHtml.includes('id="launch-order-fixture" tabindex="-1"'));
-consoleOrder = { ...consoleOrder, details_submitted_at: '2026-10-31T00:00:00Z', product_name: 'Fixture product' };
+consoleOrder = { ...consoleOrder, details_submitted_at: '2026-10-31T00:00:00Z', product_name: 'Fixture product', product_id: 'published-fixture' };
 const completedHtml = renderToStaticMarkup(React.createElement(ordersView, { userId: 'owner' }));
 assert(!completedHtml.includes('Complete product details'));
 assert(completedHtml.includes('Details received') && completedHtml.includes('View order'));
+assert(completedHtml.includes('/products/published-fixture') && completedHtml.includes('View product profile'));
 for (const expected of ['Order history', 'Fixture product', '$169.00', 'Placed', 'Paid', 'fixture', '10 business days']) assert(completedHtml.includes(expected), `History includes ${expected}`);
 assert(!completedHtml.includes('Test order'));
 assert(!completedHtml.includes('My Console'));

@@ -11,7 +11,7 @@ import { OAUTH_RETURN_TO_KEY, OAUTH_SUBMISSION_TARGET_KEY } from "@/lib/browserO
 import { withDeadline } from "@/lib/requestSafety";
 import { useSubmissionAccess } from "@/app/components/SubmissionAccess";
 
-type Order = { id: string; plan: string; amount_total: number; currency: string; status: "pending" | "paid" | "expired" | "failed"; created_at: string; paid_at: string | null; details_submitted_at: string | null };
+type Order = { id: string; plan: string; amount_total: number; currency: string; status: "pending" | "paid" | "expired" | "failed"; created_at: string; paid_at: string | null; details_submitted_at: string | null; product_id?: string | null };
 
 type Props = { orderId: string; sessionId?: string; canReconcile: boolean };
 
@@ -124,6 +124,7 @@ function PaymentReceipt({ orderId, sessionId, canReconcile }: Props) {
       <dl><dt>Plan</dt><dd>{getSubmissionPlan(order.plan)?.name}</dd><dt>Total</dt><dd>{new Intl.NumberFormat("en-US", { style: "currency", currency: order.currency }).format(order.amount_total / 100)}</dd><dt>Order reference</dt><dd>{order.id}</dd></dl>
       <p>{order.status === "paid" ? order.details_submitted_at ? "Payment and product details received. Your order is ready for manual review before fulfillment." : "Payment confirmed — awaiting product details. Add your product information and images now, or continue later from Dashboard. You do not need to pay again." : order.status === "pending" ? "Payment confirmation can take a moment. If you have already paid, keep this order reference and check again; do not make another payment." : "No fulfillment has started for this order. If your bank shows a charge, contact support with this order reference before paying again."}</p>
       {order.status === "paid" && !order.details_submitted_at && <p><Link href={`/submit/details?order=${order.id}`} className="exhibition-button">Add product details →</Link></p>}
+      {order.product_id && <p><Link href={`/products/${encodeURIComponent(order.product_id)}`} className="submission-back-link">View product profile →</Link></p>}
       {order.status === "paid" && order.details_submitted_at && <p><button type="button" className="submission-back-link" onClick={() => void startAnotherLaunch()}>Start a separate launch order →</button></p>}
       <p><Link href={launchOrderDashboardPath(order.id)} className="submission-back-link">Dashboard →</Link></p>
     </>}

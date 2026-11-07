@@ -8,7 +8,7 @@ export default function ServiceFields({ value, onChange }: {
 }) {
   return <section className="submission-service-fields" aria-labelledby="directory-history-heading">
     <p className="launch-eyebrow">Directory submission details</p>
-    <label htmlFor="delivery-email">Where should we send your report?</label>
+    <label htmlFor="delivery-email">Where should we send your confirmation and report?</label>
     <input id="delivery-email" type="email" autoComplete="email" value={value.email} onChange={event => onChange({ ...value, email: event.target.value })} placeholder="you@yourproduct.com" required maxLength={254} />
     <h3 id="directory-history-heading">Have you submitted to any directories already?</h3>
     <p>Share what you have tried so existing listings can be reviewed before any new submissions.</p>

@@ -56,6 +56,7 @@ export default function LaunchOrders({ userId, focusedOrderId }: { userId: strin
           {order.details_submitted_at && <div><dt className="inline">Details received </dt><dd className="inline">{displayDate(order.details_submitted_at)}</dd></div>}
         </dl>
         <p className="mt-2 break-all font-mono text-[10px] text-stone-400">Order {order.id}</p>
+        {order.product_id && <p className="mt-3"><Link href={`/products/${encodeURIComponent(order.product_id)}`} className="submission-back-link">View product profile →</Link></p>}
         {order.status === "paid" && order.details_submitted_at && <p className="mt-3 max-w-xl text-xs leading-5 text-stone-500">Your details are received. Directory submissions will be completed within 10 business days, with the report sent to your delivery email.</p>}
       </div>
       <Link className={order.status === "paid" && !order.details_submitted_at ? "exhibition-button" : "submission-back-link"} href={order.status === "paid" && !order.details_submitted_at ? `/submit/details?order=${order.id}` : `/submit/result?order=${order.id}`}>{order.status === "paid" && !order.details_submitted_at ? order.draft_saved_at ? "Continue editing →" : "Complete product details →" : "View order →"}</Link>

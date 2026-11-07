@@ -14,7 +14,9 @@ Webhook delivery and authenticated receipt reconciliation use the same paid-orde
 
 The paid flow is **sign in → choose a plan → pay → add product details**. Free listings skip payment and use the existing publication form. Checkout requires no product text or image upload. Orders start with empty product/service snapshots. Only a verified paid order can accept complete product information, delivery email, prior submissions and fulfillment authorization. Until then, the receipt and Dashboard show **Paid · Awaiting product details**. Product information has a separate `details_submitted_at` completion marker; payment status is never changed by the details form. Browser drafts are scoped per order, and receipt/order-list links let customers resume without paying again.
 
-The service is fulfilled manually. Purchasing for an existing product does not create another product profile. There is no automated supplier integration or operator fulfillment dashboard yet. Refunds and disputes must currently be handled and reconciled manually in Stripe and the order store; the receipt records the original checkout payment, not a complete accounting ledger.
+Final paid details publish a normal product profile using the same product mapping and validation as free submissions. The product, order association and confirmation-email queue commit in one database transaction. Catalogue invalidation makes the profile available through the existing Discover, Dashboard, product route and sitemap pipeline. A website already owned by the same account reuses its profile without resetting its content or statistics; a different owner's website cannot be claimed through a paid order. Payment does not change moderation, link trust or search-indexing guarantees.
+
+The directory service is fulfilled manually. There is no automated supplier integration or operator fulfillment dashboard yet. Refunds and disputes must currently be handled and reconciled manually in Stripe and the order store; the receipt records the original checkout payment, not a complete accounting ledger.
 
 ## Configure locally when ready
 
@@ -75,6 +77,10 @@ Payment APIs are dynamic with no-store responses, and the details/receipt pages 
 Apply `lib/migrations/20261107_confirmation_email_modes.sql` before deploying this
 revision. It changes the email-claim RPC signature and adds the paid-history index.
 Sandbox/live history, drafts and email claims are isolated by the secret key's mode.
+Then apply `lib/migrations/20261108_paid_product_profiles.sql` to add the private
+publication RPC and product association. It requires the existing product safety
+schema. This transaction is covered by the actual PostgreSQL regression suite;
+it is not automatically installed by deployment.
 
 The paid form does not load public products, matchups or the account's existing
 product list, and does not start Arena polling/countdowns. Uploaded images are

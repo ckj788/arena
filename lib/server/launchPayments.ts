@@ -6,6 +6,8 @@ import { DB_PREFIX } from "@/lib/supabaseClient";
 import { getSubmissionPlan } from "@/lib/submissionPlans";
 import { getAdminClient, HttpError } from "./auth";
 import { parseProductInput } from "./productInput";
+import { buildProductForUser } from "./arenaAdmin";
+import { toDbProduct } from "@/lib/arenaStore";
 import { checkoutBaseUrl, getStripe, stripeMode, STRIPE_APPLICATION } from "./stripe";
 import { isCheckoutSessionId, validatePaidPaymentLink } from "./paymentLinks";
 
@@ -238,7 +240,7 @@ export async function applyCheckoutEvent(event: Stripe.Event) {
   return { received: true };
 }
 
-const orderSummary = "id,plan,amount_total,currency,status,created_at,paid_at,details_submitted_at,livemode,product_name:product->>title,draft_saved_at:product->>draftSavedAt";
+const orderSummary = "id,plan,amount_total,currency,status,created_at,paid_at,details_submitted_at,livemode,product_id,product_name:product->>title,draft_saved_at:product->>draftSavedAt";
 
 export async function getLaunchOrder(userId: string, orderId: string) {
   if (!UUID_PATTERN.test(orderId)) throw new HttpError(400, "Invalid order ID.");
@@ -288,10 +290,14 @@ export async function saveLaunchDetails(userId: string, orderId: string, input: 
   const order = await getLaunchOrder(userId, orderId);
   if (order.status !== "paid") throw new HttpError(403, "Payment must be confirmed before submitting product details.");
   if (order.details_submitted_at) throw new HttpError(409, "These order details have already been received. View your order status.", "details_already_received");
-  const { data, error } = await getAdminClient().from(ordersTable).update({
-    product: input.product, service_details: input.serviceDetails, details_submitted_at: new Date().toISOString(),
-  }).eq("id", orderId).eq("user_id", userId).eq("livemode", orderLiveMode()).eq("status", "paid").is("details_submitted_at", null).select("id").maybeSingle();
-  if (error) databaseFailure("save order details", error);
-  if (!data) throw new HttpError(409, "The order has changed. Check its status before submitting again.");
-  return { orderId };
+  const profile = buildProductForUser({ id: userId }, input.product);
+  const { data, error } = await getAdminClient().rpc(`${DB_PREFIX}submit_launch_product`, {
+    p_order_id: orderId, p_user_id: userId, p_livemode: orderLiveMode(),
+    p_product: input.product, p_service_details: input.serviceDetails, p_profile: toDbProduct(profile),
+  });
+  if (error?.code === "42501") throw new HttpError(409, "This website is already listed under another account. Sign in with its owner account or contact support to link your paid service.");
+  if (error?.code === "P0002") throw new HttpError(409, "The order has changed. Check its status before submitting again.");
+  if (error) databaseFailure("publish paid product and save order details", error);
+  if (typeof data !== "string" || !data) throw new HttpError(503, "Could not confirm product publication. Check your Dashboard before retrying.");
+  return { orderId, productId: data };
 }

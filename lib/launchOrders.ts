@@ -10,4 +10,5 @@ export type LaunchOrderSummary = {
   livemode?: boolean;
   product_name?: string | null;
   draft_saved_at?: string | null;
+  product_id?: string | null;
 };
