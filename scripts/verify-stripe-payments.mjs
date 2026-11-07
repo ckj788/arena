@@ -25,12 +25,24 @@ const pricing = load('lib/productPricing.ts', { './site': site });
 const productInput = load('lib/server/productInput.ts', { 'server-only': {}, '@/lib/server/auth': { HttpError }, '@/lib/site': site, '@/lib/productTaxonomy': taxonomy, '@/lib/productPricing': pricing });
 const configuration = load('lib/server/stripe.ts', { 'server-only': {}, stripe: { default: Stripe }, undici: { fetch() { throw new Error('Offline test must not perform network requests'); } }, './auth': { HttpError } });
 assert.equal(configuration.paymentConfiguration(), true);
+assert.equal(configuration.stripeMode(), 'test');
 env.STRIPE_SECRET_KEY = 'sk_live_offline_fixture';
-assert.equal(configuration.paymentConfiguration(), false, 'Live keys cannot enable checkout in default test mode');
-assert.throws(() => configuration.getStripe(), statusIs(503));
-env.STRIPE_MODE = 'live';
 assert.equal(configuration.paymentConfiguration(), true);
+assert.equal(configuration.stripeMode(), 'live');
 env.STRIPE_MODE = 'test';
+assert.equal(configuration.stripeMode(), 'live', 'Legacy mode setting cannot override the key');
+delete env.STRIPE_MODE;
+for (const [key, mode] of [['rk_test_fixture', 'test'], ['rk_live_fixture', 'live']]) {
+  env.STRIPE_SECRET_KEY = key;
+  assert.equal(configuration.stripeMode(), mode);
+}
+for (const key of ['', 'pk_test_fixture', 'invalid']) {
+  env.STRIPE_SECRET_KEY = key;
+  assert.equal(configuration.paymentConfiguration(), false);
+  assert.throws(() => configuration.stripeMode(), statusIs(503));
+  assert.throws(() => configuration.getStripe(), statusIs(503));
+}
+
 env.STRIPE_SECRET_KEY = 'sk_test_offline_fixture';
 for (const key of ['STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'STRIPE_CHECKOUT_BASE_URL', 'SUPABASE_SERVICE_ROLE_KEY']) {
   const previous = env[key]; env[key] = ''; assert.equal(configuration.paymentConfiguration(), false); env[key] = previous;
@@ -431,7 +443,7 @@ const liveOrderId = randomUUID();
 orders.set(liveOrderId, { ...sandboxOrder, id: liveOrderId, livemode: true, details_submitted_at: null });
 assert((await payments.listLaunchOrders(user.id)).some(order => order.id === receiptOrderId));
 await assert.rejects(payments.getLaunchOrder(user.id, liveOrderId), statusIs(404));
-env.STRIPE_MODE = 'live';
+env.STRIPE_SECRET_KEY = 'sk_live_offline_fixture';
 assert.deepEqual(Array.from(await payments.listLaunchOrders(user.id), order => order.id), [liveOrderId]);
 assert.equal((await payments.getLaunchOrder(user.id, liveOrderId)).id, liveOrderId);
 await assert.rejects(payments.getLaunchOrder(user.id, receiptOrderId), statusIs(404));
@@ -441,5 +453,5 @@ await assert.rejects(payments.reconcilePaymentLink(user.id, receiptOrderId, rece
 const rpcCount = calls.rpc.length;
 await assert.rejects(payments.applyCheckoutEvent(paidEvent), statusIs(400));
 assert.equal(calls.rpc.length, rpcCount, 'Cross-mode webhook must not reach the database');
-env.STRIPE_MODE = 'test';
+env.STRIPE_SECRET_KEY = 'sk_test_offline_fixture';
 console.log('PASS: live order history, receipts, drafts and webhook processing exclude sandbox payments.');

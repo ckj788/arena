@@ -26,7 +26,7 @@ try {
     constructor(key, options) { super(key, { ...options, host: '127.0.0.1', port: server.address().port, protocol: 'http', maxNetworkRetries: 0 }); }
   }
   class HttpError extends Error {}
-  const env = { NODE_ENV: 'development', INDIECLASH_DEV_PROXY_ACTIVE: '1', STRIPE_MODE: 'test', STRIPE_SECRET_KEY: 'sk_test_local_fixture' };
+  const env = { NODE_ENV: 'development', INDIECLASH_DEV_PROXY_ACTIVE: '1', STRIPE_SECRET_KEY: 'sk_test_local_fixture' };
   const fixtureModule = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/server/stripe.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     module: fixtureModule, exports: fixtureModule.exports, process: { env }, URL,

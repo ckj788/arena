@@ -46,22 +46,22 @@ try {
       },
     }; },
   };
-  const env = { NODE_ENV: 'production', RESEND_FROM_EMAIL: 'Indie Clash <notifications@example.com>', STRIPE_CHECKOUT_BASE_URL: 'https://www.indieclash.com', EMAIL_SITE_URL: 'http://localhost:3000', RESEND_REPLY_TO: 'reply@example.com' };
+  const env = { NODE_ENV: 'production', STRIPE_SECRET_KEY: 'sk_test_fixture', RESEND_FROM_EMAIL: 'Indie Clash <notifications@example.com>', STRIPE_CHECKOUT_BASE_URL: 'https://www.indieclash.com', EMAIL_SITE_URL: 'http://localhost:3000', RESEND_REPLY_TO: 'reply@example.com' };
   const requests = []; let responseStatus = 503;
   const mod = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/server/confirmationEmails.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, {
     module: mod, exports: mod.exports, URL, AbortSignal, Error, console, setTimeout: callback => { queueMicrotask(callback); }, process: { env },
     fetch: async (url, init) => { requests.push({ url, init }); return Response.json({ id: 'email_fixture' }, { status: responseStatus }); },
-    require(name) { return { 'server-only': {}, '@/lib/supabaseClient': { DB_PREFIX: 'shipandbattle_' }, '@/lib/emails/submissionConfirmation': templates, './auth': { getAdminClient: () => adapter }, './stripe': { stripeMode: () => env.STRIPE_MODE || 'test', checkoutBaseUrl: () => env.STRIPE_CHECKOUT_BASE_URL } }[name]; },
+    require(name) { return { 'server-only': {}, '@/lib/supabaseClient': { DB_PREFIX: 'shipandbattle_' }, '@/lib/emails/submissionConfirmation': templates, './auth': { getAdminClient: () => adapter }, './stripe': { stripeMode: () => env.STRIPE_SECRET_KEY.split('_')[1], checkoutBaseUrl: () => env.STRIPE_CHECKOUT_BASE_URL } }[name]; },
   });
   const send = () => mod.exports.dispatchConfirmationEmails(order);
   assert.equal((await send()).configured, false);
   assert.equal((await count())[0].attempts, 0, 'Missing configuration preserves the queue');
   env.RESEND_API_KEY = 're_fixture';
-  env.STRIPE_MODE = 'live';
+  env.STRIPE_SECRET_KEY = 'sk_live_fixture';
   assert.equal((await send()).sent, 0, 'Live sender cannot claim sandbox emails');
   assert.equal((await count())[0].attempts, 0);
-  env.STRIPE_MODE = 'test';
+  env.STRIPE_SECRET_KEY = 'sk_test_fixture';
   assert.equal((await send()).failed, 1);
   assert.equal((await count())[0].status, 'pending');
   responseStatus = 200;

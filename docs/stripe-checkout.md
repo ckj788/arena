@@ -21,7 +21,6 @@ The service is fulfilled manually. Purchasing for an existing product does not c
 2. Set these server-only values in `.env.local` (or the deployment's environment settings). Do not send keys in chat or commit `.env.local`:
 
    ```dotenv
-   STRIPE_MODE=test
    STRIPE_SECRET_KEY=<Stripe sandbox secret key>
    STRIPE_WEBHOOK_SECRET=<signing secret for this endpoint>
    STRIPE_CHECKOUT_BASE_URL=http://localhost:3000
@@ -31,7 +30,7 @@ The service is fulfilled manually. Purchasing for an existing product does not c
 
    Existing Supabase URL, anon key, and service role key must also be configured. Use the **exact same origin** in the browser and `STRIPE_CHECKOUT_BASE_URL`, including `localhost` versus `127.0.0.1`, to retain the session and draft on return. Production return URLs must use HTTPS.
 
-   The default mode is `test`: a live key is rejected before any Stripe request. Live payments require an explicit `STRIPE_MODE=live` and matching live API key and endpoint signing secret after sandbox verification. No publishable key is needed for this Hosted Checkout integration. Never replace either Stripe secret with a `pk_test_` publishable key.
+   The secret key determines test/live mode automatically from its sk_test_, rk_test_, sk_live_ or rk_live_ prefix. Configure matching Payment Links and webhook signing secret for that mode. No publishable key is needed for Hosted Checkout.
    Provision the three test products/prices/links once with `node --require ./scripts/local-network.cjs scripts/setup-payment-links.mjs`. It only accepts test keys, verifies prices/return URLs, and writes the two new settings to ignored `.env.local`. It does not charge a card. Existing matching links are reused. A paid order is uniquely derived from the resulting Stripe Checkout Session ID; revisiting a reusable link may start a different session, so customers should resume paid orders from Dashboard.
 
    For a deployed environment, create matching Payment Links in the appropriate Stripe mode with fixed USD one-time prices ($99/$169/$259), quantity 1, card payment, no adjustable quantity, discounts or automatic tax. Each link needs metadata `application=indieclash-directory`, `flow=payment-link`, and `plan=starter|growth|pro`. Set after-completion redirect to `https://YOUR-SITE/submit/result?session_id={CHECKOUT_SESSION_ID}`. These link values go in server-only environment JSON:
@@ -79,7 +78,7 @@ Payment APIs are dynamic with no-store responses, and the details/receipt pages 
 
 Apply `lib/migrations/20261107_confirmation_email_modes.sql` before deploying this
 revision. It changes the email-claim RPC signature and adds the paid-history index.
-Sandbox/live history, drafts and email claims are isolated by `STRIPE_MODE`.
+Sandbox/live history, drafts and email claims are isolated by the secret key's mode.
 
 The paid form does not load public products, matchups or the account's existing
 product list, and does not start Arena polling/countdowns. Uploaded images are

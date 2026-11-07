@@ -5,8 +5,8 @@ const path = require('node:path');
 const { spawn } = require('node:child_process');
 require('@next/env').loadEnvConfig(process.cwd(), true);
 const key = process.env.STRIPE_SECRET_KEY?.trim();
-if (!/^(sk|rk)_test_/.test(key || '') || (process.env.STRIPE_MODE || 'test') !== 'test') {
-  throw new Error('A Stripe test key and test mode are required for the local listener.');
+if (!/^(sk|rk)_test_/.test(key || '')) {
+  throw new Error('A Stripe test key is required for the local listener.');
 }
 const base = new URL(process.env.STRIPE_CHECKOUT_BASE_URL || 'http://localhost:3000');
 if (!['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) throw new Error('Local listener requires a localhost return URL.');

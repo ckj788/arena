@@ -5,7 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import Stripe from 'stripe';
 import { fetch as proxyFetch } from 'undici';
 
-if ((process.env.STRIPE_MODE || 'test') !== 'test' || !/^sk_test_/.test(process.env.STRIPE_SECRET_KEY || '')) throw new Error('This setup script only provisions test-mode payment links.');
+if (!/^sk_test_/.test(process.env.STRIPE_SECRET_KEY?.trim() || '')) throw new Error('This setup script only provisions test-mode payment links.');
 const baseUrl = new URL(process.env.STRIPE_CHECKOUT_BASE_URL).origin;
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { timeout: 20000, maxNetworkRetries: 1,
   ...(process.env.INDIECLASH_DEV_PROXY_ACTIVE === '1' ? { httpClient: Stripe.createFetchHttpClient(proxyFetch) } : {}) });

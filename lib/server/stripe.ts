@@ -4,13 +4,14 @@ import { fetch as proxyFetch } from "undici";
 import { HttpError } from "./auth";
 
 export function stripeMode() {
-  return process.env.STRIPE_MODE?.trim() || "test";
+  const key = configuredKey();
+  if (!key) throw new HttpError(503, "A valid Stripe secret key is required.");
+  return key.startsWith("sk_live_") || key.startsWith("rk_live_") ? "live" : "test";
 }
 
 function configuredKey() {
   const key = process.env.STRIPE_SECRET_KEY?.trim() || "";
-  const mode = stripeMode();
-  return (mode === "test" || mode === "live") && new RegExp(`^(sk|rk)_${mode}_`).test(key) ? key : null;
+  return /^(sk|rk)_(test|live)_.+/.test(key) ? key : null;
 }
 
 export function paymentConfiguration() {
@@ -21,7 +22,7 @@ export function paymentConfiguration() {
 export function getStripe() {
   const key = process.env.STRIPE_SECRET_KEY?.trim();
   if (!key) throw new HttpError(503, "Stripe is not configured yet. No payment has been created.");
-  if (!configuredKey()) throw new HttpError(503, "Stripe key does not match STRIPE_MODE. Test mode requires a test key; live payments are disabled unless explicitly configured.");
+  if (!configuredKey()) throw new HttpError(503, "A valid Stripe secret key is required.");
   return new Stripe(key, {
     maxNetworkRetries: 1, timeout: 12_000,
     ...(process.env.NODE_ENV !== "production" && process.env.INDIECLASH_DEV_PROXY_ACTIVE === "1"
