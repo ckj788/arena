@@ -25,6 +25,5 @@ export default function ServiceFields({ value, onChange }: {
       <textarea id="submitted-directories" rows={5} maxLength={8000} required value={value.directories} onChange={event => onChange({ ...value, directories: event.target.value })} placeholder={"Product Hunt — already live\nhttps://example-directory.com/your-product\nAnother directory — pending review"} />
       <p>Names, listing URLs, or a link to your submission report. Include pending submissions too. No passwords or private account links.</p>
     </div>}
-    <label className="submission-consent"><input type="checkbox" required checked={value.consent} onChange={event => onChange({ ...value, consent: event.target.checked })} /><span>I am authorized to submit this product and allow Indie Clash and its fulfillment partner to use these details for directory submissions and delivery reports.</span></label>
   </section>;
 }

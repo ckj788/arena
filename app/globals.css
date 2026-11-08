@@ -858,7 +858,7 @@ button:disabled { cursor: not-allowed; opacity: 0.65; }
 .submission-history-options { display: flex; flex-wrap: wrap; gap: 10px; }
 .submission-history-options label { display: flex; align-items: center; gap: 7px; padding: 9px 12px; border: 1px solid #e2ded6; border-radius: 5px; cursor: pointer; color: #5f574c; }
 .submission-history-options input { accent-color: #92703a; }
-.submission-consent { display: flex !important; align-items: flex-start; gap: 10px; line-height: 1.8; margin-top: 10px; }
+.submission-consent { display: flex !important; align-items: flex-start; gap: 10px; line-height: 1.8; margin-top: 10px; color: #62594c; }
 .submission-consent input { flex-shrink: 0; width: 16px; height: 16px; margin-top: 3px; accent-color: #92703a; }
 .submission-checkout { margin-top: 20px; font-size: 12px; line-height: 1.9; color: #81786a; }
 .submission-checkout p + p { margin-top: 10px; }

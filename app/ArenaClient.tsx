@@ -1450,11 +1450,11 @@ export default function ArenaClient({
         };
         await authenticatedJson(`/api/payments/orders/${paidOrderId}/details`, { product: input, serviceDetails }, "PUT");
         try { sessionStorage.removeItem(submissionDraftKey); } catch { /* Optional browser draft. */ }
-        router.push(`/submit/result?order=${paidOrderId}`);
+        router.replace(launchOrderDashboardPath(paidOrderId));
       } catch (failure) {
         if (failure instanceof ApiRequestError && failure.code === "details_already_received") {
           try { sessionStorage.removeItem(submissionDraftKey); } catch { /* Optional browser draft. */ }
-          router.push(`/submit/result?order=${paidOrderId}`);
+          router.replace(launchOrderDashboardPath(paidOrderId));
           return;
         }
         setSubmitError(failure instanceof Error ? failure.message : "Could not save your details. Your paid order remains available in Dashboard.");
@@ -3934,6 +3934,7 @@ export default function ArenaClient({
 
               <ScreenshotInput value={newScreenshot} onChange={setNewScreenshot} onBusy={setPreparingScreenshot} disabled={isSubmittingProduct} />
 
+              {isPaidSubmission && <label className="submission-consent"><input type="checkbox" required checked={serviceDetails.consent} onChange={event => setServiceDetails({ ...serviceDetails, consent: event.target.checked })} /><span>I am authorized to submit this product and allow Indie Clash and its fulfillment partner to use these details for directory submissions and delivery reports.</span></label>}
               <div className={isPaidSubmission ? "sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white py-4" : isSubmissionPage ? "flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white pt-6" : "sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-zinc-200/80 bg-white py-4"}>
                 <button
                   type="button"
@@ -3947,7 +3948,7 @@ export default function ArenaClient({
                 {isSavingDraft && <span role="status" className="text-xs text-zinc-500">Saving…</span>}
                 <button
                   type="submit"
-                  disabled={isSubmittingProduct || isSavingDraft || preparingScreenshot || (!isPaidSubmission && Boolean(duplicateProduct))}
+                  disabled={isSubmittingProduct || isSavingDraft || preparingScreenshot || (isPaidSubmission && !serviceDetails.consent) || (!isPaidSubmission && Boolean(duplicateProduct))}
                   className="min-w-28 px-5 py-2 bg-zinc-900 hover:bg-zinc-800 text-white font-semibold rounded-lg text-xs shadow-xs transition duration-150 cursor-pointer disabled:cursor-not-allowed disabled:bg-zinc-200 disabled:text-zinc-500"
                 >
                   {preparingScreenshot ? "Preparing image…" : isSubmittingProduct ? (editingProduct ? "Saving…" : "Submitting…") : editingProduct ? "Save Changes" : isPaidSubmission ? "Send product details →" : isSubmissionPage ? "Publish for free →" : "Submit Project"}

@@ -51,7 +51,7 @@ export default function PlanPicker({ initialPlan = null, cancelled = false }: { 
       <label className={`launch-free-plan ${selected === "free" ? "is-selected" : ""}`}>
         <input className="sr-only" type="radio" name="plan" value="free" checked={selected === "free"} onChange={() => setSelected("free")} required />
         <span className="launch-radio-mark" aria-hidden="true">{selected === "free" ? <Check /> : null}</span>
-        <div className="launch-free-copy"><span className="launch-eyebrow">Indie Clash only</span><h2>Free listing</h2><p>Publish a product profile on Indie Clash and optionally join the Arena.</p></div>
+        <div className="launch-free-copy"><h2>Free listing</h2><p>Publish a product profile on Indie Clash and optionally join the Arena.</p></div>
         <div className="launch-free-price"><strong>Free</strong><span>No payment required</span></div>
       </label>
     </fieldset>

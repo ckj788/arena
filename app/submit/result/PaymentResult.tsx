@@ -115,6 +115,7 @@ function PaymentReceipt({ orderId, sessionId, canReconcile }: Props) {
     } catch (failure) { setError(failure instanceof Error ? failure.message : "Could not start another launch."); }
   }
 
+  const awaitingDetails = order?.status === "paid" && !order.details_submitted_at;
   const titles = { paid: "Payment confirmed.", pending: "Waiting for payment confirmation.", expired: "This checkout has expired.", failed: "Payment was not completed." };
   return <main className="payment-result" aria-live="polite" aria-busy={loading}>
     <p className="launch-eyebrow">Your launch order</p>
@@ -123,16 +124,16 @@ function PaymentReceipt({ orderId, sessionId, canReconcile }: Props) {
     {order && <>
       <dl><dt>Plan</dt><dd>{getSubmissionPlan(order.plan)?.name}</dd><dt>Total</dt><dd>{new Intl.NumberFormat("en-US", { style: "currency", currency: order.currency }).format(order.amount_total / 100)}</dd><dt>Order reference</dt><dd>{order.id}</dd></dl>
       <p>{order.status === "paid" ? order.details_submitted_at ? "Payment and product details received. Your order is ready for manual review before fulfillment." : "Payment confirmed — awaiting product details. Add your product information and images now, or continue later from Dashboard. You do not need to pay again." : order.status === "pending" ? "Payment confirmation can take a moment. If you have already paid, keep this order reference and check again; do not make another payment." : "No fulfillment has started for this order. If your bank shows a charge, contact support with this order reference before paying again."}</p>
-      {order.status === "paid" && !order.details_submitted_at && <p><Link href={`/submit/details?order=${order.id}`} className="exhibition-button">Add product details →</Link></p>}
+      {awaitingDetails && <p><Link href={`/submit/details?order=${order.id}`} className="exhibition-button">Tell us what you build</Link></p>}
       {order.product_id && <p><Link href={`/products/${encodeURIComponent(order.product_id)}`} className="submission-back-link">View product profile →</Link></p>}
       {order.status === "paid" && order.details_submitted_at && <p><button type="button" className="submission-back-link" onClick={() => void startAnotherLaunch()}>Start a separate launch order →</button></p>}
-      <p><Link href={launchOrderDashboardPath(order.id)} className="submission-back-link">Dashboard →</Link></p>
+      {!awaitingDetails && <p><Link href={launchOrderDashboardPath(order.id)} className="submission-back-link">Dashboard →</Link></p>}
     </>}
     {error && <p role="alert" className="text-red-700">{error}</p>}
     {needsSignIn ? <>
       <p>Use the same account that started checkout. Order details are private.</p>
       {(["google", "github"] as const).map(name => <AuthProviderButton key={name} provider={name} busy={provider === name} disabled={provider !== null} onClick={() => void signIn(name)} />)}
     </> : (!order || order.status === "pending") && <button type="button" className="exhibition-button mt-6" disabled={loading} onClick={() => { setError(""); setLoading(true); setRefresh(value => value + 1); }}>Refresh order</button>}
-    <p><Link href="/products" className="submission-back-link">Back to products ↗</Link></p>
+    {!awaitingDetails && <p><Link href="/products" className="submission-back-link">Back to products ↗</Link></p>}
   </main>;
 }
