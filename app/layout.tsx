@@ -63,7 +63,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Indie Clash — Discover and Duel Indie Products",
     description: SITE_DESCRIPTION,
-    images: ["/og-image-v2.png"],
+    images: ["/og-image-v2.png?v=5686c83c"],
   },
 };
 
