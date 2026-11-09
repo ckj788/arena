@@ -45,7 +45,7 @@ export default function PrivacyPage() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-bold text-zinc-950">Contact and updates</h2>
-          <p>Privacy requests can be sent to <a className="font-medium text-zinc-950 underline hover:text-amber-600" href="mailto:support@maber.xyz">support@maber.xyz</a>. We may update this policy as the service changes and will revise the effective date above.</p>
+          <p>Privacy requests can be sent to <a className="font-medium text-zinc-950 underline hover:text-amber-600" href="mailto:support@indieclash.com">support@indieclash.com</a>. We may update this policy as the service changes and will revise the effective date above.</p>
         </section>
       </article>
     </main>

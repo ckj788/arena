@@ -42,7 +42,7 @@ export default function TermsPage() {
 
         <section className="space-y-3">
           <h2 className="text-lg font-bold text-zinc-950">Changes</h2>
-          <p>We may change the service or these terms as it evolves. Continued use after an updated effective date means you accept the revised terms. Questions can be sent to <a className="font-medium text-zinc-950 underline hover:text-amber-600" href="mailto:support@maber.xyz">support@maber.xyz</a>.</p>
+          <p>We may change the service or these terms as it evolves. Continued use after an updated effective date means you accept the revised terms. Questions can be sent to <a className="font-medium text-zinc-950 underline hover:text-amber-600" href="mailto:support@indieclash.com">support@indieclash.com</a>.</p>
         </section>
       </article>
     </main>
