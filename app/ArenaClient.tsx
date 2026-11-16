@@ -2461,7 +2461,7 @@ export default function ArenaClient({
           <section className="exhibition-hero">
             <div className="exhibition-hero-layout">
               <div className="exhibition-hero-copy">
-                <p className="exhibition-kicker hero-badge">Independent product discovery &amp; launch platform</p>
+                <p className="exhibition-kicker hero-badge">Product discovery &amp; launch platform</p>
                 <h1 className="exhibition-hero-title hero-title">
                   <span>Every Product</span>
                   <span>deserves</span>
@@ -2480,7 +2480,7 @@ export default function ArenaClient({
               <ClashSculpture />
             </div>
             <div className="exhibition-ledger">
-              <span className="exhibition-product-count"><i aria-hidden="true" /> <strong>{visibleProducts.length} products</strong> · Independent makers</span>
+              <span className="exhibition-product-count"><i aria-hidden="true" /> <strong>{visibleProducts.length} products</strong></span>
               <div className="exhibition-ledger-principles">
                 <span>Built for discovery</span>
                 <span>Optional battles</span>

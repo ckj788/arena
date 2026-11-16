@@ -30,6 +30,17 @@ export default function PlanPicker({ initialPlan = null, cancelled = false }: { 
   return <form onSubmit={submit} className="launch-plan-picker">
     <fieldset>
       <legend className="sr-only">Choose your launch plan</legend>
+      <label className={`launch-free-plan ${selected === "free" ? "is-selected" : ""}`}>
+        <input className="sr-only" type="radio" name="plan" value="free" checked={selected === "free"} onChange={() => setSelected("free")} required />
+        <span className="launch-radio-mark" aria-hidden="true">{selected === "free" ? <Check /> : null}</span>
+        <div className="launch-free-copy"><h2>Free listing</h2><p>Publish a product profile on Indie Clash and optionally join the Arena.</p></div>
+        <div className="launch-free-price"><strong>Free</strong><span>No payment required</span></div>
+      </label>
+      <div className="launch-service-intro">
+        <span className="launch-eyebrow">Optional services</span>
+        <h2>Want to reach more directories?</h2>
+        <p>Expand your reach with our optional manual directory submission services. One-time payment, no subscription.</p>
+      </div>
       <div className="launch-paid-plans">
         {paidPlans.map(plan => <label key={plan.id} className={`launch-plan-card${plan.id === "growth" ? " launch-plan-featured" : ""}${selected === plan.id ? " is-selected" : ""}`}>
           <input className="sr-only" type="radio" name="plan" value={plan.id} checked={selected === plan.id} onChange={() => setSelected(plan.id)} required />
@@ -48,12 +59,6 @@ export default function PlanPicker({ initialPlan = null, cancelled = false }: { 
           <span className="launch-card-choice">{selected === plan.id ? `${plan.name} selected` : `Choose ${plan.name}`}</span>
         </label>)}
       </div>
-      <label className={`launch-free-plan ${selected === "free" ? "is-selected" : ""}`}>
-        <input className="sr-only" type="radio" name="plan" value="free" checked={selected === "free"} onChange={() => setSelected("free")} required />
-        <span className="launch-radio-mark" aria-hidden="true">{selected === "free" ? <Check /> : null}</span>
-        <div className="launch-free-copy"><h2>Free listing</h2><p>Publish a product profile on Indie Clash and optionally join the Arena.</p></div>
-        <div className="launch-free-price"><strong>Free</strong><span>No payment required</span></div>
-      </label>
     </fieldset>
     <div className="launch-selection-bar">
       <div aria-live="polite"><span className="launch-eyebrow">Your starting point</span><p>{current ? `${current.name}${current.price ? ` · $${current.price} one-time` : " · $0"}` : "Choose a plan to continue."}</p></div>

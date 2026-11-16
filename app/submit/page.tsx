@@ -19,8 +19,8 @@ export default async function SubmitPage({ searchParams }: { searchParams: Promi
     <PublicSiteHeader actionHref="/products" actionLabel="Explore products" />
     <main className="launch-plans-main relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-12 sm:pt-16">
       <div className="launch-plan-intro">
-        <h1>Pick your <span>package</span></h1>
-        <p>One-time payment, no subscription. We submit your product by hand and you can follow your order from your dashboard.</p>
+        <h1>Launch for free.<br /><span>Grow when you’re ready.</span></h1>
+        <p>Publish your product on IndieClash for free. Looking to reach more directories? Explore our optional manual submission services below.</p>
       </div>
       <PlanPicker key={initialPlan ?? "choose"} initialPlan={initialPlan} cancelled={params.checkout === "cancelled"} />
     </main>

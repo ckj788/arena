@@ -53,7 +53,7 @@ for (const history of ['none', 'provided', 'unsure']) {
   assert.equal((html.match(/type="radio"/g) || []).length, 3);
   assert.equal(html.includes('id="submitted-directories"'), history === 'provided');
   assert(html.includes('type="email"'));
-  assert(html.includes('type="checkbox"') && !html.includes('type="checkbox" checked=""'));
+  assert(!html.includes('type="checkbox"'), 'Consent belongs at the end of the product form and is verified by verify-payment-recovery-browser.mjs');
 }
 
 const detailsPage = load('app/submit/details/page.tsx', {
