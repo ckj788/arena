@@ -65,7 +65,6 @@ import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { normalizeProductWebsite } from "@/lib/productWebsite";
 import { DUPLICATE_PRODUCT_MESSAGE, findProductWithSameDomain, isVisibleProduct, productLinkRel } from "@/lib/productSafety";
 import ScreenshotInput from "@/app/components/ScreenshotInput";
-import ProfileReadiness from "@/app/components/ProfileReadiness";
 import LaunchShareKit from "@/app/components/LaunchShareKit";
 import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, OAUTH_SUBMISSION_TARGET_KEY, oauthReturnDestination } from "@/lib/browserOAuth";
 import { EMPTY_SERVICE_DETAILS, getSubmissionPlan, launchOrderDashboardPath, SUBMISSION_PAGE_DRAFT_KEY, type SubmissionPlanId, type SubmissionServiceDetails } from "@/lib/submissionPlans";
@@ -1427,6 +1426,9 @@ export default function ArenaClient({
     e.preventDefault();
     if (submitPendingRef.current || preparingScreenshot) return;
     setSubmitError(null);
+    if (!newCategory) { setSubmitError("Please choose a primary category."); return; }
+    if (newPricingModel === "unspecified") { setSubmitError("Please choose a pricing model."); return; }
+    if (!newMaker.trim()) { setSubmitError("Please enter the maker name."); return; }
 
     if (isPaidSubmission) {
       if (!(e.currentTarget as HTMLFormElement).reportValidity()) return;
@@ -1442,7 +1444,7 @@ export default function ArenaClient({
         const { logo, screenshot: screenshots } = await uploadSubmissionImages({ logo: newLogo, screenshot: newScreenshot });
         const input = {
           title: newTitle, tagline: newTagline, url: normalizedProductUrl, description: newDescription,
-          makerName: newMaker || "Anonymous Maker", makerTwitter: newTwitter || "@anonymous",
+          makerName: newMaker.trim(), makerTwitter: newTwitter || "@anonymous",
           logo, screenshots, category: newCategory || undefined, pricingModel: newPricingModel,
           pricingDetails: pricingDraftValue(newPricingDetails) ? normalizeProductPricing(newPricingDetails) : null,
           platforms: newPlatforms.split(",").map(item => item.trim()).filter(Boolean), targetAudience: newTargetAudience,
@@ -1504,7 +1506,7 @@ export default function ArenaClient({
     setIsSubmittingProduct(true);
     try {
       let newProd: Product;
-      const makerName = newMaker || "Anonymous Maker";
+      const makerName = newMaker.trim();
       const makerTwitter = newTwitter ? (newTwitter.startsWith("@") ? newTwitter : `@${newTwitter}`) : "@anonymous";
       const makerAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces";
 
@@ -3651,7 +3653,6 @@ export default function ArenaClient({
             >
               <fieldset disabled={isSubmittingProduct} className="submission-form-fields">
               {isPaidSubmission && <ServiceFields value={serviceDetails} onChange={setServiceDetails} />}
-              {!isPaidSubmission && <ProfileReadiness product={{ description: newDescription, logo: newLogo, screenshots: newScreenshot, makerName: newMaker, targetAudience: newTargetAudience, pricingModel: newPricingModel, makerStory: newMakerStory, feedbackRequest: newFeedbackRequest }} />}
               <div className="flex flex-col gap-1">
                 <label htmlFor="product-title" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
                 <input
@@ -3735,15 +3736,16 @@ export default function ArenaClient({
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
-                <label htmlFor="product-category" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Primary category <span className="normal-case tracking-normal text-zinc-500">(optional)</span></label>
+                <label htmlFor="product-category" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Primary category *</label>
                 <select
                   id="product-category"
+                  required
                   value={newCategory}
                   onChange={(e) => setNewCategory(e.target.value as ProductCategory | "")}
                   aria-describedby="product-category-hint"
                   className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
-                  <option value="">Not sure yet</option>
+                  <option value="" disabled>Select a category</option>
                   {PRODUCT_CATEGORY_GROUPS.map((group) => (
                     <optgroup key={group.label} label={group.label}>
                       {group.categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
@@ -3753,14 +3755,16 @@ export default function ArenaClient({
                 <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-500">Choose the main use. Your profile shows this category; the discovery feed shows its broader group.</p>
               </div>
               <div className="flex flex-col gap-1">
-                <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing model <span className="normal-case tracking-normal">(optional)</span></label>
+                <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing model *</label>
                 <select
                   id="product-pricing"
-                  value={newPricingModel}
+                  required
+                  value={newPricingModel === "unspecified" ? "" : newPricingModel}
                   onChange={(e) => setNewPricingModel(e.target.value as PricingModel)}
                   className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
                 >
-                  {PRICING_MODELS.map((pricing) => <option key={pricing.value} value={pricing.value}>{pricing.label}</option>)}
+                  <option value="" disabled>Select a pricing model</option>
+                  {PRICING_MODELS.filter((pricing) => pricing.value !== "unspecified").map((pricing) => <option key={pricing.value} value={pricing.value}>{pricing.label}</option>)}
                 </select>
               </div>
               </div>
@@ -3824,9 +3828,11 @@ export default function ArenaClient({
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1">
-                  <label htmlFor="product-maker" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Maker Name</label>
+                  <label htmlFor="product-maker" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Maker Name *</label>
                   <input
                     type="text"
+                    required
+                    maxLength={80}
                     placeholder="Sarah"
                     id="product-maker"
                   value={newMaker}
@@ -4276,7 +4282,6 @@ export default function ArenaClient({
               <div className="space-y-4">
                 <Link href={`/products/${encodeURIComponent(publishedProduct.id)}`} className="block rounded-lg bg-amber-400 px-4 py-3 font-semibold hover:bg-amber-300">View {publishedProduct.title} →</Link>
                 <LaunchShareKit product={publishedProduct} />
-                <ProfileReadiness product={publishedProduct} />
               <button
                 onClick={() => {
                   setIsSuccessOpen(false);

@@ -17,10 +17,10 @@ export default async function SubmitPage({ searchParams }: { searchParams: Promi
   return <div className="arena-app launch-page relative min-h-screen overflow-x-hidden text-zinc-950">
     <InteractiveGrid />
     <PublicSiteHeader actionHref="/products" actionLabel="Explore products" />
-    <main className="launch-plans-main relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-12 sm:pt-16">
+    <main className="launch-plans-main relative z-10 mx-auto max-w-[1200px] px-5 pb-16 pt-12 sm:pt-16">
       <div className="launch-plan-intro">
-        <h1>Launch for free.<br /><span>Grow when you’re ready.</span></h1>
-        <p>Publish your product on IndieClash for free. Looking to reach more directories? Explore our optional manual submission services below.</p>
+        <h1>Launch for Free. <span>Grow When You’re Ready.</span></h1>
+        <p>Publish your product on IndieClash for free, get discovered by the community, and receive real feedback.<br />Looking for more exposure? Explore our optional promotion services below.</p>
       </div>
       <PlanPicker key={initialPlan ?? "choose"} initialPlan={initialPlan} cancelled={params.checkout === "cancelled"} />
     </main>

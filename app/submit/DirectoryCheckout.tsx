@@ -40,8 +40,16 @@ export function useDirectoryCheckout(selectedPlan: SubmissionPlanId | null = nul
   const current = status === "signed-in" && options?.userId === userId ? options : null;
   const error = selectedPlan ? current?.errors[selectedPlan] || "" : "";
   const href = selectedPlan ? current?.links[selectedPlan] : undefined;
+  function forPlan(planId: SubmissionPlanId) {
+    return {
+      href: current?.links[planId],
+      error: current?.errors[planId] || "",
+      signIn: () => requestSubmission(`/submit?plan=${planId}`),
+      consume: () => { if (userId) consumePreparedCheckout(userId, planId); },
+    };
+  }
   return {
-    href, error, signedOut: status === "signed-out" || status === "error",
+    href, error, forPlan, signedOut: status === "signed-out" || status === "error",
     signIn: () => requestSubmission(`/submit${selectedPlan ? `?plan=${selectedPlan}` : ""}`),
     consume: () => { if (userId && selectedPlan) consumePreparedCheckout(userId, selectedPlan); },
     reload: () => { setOptions(null); setRetry(value => value + 1); },

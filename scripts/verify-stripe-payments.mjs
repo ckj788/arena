@@ -154,7 +154,7 @@ const payments = load('lib/server/launchPayments.ts', {
   '@/lib/arenaStore': { toDbProduct: product => product },
 });
 const body = { requestId: randomUUID(), plan: 'starter', amount: 1,
-  product: { title: 'Offline launch test', tagline: 'An isolated payment integration fixture.', url: 'https://example.com', makerName: 'Maker', makerTwitter: '@maker', logo: '🚀', description: 'A'.repeat(100), pricingModel: 'unspecified' },
+  product: { title: 'Offline launch test', tagline: 'An isolated payment integration fixture.', url: 'https://example.com', makerName: 'Maker', makerTwitter: '@maker', logo: '🚀', description: 'A'.repeat(100), category: 'saas', pricingModel: 'free' },
   serviceDetails: { email: 'test@example.com', history: 'none', directories: '', consent: true },
 };
 for (const [plan, cents] of [['starter', 9900], ['growth', 16900], ['pro', 25900]]) {

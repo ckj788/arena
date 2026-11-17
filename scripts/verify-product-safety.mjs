@@ -17,7 +17,11 @@ const safety = load('lib/productSafety.ts');
 const taxonomy = load('lib/productTaxonomy.ts');
 const pricing = load('lib/productPricing.ts', {'./site':site});
 const input = load('lib/server/productInput.ts', {'server-only':{},'@/lib/server/auth':{HttpError},'@/lib/site':site,'@/lib/productTaxonomy':taxonomy,'@/lib/productPricing':pricing});
-const base = {title:'Valid Product',tagline:'A useful example product.',url:'https://example.com',makerName:'Maker',makerTwitter:'maker',logo:'🚀',description:'A'.repeat(100)};
+const base = {title:'Valid Product',tagline:'A useful example product.',url:'https://example.com',makerName:'Maker',makerTwitter:'maker',logo:'🚀',description:'A'.repeat(100),category:'saas',pricingModel:'free'};
+for (const field of ['category', 'pricingModel', 'makerName']) {
+  for (const value of [undefined, null, '', '   ']) assert.throws(() => input.parseProductInput({...base,[field]:value}), e => e.status === 400, `${field} must be filled in`);
+}
+assert.throws(() => input.parseProductInput({...base,pricingModel:'unspecified'}), e => e.status === 400);
 assert.equal('shipTimeframe' in input.parseProductInput({...base,shipTimeframe:'48h'}),false);
 assert.equal(new Set(taxonomy.PRODUCT_CATEGORIES.map(c=>c.value)).size,taxonomy.PRODUCT_CATEGORIES.length);
 for (const category of taxonomy.PRODUCT_CATEGORIES) {

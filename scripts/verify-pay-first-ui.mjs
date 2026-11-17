@@ -70,32 +70,42 @@ assert.notEqual((await renderGate(null, new Error('Order not found'))).type, Are
 console.log('PASS: all paid tiers ask for payment before product fields, free route skips payment, and only a verified paid/incomplete order unlocks the details form. Rendered components and mocked auth/store; no payment performed.');
 
 // Payment action is a real anchor: it has no async click handler or checkout API.
-const formRoutes = [], destinations = [];
-let selectedPlan = 'starter', href, signedOut = false;
+const formRoutes = [], consumedPlans = [], signInPlans = [];
+let ready = true, signedOut = false;
 const picker = load('app/submit/PlanPicker.tsx', {
   '@/lib/submissionPlans': plans, 'next/navigation': { useRouter: () => ({ push: path => formRoutes.push(path) }) },
-  './DirectoryCheckout': { useDirectoryCheckout: () => ({ href, signedOut, signIn() {}, reload() {}, consume() {} }) },
-}, { useState: () => [selectedPlan, () => {}] }, { window: { location: { assign: url => destinations.push(url) } } }).default;
+  './DirectoryCheckout': { useDirectoryCheckout: () => ({ signedOut, forPlan: plan => ({
+    href: ready && !signedOut ? `https://buy.stripe.com/test_${plan}` : undefined,
+    consume: () => consumedPlans.push(plan), signIn: () => signInPlans.push(plan),
+  }) }) },
+}).default;
+function planAction(plan) {
+  const tree = picker({});
+  const cards = tree.props.children[1].props.children[1].props.children;
+  return cards.find(card => card.props['data-plan'] === plan).props.children[5];
+}
 for (const plan of ['starter', 'growth', 'pro']) {
-  selectedPlan = plan; href = 'https://buy.stripe.com/test_' + plan;
-  const form = picker({});
-  const bar = form.props.children.find(child => child?.props?.className === 'launch-selection-bar');
-  const action = bar.props.children[1];
+  const action = planAction(plan);
   assert.equal(action.type, 'a');
-  assert.equal(action.props.href, href);
+  assert.equal(action.props.href, `https://buy.stripe.com/test_${plan}`);
   assert.equal(typeof action.props.onClick, 'function');
   action.props.onClick();
-  form.props.onSubmit({ preventDefault() {} });
-  assert.equal(destinations.at(-1), href, 'Keyboard submit also navigates synchronously');
+  assert.equal(consumedPlans.at(-1), plan, 'Each card consumes its own prepared checkout');
 }
-href = undefined;
-selectedPlan = 'free';
-const form = picker({});
-assert.equal(form.props.children.find(child => child?.props?.className === 'launch-selection-bar').props.children[1].props.disabled, false);
-form.props.onSubmit({ preventDefault() {} });
+const freeAction = picker({}).props.children[0].props.children[1].props.children[0];
+assert(!freeAction.props.disabled, 'Free submission must not wait for payment preparation');
+freeAction.props.onClick();
 assert.equal(formRoutes.at(-1), '/submit/details?plan=free');
-signedOut = true; selectedPlan = 'growth';
-assert.equal(picker({}).props.children.find(child => child?.props?.className === 'launch-selection-bar').props.children[1].type, 'button');
+ready = false;
+assert.equal(planAction('growth').props.disabled, true, 'Unprepared checkout cannot navigate');
+signedOut = true;
+for (const plan of ['starter', 'growth', 'pro']) {
+  const action = planAction(plan);
+  assert.equal(action.type, 'button');
+  assert.equal(action.props.disabled, false);
+  action.props.onClick();
+  assert.equal(signInPlans.at(-1), plan, 'Sign in retains the chosen tier');
+}
 
 let linkSlots = [], linkIndex = 0, linkEffects = [], activeUser = 'owner', activeStatus = 'signed-in';
 const linkRequests = [];
@@ -118,10 +128,12 @@ assert.equal(renderLinks('starter').href, undefined);
 const cleanupLinks = linkEffects[0](); await new Promise(setImmediate);
 assert.equal(renderLinks('starter').href, 'https://buy.stripe.com/test_starter');
 assert.equal(renderLinks('pro').href, 'https://buy.stripe.com/test_pro');
+for (const plan of ['starter', 'growth', 'pro']) assert.equal(renderLinks(null).forPlan(plan).href, `https://buy.stripe.com/test_${plan}`);
 assert.equal(linkRequests.length, 3, 'All paid plans prepare in the background');
 assert.deepEqual(linkRequests.map(request => request.plan), ['starter', 'growth', 'pro']);
 activeUser = 'different-owner';
 assert.equal(renderLinks('starter').href, undefined, 'Account switch must remove the previous payment link immediately');
+assert.equal(renderLinks(null).forPlan('growth').href, undefined, 'Card links must also be isolated by account');
 activeUser = 'owner'; activeStatus = 'signed-out';
 assert.equal(renderLinks('starter').href, undefined, 'Sign-out must remove payment link');
 cleanupLinks();

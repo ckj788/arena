@@ -41,7 +41,7 @@ try {
   });
   for (const plan of ['starter', 'growth', 'pro']) {
     await page.goto(`${process.env.VERIFY_BASE_URL || config.baseUrl}/submit?plan=${plan}`, { waitUntil: 'networkidle0', timeout: 60000 });
-    const selector = '.launch-selection-bar a.exhibition-button';
+    const selector = `[data-plan="${plan}"] a.launch-card-choice`;
     await page.waitForSelector(selector);
     const url = await page.$eval(selector, a => a.href);
     assert.equal(url, config.links[plan].url);

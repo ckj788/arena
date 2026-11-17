@@ -19,7 +19,7 @@ const site = load('lib/site.ts');
 const taxonomy = load('lib/productTaxonomy.ts');
 const pricing = load('lib/productPricing.ts', { './site': site });
 const input = load('lib/server/productInput.ts', { 'server-only': {}, '@/lib/server/auth': { HttpError }, '@/lib/site': site, '@/lib/productTaxonomy': taxonomy, '@/lib/productPricing': pricing });
-const base = { title: 'Pricing fixture', tagline: 'An isolated product pricing test.', url: 'https://example.com', makerName: 'Maker', makerTwitter: 'maker', logo: '🚀', description: 'A'.repeat(100), pricingModel: 'paid' };
+const base = { title: 'Pricing fixture', tagline: 'An isolated product pricing test.', url: 'https://example.com', makerName: 'Maker', makerTwitter: 'maker', logo: '🚀', description: 'A'.repeat(100), category: 'saas', pricingModel: 'paid' };
 const quote = { planName: 'Pro', amount: '19.99', currency: 'USD', billingPeriod: 'month', pricingUrl: 'https://example.com/pricing' };
 const parsed = input.parseProductInput({ ...base, pricingDetails: quote });
 assert.equal(parsed.pricingDetails.amount, '19.99');

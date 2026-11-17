@@ -63,7 +63,7 @@ const store = load('lib/arenaStore.ts', {
 const user = { id: 'fixture-owner', user_metadata: { user_name: 'fixture' } };
 const base = input.parseProductInput({
   title: 'Domain fixture', tagline: 'An isolated duplicate submission test.', url: original.url,
-  makerName: 'Maker', makerTwitter: '@maker', logo: '🚀', description: 'A'.repeat(100),
+  makerName: 'Maker', makerTwitter: '@maker', logo: '🚀', description: 'A'.repeat(100), category: 'saas', pricingModel: 'free',
 });
 const row = (id, url, owner = user.id) => ({
   [prefix + 'id']: id, [prefix + 'url']: url, [prefix + 'creator_uid']: owner,

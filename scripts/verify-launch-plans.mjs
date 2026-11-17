@@ -35,12 +35,13 @@ for (const invalid of [undefined, null, '', 'enterprise', '__proto__', ['free'],
   assert.equal(plans.getSubmissionPlan(invalid), undefined);
 }
 
-const picker = load('app/submit/PlanPicker.tsx', { '@/lib/submissionPlans': plans, 'next/navigation': { useRouter: () => ({ push() {} }) }, './DirectoryCheckout': { useDirectoryCheckout: () => ({ configuration: 'ready', busy: false }) } }).default;
+const picker = load('app/submit/PlanPicker.tsx', { '@/lib/submissionPlans': plans, 'next/navigation': { useRouter: () => ({ push() {} }) }, './DirectoryCheckout': { useDirectoryCheckout: () => ({ forPlan: () => ({}) }) } }).default;
 const pickerHtml = renderToStaticMarkup(React.createElement(picker));
-assert.equal((pickerHtml.match(/type="radio"/g) || []).length, 4);
+assert.equal((pickerHtml.match(/type="radio"/g) || []).length, 0);
 assert.equal((pickerHtml.match(/class="launch-plan-card/g) || []).length, 3);
 assert(pickerHtml.includes('launch-free-plan'));
-assert(pickerHtml.includes('$1.30') && pickerHtml.includes('$1.98') && pickerHtml.includes('$1.69'));
+assert(pickerHtml.includes('Free Product Listing'));
+for (const price of [99, 169, 259]) assert(pickerHtml.includes(`$${price}`));
 assert(!pickerHtml.includes('action="/submit/checkout"'), 'Plan selection must not navigate to an extra confirmation page');
 assert(pickerHtml.includes('disabled=""'));
 assert(!pickerHtml.includes('checked=""'), 'No paid plan should be silently preselected');

@@ -73,6 +73,10 @@ try {
   await page.type('#product-tagline', 'A complete product for normal discovery');
   await page.type('#product-url', 'example.com/resources');
   await page.type('#product-description', 'This product helps independent founders prepare their launch and organize their product information for discovery across useful platforms.');
+  for (const selector of ['#product-category', '#product-pricing', '#product-maker']) assert.equal(await page.$eval(selector, input => input.required && !input.checkValidity()), true, `${selector} is required before final submission`);
+  await page.select('#product-category', 'saas');
+  await page.select('#product-pricing', 'free');
+  await page.type('#product-maker', 'Fixture Maker');
   await page.type('#delivery-email', 'fixture@example.invalid');
   await page.click('input[name="directory-history"][value="none"]');
   assert.equal(await page.$eval('button[type="submit"]', button => button.disabled), true, 'Consent is required even when fields are complete');

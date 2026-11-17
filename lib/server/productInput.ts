@@ -72,11 +72,12 @@ export function parseProductInput(body: unknown): NewProductInput {
   }
 
   const makerTwitter = requiredText(value.makerTwitter, "Maker handle", 1, 50);
-  const category = optionalText(value.category, "Category", 40);
-  if (category && !PRODUCT_CATEGORIES.some((item) => item.value === category)) {
+  const category = requiredText(value.category, "Primary category", 1, 40);
+  if (!PRODUCT_CATEGORIES.some((item) => item.value === category)) {
     throw new HttpError(400, "Invalid product category.");
   }
-  const pricingModel = optionalText(value.pricingModel, "Pricing model", 40) || "unspecified";
+  const pricingModel = requiredText(value.pricingModel, "Pricing model", 1, 40);
+  if (pricingModel === "unspecified") throw new HttpError(400, "Please choose a pricing model.");
   if (!PRICING_MODELS.some((item) => item.value === pricingModel)) {
     throw new HttpError(400, "Invalid pricing model.");
   }
@@ -92,7 +93,7 @@ export function parseProductInput(body: unknown): NewProductInput {
     screenshot: screenshots !== undefined ? screenshots[0] || "" : safeScreenshot(value.screenshot),
     screenshots,
     description: requiredText(value.description, "Description", 80, 2_000),
-    category: category ? category as NewProductInput["category"] : undefined,
+    category: category as NewProductInput["category"],
     pricingModel: pricingModel as NewProductInput["pricingModel"],
     ...(value.pricingDetails !== undefined ? {
       pricingDetails: value.pricingDetails === null ? null : normalizeProductPricing(value.pricingDetails as PricingDraft),
