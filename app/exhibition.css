@@ -70,7 +70,7 @@
   color: #736b5f; font: 10px/1.8 var(--font-mono); letter-spacing: .09em; text-transform: uppercase;
 }
 .exhibition-product-count { display: inline-flex; align-items: center; gap: 16px; }
-.exhibition-product-count strong { font-weight: 500; color: #25231f; }
+.exhibition-product-count strong { font-size: 12px; font-weight: 700; color: #25231f; }
 .exhibition-product-count i { width: 5px; height: 5px; border-radius: 50%; background: #a88142; }
 .exhibition-ledger-principles { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; }
 .exhibition-ledger-principles > span { display: inline-flex; align-items: center; gap: 20px; }

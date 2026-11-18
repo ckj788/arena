@@ -831,7 +831,7 @@ button:disabled { cursor: not-allowed; opacity: 0.65; }
 .launch-time-saved { padding: 8px 10px; border: 1px solid #ebdbbd; border-radius: 6px; background: #fbf4e6; color: #67491c; }
 .launch-card-choice { display: inline-flex; align-items: center; justify-content: center; gap: 10px; align-self: stretch; min-height: 48px; margin-top: auto; padding: 12px 20px; border-radius: 6px; background: #302b22; color: #fffaf1; font-size: 13px; font-weight: 600; cursor: pointer; box-shadow: 0 3px 7px #302b2210; }
 .launch-card-choice:hover { filter: brightness(1.08); }
-.launch-card-choice:disabled { cursor: wait; opacity: .55; }
+.launch-card-choice:disabled { cursor: pointer; opacity: 1; }
 .launch-card-choice:focus-visible { outline: 2px solid #6d28d9; outline-offset: 4px; }
 .launch-plan-featured .launch-card-choice { background: #dfac50; color: #302518; }
 .launch-plan-card.is-selected .launch-card-choice { background: #fffaf1; color: #60441c; box-shadow: inset 0 0 0 1px #ac7b2d; }

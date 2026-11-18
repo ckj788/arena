@@ -2482,7 +2482,7 @@ export default function ArenaClient({
               <ClashSculpture />
             </div>
             <div className="exhibition-ledger">
-              <span className="exhibition-product-count"><i aria-hidden="true" /> <strong>{visibleProducts.length} products</strong></span>
+              <span className="exhibition-product-count"><i aria-hidden="true" /> <strong>{visibleProducts.length} products launched</strong></span>
               <div className="exhibition-ledger-principles">
                 <span>Built for discovery</span>
                 <span>Optional battles</span>
