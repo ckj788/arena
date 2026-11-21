@@ -15,13 +15,13 @@ export const metadata: Metadata = {
 };
 
 export default async function ArenaPage() {
-  const { products, pastChampions, bracket } = await getArenaPageData();
+  const { pages, pastChampions, bracket } = await getArenaPageData();
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({
       "@context": "https://schema.org", "@type": "CollectionPage",
       name: title, description, url: absoluteUrl("/arena"),
       isPartOf: { "@id": `${absoluteUrl("/")}#website` },
     }) }} />
-    <ArenaClient page="arena" initialProducts={products} initialPastChampions={pastChampions || []} initialBracket={bracket} />
+    <ArenaClient page="arena" initialPages={pages} initialProducts={[]} initialPastChampions={pastChampions || []} initialBracket={bracket} />
   </>;
 }

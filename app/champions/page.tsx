@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import ArenaClient from "../ArenaClient";
 import { getPastChampions } from "@/lib/server/arenaPageData";
-import { getPublicProducts } from "@/lib/server/publicSeoData";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
 export const revalidate = 3600;
@@ -16,7 +15,7 @@ export const metadata: Metadata = {
 };
 
 export default async function ChampionsPage() {
-  const [products, pastChampions] = await Promise.all([getPublicProducts().catch(() => []), getPastChampions().catch(() => [])]);
+  const pastChampions = await getPastChampions().catch(() => []);
   return <>
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd({
       "@context": "https://schema.org", "@type": "CollectionPage",
@@ -27,6 +26,6 @@ export default async function ChampionsPage() {
         url: absoluteUrl(`/products/${encodeURIComponent(product.id)}`),
       })) },
     }) }} />
-    <ArenaClient page="champions" initialProducts={products} initialPastChampions={pastChampions || []} initialBracket={null} />
+    <ArenaClient page="champions" initialProducts={[]} initialPastChampions={pastChampions || []} initialBracket={null} />
   </>;
 }

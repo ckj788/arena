@@ -48,14 +48,17 @@ const mocks = {
   './productImages': { withPublicImageUrls: product => product },
   './cachePolicy': { productActivityTag: id => id, versusTag: slug => slug },
 };
-const source = ts.transpileModule(fs.readFileSync('lib/server/publicSeoData.ts', 'utf8'), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText;
-const testModule = { exports: {} };
-vm.runInNewContext(source, {
-  module: testModule, exports: testModule.exports, console: { warn() {} }, AbortSignal,
-  require(name) { if (name in mocks) return mocks[name]; throw new Error(`Unexpected import: ${name}`); },
-});
+function load(file) {
+  const mod = { exports: {} };
+  const source = ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInNewContext(source, { module: mod, exports: mod.exports, console: { warn() {} }, AbortSignal, process,
+    require(name) { assert(name in mocks, name); return mocks[name]; } });
+  return mod.exports;
+}
+mocks['node:crypto'] = await import('node:crypto');
+mocks['@/lib/cataloguePages'] = load('lib/cataloguePages.ts');
+mocks['./cataloguePages'] = load('lib/server/cataloguePages.ts');
+const testModule = { exports: load('lib/server/publicSeoData.ts') };
 for (const failingTable of ['matches', 'votes']) {
   failAt = failingTable;
   const data = await testModule.exports.getProductSeoData(product.id);

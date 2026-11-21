@@ -2,12 +2,14 @@ import "server-only";
 
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
-import { fetchCloudProducts, fromDbProduct } from "@/lib/arenaStore";
+import { getPublicProducts } from "./cataloguePages";
+export { getPublicProducts } from "./cataloguePages";
+import { fromDbProduct } from "@/lib/arenaStore";
 import { Product, SEED_PRODUCTS } from "@/lib/mockData";
 import { DB_PREFIX, publicArenaTable, supabase } from "@/lib/supabaseClient";
 import { isVisibleProduct } from "@/lib/productSafety";
 import { withPublicImageUrls } from "./productImages";
-import { CATALOGUE_SECONDS, CATALOGUE_TAG, PRODUCT_ACTIVITY_TAG, SEO_SECONDS, VERSUS_TAG, productActivityTag, versusTag } from "./cachePolicy";
+import { CATALOGUE_TAG, PRODUCT_ACTIVITY_TAG, SEO_SECONDS, VERSUS_TAG, productActivityTag, versusTag } from "./cachePolicy";
 
 const SAFE_ID = /^[a-z0-9][a-z0-9_-]{0,99}$/i;
 
@@ -68,50 +70,6 @@ export interface SitemapProduct {
   category?: string;
 }
 
-const loadPublicProducts = unstable_cache(async () => {
-  if (!supabase) return fetchCloudProducts();
-  let data: DatabaseRow[] | null = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const response = await supabase.from(publicArenaTable("products"))
-        .select("*").order(`${DB_PREFIX}submitted_at`, { ascending: true })
-        .abortSignal(AbortSignal.timeout(8_000));
-      if (response.error) {
-        const transient = /fetch failed|timeout|aborted|network/i.test(response.error.message);
-        if (attempt === 0 && transient) continue;
-        if (process.env.NODE_ENV !== "production" || process.env.NEXT_PHASE === "phase-production-build") {
-          console.warn("[INDIE CLASH] Supabase unavailable, falling back to seed products:", response.error.message);
-          return SEED_PRODUCTS;
-        }
-        throw new Error(`Public products are temporarily unavailable: ${response.error.message}`);
-      }
-      data = response.data as unknown as DatabaseRow[] | null;
-      break;
-    } catch (error) {
-      if (attempt === 1 || !/fetch failed|timeout|aborted|network/i.test(String(error))) {
-        if (process.env.NODE_ENV !== "production" || process.env.NEXT_PHASE === "phase-production-build") {
-          console.warn("[INDIE CLASH] Supabase network exception, falling back to seed products:", error);
-          return SEED_PRODUCTS;
-        }
-        throw error;
-      }
-    }
-  }
-  // Do not persist an offline fallback as a successful empty catalogue. An
-  // unsuccessful revalidation must preserve the last successful cached value.
-  if (!data) {
-    if (process.env.NODE_ENV !== "production" || process.env.NEXT_PHASE === "phase-production-build") return SEED_PRODUCTS;
-    throw new Error("Public products are temporarily unavailable.");
-  }
-  return data.map(row => withPublicImageUrls(fromDbProduct(row)));
-}, ["arena-public-products-v3"], {
-  revalidate: CATALOGUE_SECONDS,
-  tags: [CATALOGUE_TAG],
-});
-
-export const getArenaProducts = cache(loadPublicProducts);
-export const getPublicProducts = cache(async () => (await getArenaProducts()).filter(isVisibleProduct));
-
 function stringValue(row: DatabaseRow, key: string) {
   const value = row[key];
   return typeof value === "string" ? value : "";
@@ -138,6 +96,14 @@ function mapMatch(row: DatabaseRow): PublicMatch {
 
 function seedProduct(slug: string) {
   return SEED_PRODUCTS.find((product) => product.id.toLowerCase() === slug.toLowerCase()) ?? null;
+}
+
+function relatedLaunches(product: Product, catalogue: Product[]) {
+  const others = catalogue.filter(item => item.id !== product.id && isVisibleProduct(item));
+  const peers = product.category ? others.filter(item => item.category === product.category) : [];
+  return (peers.length ? peers : others)
+    .sort((a, b) => Date.parse(b.submittedAt) - Date.parse(a.submittedAt))
+    .slice(0, 6);
 }
 
 function versusCandidates(slug: string) {
@@ -173,7 +139,7 @@ const loadProductSeoData = async (rawSlug: string): Promise<ProductSeoData | nul
         product,
         critiques: [],
         matchups: [],
-        relatedProducts: SEED_PRODUCTS.filter((item) => item.id !== product.id).slice(0, 6),
+        relatedProducts: relatedLaunches(product, SEED_PRODUCTS),
         wins: 0,
       };
     }
@@ -245,10 +211,7 @@ const loadProductSeoData = async (rawSlug: string): Promise<ProductSeoData | nul
     const opponents = new Map(
       products.map((item) => [item.id, item] as const),
     );
-    const relatedProducts = products
-      .filter((item) => item.id !== product.id)
-      .sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime())
-      .slice(0, 6);
+    const relatedProducts = relatedLaunches(product, products);
 
     const critiques = critiqueRows.flatMap((row): PublicCritique[] => {
       const votedProductId = stringValue(row, `${DB_PREFIX}voted_product_id`);
@@ -279,7 +242,7 @@ const loadProductSeoData = async (rawSlug: string): Promise<ProductSeoData | nul
       relatedProducts,
       wins: matches.filter((match) => match.winnerId === product.id).length,
     };
-  }, ["arena-product-seo-v4", slug], {
+  }, ["arena-product-seo-v5", slug], {
     revalidate: SEO_SECONDS,
     tags: [CATALOGUE_TAG, PRODUCT_ACTIVITY_TAG, productActivityTag(slug)],
   })();
@@ -388,7 +351,7 @@ async function loadSitemapRecords(): Promise<{
   for (let start = 0; ; start += pageSize) {
     const { data, error } = await supabase
       .from(publicArenaTable("products"))
-      .select("*")
+      .select(["id", "moderation_status", "submitted_at", "updated_at", "category"].map(field => DB_PREFIX + field).join(","))
       .order(`${DB_PREFIX}id`, { ascending: true })
       .range(start, start + pageSize - 1).abortSignal(AbortSignal.timeout(15_000));
     if (error || !data) throw new Error(`Unable to build product sitemap: ${error?.message || "Missing response"}`);

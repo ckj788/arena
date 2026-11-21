@@ -109,6 +109,7 @@ const matchRows = [
 ];
 const ranges = [];
 const data = load('lib/server/publicSeoData.ts', {
+  './cataloguePages': {},
   'server-only': {},
   './productImages': {},
   './cachePolicy': {},

@@ -4,14 +4,14 @@ import vm from 'node:vm';
 import ts from 'typescript';
 import { createHash } from 'node:crypto';
 
-function load(file, mocks = {}) {
+function load(file, mocks = {}, globals = {}) {
   const mod = { exports: {} };
   vm.runInNewContext(ts.transpileModule(fs.readFileSync(file, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText, {
     module: mod, exports: mod.exports, URL, Response, Request, Buffer, AbortSignal,
     console: { warn() {}, error() {} }, process: { env: { NODE_ENV: 'production', NEXT_PUBLIC_SUPABASE_URL: 'https://fixture.supabase.co' } },
-    require(name) { assert(name in mocks, `Unexpected dependency: ${name}`); return mocks[name]; },
+    ...globals, require(name) { assert(name in mocks, `Unexpected dependency: ${name}`); return mocks[name]; },
   });
   return mod.exports;
 }
@@ -78,16 +78,57 @@ const nextCache = {
 };
 const mutations = load('lib/server/cache.ts', { 'server-only': {}, 'next/cache': nextCache, './cachePolicy': policy });
 const db = { DB_PREFIX: 'shipandbattle_', publicArenaTable: table => table, supabase };
-const data = load('lib/server/publicSeoData.ts', {
+const catalogueModules = {
   'server-only': {}, react: { cache: fn => fn }, 'next/cache': nextCache,
-  '@/lib/arenaStore': { fromDbProduct, fetchCloudProducts: async () => [] }, '@/lib/mockData': { SEED_PRODUCTS: [] },
+  '@/lib/arenaStore': { fromDbProduct }, '@/lib/mockData': { SEED_PRODUCTS: [] },
   '@/lib/supabaseClient': db, '@/lib/productSafety': { isVisibleProduct: product => product.moderationStatus !== 'restricted' },
-  './cachePolicy': policy, './productImages': images,
+  './cachePolicy': policy, './productImages': images, 'node:crypto': { createHash },
+  '@/lib/cataloguePages': load('lib/cataloguePages.ts'),
+};
+const catalogue = load('lib/server/cataloguePages.ts', catalogueModules);
+// Cross the normal database row cap. Revalidate the SSR pages, mutate one
+// record, then delete a cursor row. Unchanged pages must have no response body.
+const inventory = Array.from({ length: 1103 }, (_, i) => row({ id: String(i).padStart(4, '0'), title: 'Card ' + i }));
+let bodies = 0;
+const pagedDb = {
+  from() {
+    let after = '', limit;
+    return {
+      select(columns) { assert(!columns.includes('*') && !columns.includes('screenshot')); return this; },
+      order() { return this; }, limit(n) { limit = n; return this; },
+      gt(_field, id) { after = id; return this; },
+      async abortSignal() { return { data: inventory.filter(item => item.shipandbattle_id > after).slice(0, limit) }; },
+    };
+  },
+};
+const paged = load('lib/server/cataloguePages.ts', { ...catalogueModules,
+  'next/cache': { unstable_cache: fn => fn }, '@/lib/supabaseClient': { ...db, supabase: pagedDb },
 });
+const route = load('app/api/arena/catalogue/route.ts', { '@/lib/server/cataloguePages': paged });
+const reader = load('lib/cataloguePages.ts', {}, { fetch: async (url, init) => {
+  const response = await route.GET(new Request(new URL(url, 'https://fixture.invalid'), init));
+  if (response.status === 200) bodies++;
+  else { assert.equal(response.status, 304); assert.equal(await response.text(), ''); }
+  return response;
+} });
+const initial = await paged.getCataloguePages();
+const signal = new AbortController().signal;
+assert.equal(reader.catalogueProducts(initial).length, inventory.length);
+assert.equal(await reader.refreshCatalogue(initial, signal), initial);
+assert.equal(bodies, 0);
+inventory[257].shipandbattle_title = 'Updated card';
+const changed = await reader.refreshCatalogue(initial, signal);
+assert.equal(bodies, 1);
+assert.equal(reader.catalogueProducts(changed)[257].title, 'Updated card');
+inventory.splice(inventory.findIndex(item => item.shipandbattle_id === initial[0].next), 1);
+const resized = reader.catalogueProducts(await reader.refreshCatalogue(changed, signal));
+assert.deepEqual(Array.from(resized, product => product.id), inventory.map(row => row.shipandbattle_id));
+console.log('PASS: 1,103 public cards across pages, zero unchanged bodies, single-batch update and cursor deletion.');
+const data = load('lib/server/publicSeoData.ts', { ...catalogueModules, './cataloguePages': catalogue });
 let bracketReads = 0, championReads = 0;
 const arena = load('lib/server/arenaPageData.ts', {
   'server-only': {}, react: { cache: fn => fn }, 'next/cache': nextCache,
-  '@/lib/server/publicSeoData': data, './cachePolicy': policy,
+  ...catalogueModules, './cataloguePages': catalogue,
   '@/lib/arenaStore': {
     fetchCloudBracket: async () => { bracketReads++; return { votesA: match.votes_a }; },
     fetchCloudPastChampions: async products => { championReads++; return [products[0]]; },
@@ -157,7 +198,7 @@ assert.equal(outage.status, 503);
 assert.equal(outage.headers.get('cache-control'), 'no-store');
 queryError = null;
 assert.equal(images.legacyRasterImage('data:image/svg+xml;base64,PHN2Zz4='), null);
-assert(settings.every(setting => setting.revalidate >= 300));
+assert(settings.every(setting => setting.revalidate >= 300 || (setting.revalidate === 30 && setting.tags.includes(policy.CATALOGUE_TAG))));
 
 let authorized = false, rpcCalls = 0, rpcError = null, voteTargets;
 class HttpError extends Error { constructor(status, message) { super(message); this.status = status; } }

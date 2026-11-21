@@ -5,79 +5,59 @@ import { useRouter } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import Link from "@/app/components/NavigationLink";
 import useModalAccessibility from "@/app/components/useModalAccessibility";
+import usePublicArenaData, { firstOpenBracketMatch } from "./components/usePublicArenaData";
+import type { CataloguePage } from "@/lib/cataloguePages";
 import useHomeMotion from "@/app/components/useHomeMotion";
 import useArenaNavigation from "@/app/components/useArenaNavigation";
 import AuthProviderButton from "@/app/components/AuthProviderButton";
-import PricingFields from "@/app/components/PricingFields";
-import { EMPTY_PRICING_DRAFT, normalizeProductPricing, pricingDraftValue, productPricingError, type PricingDraft } from "@/lib/productPricing";
+import ProductFields from "./submit/ProductFields";
+import useProductSubmission, { OAUTH_SUBMIT_DRAFT_KEY } from "./submit/useProductSubmission";
 import { gsap } from "gsap";
 import { withDeadline } from "@/lib/requestSafety";
 import { Product, Match, Bracket } from "@/lib/mockData";
 import {
   loadProducts,
   saveProducts,
-  loadBracket,
   saveBracket,
   buildInitialBracket,
   getActiveRound,
-  getArenaFormatName,
   getBracketSize,
   getInitialRoundMatches,
   getInitialRoundNumber,
   getRoundMatches,
   advanceTournamentRound,
-  fetchCloudProducts,
-  PublicRefreshError,
-  fetchCloudBracket,
-  fetchCloudPastChampions,
   loadLocalPastChampions,
   saveLocalPastChampions
 } from "@/lib/arenaStore";
 import {
-  ApiRequestError,
   AuthSessionExpiredError,
-  authenticatedJson,
   castArenaVote,
   enqueueArenaProduct,
   fetchOwnedArenaProducts,
   requestArenaSettlement,
-  submitArenaProduct,
-  updateArenaProduct,
-  uploadArenaLogo,
 } from "@/lib/arenaApi";
 import { supabase, DB_PREFIX, publicArenaTable } from "@/lib/supabaseClient";
 import {
   getMillisecondsToNextNYMidnight,
   getRoundEndAtIso,
   getRoundRemainingMs,
-  formatToHMS
 } from "@/lib/timeHelpers";
 import InteractiveGrid from "@/app/components/InteractiveGrid";
 import ClashLogo from "@/app/components/ClashLogo";
 import ClashSculpture from "@/app/components/ClashSculpture";
 import MakerConsole from "@/app/components/MakerConsole";
-import FairDiscoverySection from "@/app/components/FairDiscoverySection";
-import DailyArenaRunCountdown from "@/app/components/DailyArenaRunCountdown";
+import DiscoverFeed from "./components/DiscoverFeed";
+import ArenaBoard from "./arena/ArenaBoard";
+import ChampionsSection from "./champions/ChampionsSection";
 import PrimaryNavigation, { type MainPage } from "@/app/components/PrimaryNavigation";
-import { PRICING_MODELS, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_GROUPS, feedCategoryLabel, type PricingModel, type ProductCategory } from "@/lib/productTaxonomy";
 import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
-import { normalizeProductWebsite } from "@/lib/productWebsite";
-import { DUPLICATE_PRODUCT_MESSAGE, findProductWithSameDomain, isVisibleProduct, productLinkRel } from "@/lib/productSafety";
-import ScreenshotInput from "@/app/components/ScreenshotInput";
+import { isVisibleProduct, productLinkRel } from "@/lib/productSafety";
 import LaunchShareKit from "@/app/components/LaunchShareKit";
 import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, OAUTH_SUBMISSION_TARGET_KEY, oauthReturnDestination } from "@/lib/browserOAuth";
-import { EMPTY_SERVICE_DETAILS, getSubmissionPlan, launchOrderDashboardPath, SUBMISSION_PAGE_DRAFT_KEY, type SubmissionPlanId, type SubmissionServiceDetails } from "@/lib/submissionPlans";
+import { getSubmissionPlan, type SubmissionPlanId } from "@/lib/submissionPlans";
 import ServiceFields from "@/app/submit/ServiceFields";
 import { useSubmissionAccess } from "@/app/components/SubmissionAccess";
-
-function firstOpenBracketMatch(bracket: Bracket): Match | null {
-  const round = bracket.status === "active"
-    ? getActiveRound(bracket)
-    : getInitialRoundNumber(getBracketSize(bracket));
-  const matches = getRoundMatches(bracket, round);
-  return matches.find((match) => !match.winnerId) || matches[0] || null;
-}
 
 // --- GLOBAL AUDIO UTILITY FOR GEEK HAPTIC SOUNDS ---
 let audioCtx: AudioContext | null = null;
@@ -138,26 +118,12 @@ const GitCommitIcon = ({ className = "w-3.5 h-3.5" }: { className?: string }) =>
   </svg>
 );
 
-// Memory cache for client-side Stale-While-Revalidate (SWR) performance
-let memoryCache: {
-  products: Product[] | null;
-  bracket: Bracket | null;
-  champs: Product[] | null;
-  lastFetchTime: number;
-} = {
-  products: null,
-  bracket: null,
-  champs: null,
-  lastFetchTime: 0
-};
-
-const OAUTH_SUBMIT_DRAFT_KEY = "indieclash_oauth_submit_draft_v1";
-
 interface ArenaClientProps {
-  page?: MainPage;
+  page?: Exclude<MainPage, "resources">;
   submissionPlan?: SubmissionPlanId;
   paidOrderId?: string;
   initialSubmissionDraft?: Record<string, unknown> | null;
+  initialPages?: CataloguePage[];
   initialProducts: Product[];
   initialPastChampions: Product[];
   initialBracket: Bracket | null;
@@ -187,6 +153,7 @@ export default function ArenaClient({
   submissionPlan,
   paidOrderId,
   initialSubmissionDraft,
+  initialPages,
   initialProducts,
   initialPastChampions,
   initialBracket
@@ -196,18 +163,18 @@ export default function ArenaClient({
   const selectedSubmissionPlan = getSubmissionPlan(submissionPlan);
   const isSubmissionPage = Boolean(selectedSubmissionPlan);
   const isPaidSubmission = Boolean(selectedSubmissionPlan?.price);
-  const submissionDraftKey = paidOrderId ? `${SUBMISSION_PAGE_DRAFT_KEY}:${paidOrderId}` : SUBMISSION_PAGE_DRAFT_KEY;
   const SubmissionContainer = isSubmissionPage ? "main" : "div";
   const arenaRootRef = useRef<HTMLDivElement | null>(null);
-  const submitDialogRef = useRef<HTMLDivElement | null>(null);
   const authDialogRef = useRef<HTMLDivElement | null>(null);
   const voteDialogRef = useRef<HTMLDivElement | null>(null);
   const successDialogRef = useRef<HTMLDivElement | null>(null);
   const authStartingRef = useRef(false);
   const [signingInProvider, setSigningInProvider] = useState<string | null>(null);
-  const [products, setProducts] = useState<Product[]>(initialProducts);
-  const [pastChampions, setPastChampions] = useState<Product[]>(initialPastChampions);
   const { currentView, focusedOrderId, setCurrentView, showHomeSection } = useArenaNavigation();
+  const scope = isPaidSubmission ? "paid" : isSubmissionPage ? "free" : currentView === "console" ? "console" : page;
+  const { products, setProducts, bracket, setBracket, activeMatch, setActiveMatch, pastChampions, setPastChampions,
+    publicSyncError, isPublicSyncPending, syncCloudData, isResettingRef, isSyncLockedRef, votePendingRef,
+    publicRevisionRef } = usePublicArenaData(scope, initialPages, initialProducts, initialPastChampions, initialBracket);
   const isMuted = false;
   const synthClick = (freq = 300, type: OscillatorType = "sine", duration = 0.06, vol = 0.02) => {
     if (!isMuted) {
@@ -230,268 +197,19 @@ export default function ArenaClient({
     text: string;
     date: string;
   }>>([]);
-  const [bracket, setBracket] = useState<Bracket | null>(initialBracket);
-  const [activeMatch, setActiveMatch] = useState<Match | null>(() => {
-    if (!initialBracket) return null;
-    return firstOpenBracketMatch(initialBracket);
-  });
-  const isInitialSyncDone = useRef(false);
-
-
-
   // Screen shake animation state
   const [isShaking, setIsShaking] = useState(false);
 
   // Visual dynamic clashing swords animation key state
   const [isSwordsClashing, setIsSwordsClashing] = useState(false);
 
-  // Submit Drawer State
-  const [isSubmitOpen, setIsSubmitOpen] = useState(isSubmissionPage);
-  const [serviceDetails, setServiceDetails] = useState<SubmissionServiceDetails>({ ...EMPTY_SERVICE_DETAILS });
-  const [submitSource, setSubmitSource] = useState<'home' | 'console'>('home');
-  const [isSubmittingProduct, setIsSubmittingProduct] = useState(false);
-  const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
-  const submitPendingRef = useRef(false);
-  const publicRevisionRef = useRef(0);
-  const publicSyncPendingRef = useRef(false);
-  const [publicSyncError, setPublicSyncError] = useState<string | null>(null);
-  const [isPublicSyncPending, setIsPublicSyncPending] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [publishedProduct, setPublishedProduct] = useState<Product | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState(false);
   const [isTermsOpen, setIsTermsOpen] = useState(false);
-  const [newTitle, setNewTitle] = useState("");
-  const [newTagline, setNewTagline] = useState("");
-  const [newUrl, setNewUrl] = useState("");
-  const [newDescription, setNewDescription] = useState("");
-  const [newCategory, setNewCategory] = useState<ProductCategory | "">("");
-  const [newPricingModel, setNewPricingModel] = useState<PricingModel>("unspecified");
-  const [newPricingDetails, setNewPricingDetails] = useState<PricingDraft>({ ...EMPTY_PRICING_DRAFT });
-  const [newPlatforms, setNewPlatforms] = useState("");
-  const [newTargetAudience, setNewTargetAudience] = useState("");
-  const [newMakerStory, setNewMakerStory] = useState("");
-  const [newFeedbackRequest, setNewFeedbackRequest] = useState("");
-  const [newMaker, setNewMaker] = useState("");
-  const [newTwitter, setNewTwitter] = useState("");
-  const [newLogo, setNewLogo] = useState("🚀");
-  const [newScreenshot, setNewScreenshot] = useState<string[]>([]);
-  const [preparingScreenshot, setPreparingScreenshot] = useState(false);
-  const normalizedProductUrl = normalizeProductWebsite(newUrl);
-  const duplicateProduct = useMemo(
-    () => normalizedProductUrl ? findProductWithSameDomain(products, normalizedProductUrl, editingProduct) : undefined,
-    [products, normalizedProductUrl, editingProduct],
-  );
   const [activeCardProduct, setActiveCardProduct] = useState<Product | null>(null);
-
-  const productFormDraft = () => ({
-    title: newTitle, tagline: newTagline, url: newUrl, description: newDescription,
-    category: newCategory, pricingModel: newPricingModel, pricingDetails: newPricingDetails,
-    editingProductId: editingProduct?.id, platforms: newPlatforms,
-    targetAudience: newTargetAudience, makerStory: newMakerStory, feedbackRequest: newFeedbackRequest,
-    maker: newMaker, twitter: newTwitter, logo: newLogo, screenshot: newScreenshot,
-    source: submitSource, serviceDetails, plan: submissionPlan,
-  });
-
-  const saveSubmissionDraft = () => {
-    try {
-      sessionStorage.setItem(submissionDraftKey, JSON.stringify(productFormDraft()));
-      return true;
-    } catch {
-      setSubmitError("This browser could not save your draft. Keep this page open, or remove large images and try again.");
-      return false;
-    }
-  };
-
-  const uploadSubmissionImages = async (draft: { logo: string; screenshot: string[] }) => {
-    const results = await Promise.allSettled([draft.logo, ...draft.screenshot].map(uploadArenaLogo));
-    // Preserve successful uploads even if another image failed, so retrying
-    // does not upload the same files again or overwrite edits made meanwhile.
-    const logoResult = results[0];
-    if (logoResult.status === "fulfilled") setNewLogo(current => current === draft.logo ? logoResult.value : current);
-    setNewScreenshot(current => current.map((image, index) => {
-      const result = results[index + 1];
-      return image === draft.screenshot[index] && result?.status === "fulfilled" ? result.value : image;
-    }));
-    const urls = results.map(result => {
-      if (result.status === "rejected") throw result.reason;
-      return result.value;
-    });
-    return { logo: urls[0], screenshot: urls.slice(1) };
-  };
-
-  const savePaidDraft = async () => {
-    if (!paidOrderId || submitPendingRef.current || preparingScreenshot) return false;
-    submitPendingRef.current = true;
-    setIsSavingDraft(true);
-    setSubmitError(null);
-    try {
-      const draft = productFormDraft();
-      const { logo, screenshot } = await uploadSubmissionImages(draft);
-      await authenticatedJson(`/api/payments/orders/${paidOrderId}/draft`, { ...draft, logo, screenshot }, "PUT");
-      pushToast("Saved. You can continue in Dashboard.");
-      return true;
-    } catch (failure) {
-      const message = failure instanceof Error ? failure.message : "Your draft could not be saved. Please retry.";
-      setSubmitError(message);
-      pushToast(message, "info");
-      return false;
-    } finally {
-      submitPendingRef.current = false;
-      setIsSavingDraft(false);
-    }
-  };
-
-  const returnToDashboard = async () => {
-    if (paidOrderId ? await savePaidDraft() : saveSubmissionDraft()) {
-      router.push(paidOrderId ? launchOrderDashboardPath(paidOrderId) : "/?view=console");
-    }
-  };
-
-  const changeSubmissionPlan = () => {
-    if (paidOrderId) void returnToDashboard();
-    else if (saveSubmissionDraft()) router.push("/submit");
-  };
-
-  useEffect(() => {
-    let restoreTimer: number | undefined;
-    const restoreUi = () => {
-    const params = new URLSearchParams(window.location.search);
-    const fragment = new URLSearchParams(window.location.hash.slice(1));
-    const isOAuthCallback = params.has("code") || params.has("error") || params.has("error_description") || fragment.has("error");
-    // Wait for the code exchange before consuming the draft/return context.
-    if (isOAuthCallback) return;
-    const shouldOpenFromQuery = params.get("submit") === "1";
-    const shouldSignIn = params.get("signin") === "1";
-    const shouldRestoreConsole = params.get("view") === "console";
-    let savedDraft: string | null = null;
-    try { savedDraft = sessionStorage.getItem(isSubmissionPage ? submissionDraftKey : OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Storage may be restricted. */ }
-    let restoredDraft: Record<string, unknown> | null = initialSubmissionDraft ?? null;
-
-    if (!restoredDraft && savedDraft) {
-      try {
-        restoredDraft = JSON.parse(savedDraft) as Record<string, unknown>;
-      } catch {
-        // A malformed browser draft should never prevent the page from loading.
-      }
-    }
-
-    if (!shouldOpenFromQuery && !restoredDraft && !shouldRestoreConsole && !shouldSignIn) return;
-
-    if (!isSubmissionPage && shouldOpenFromQuery && !restoredDraft?.editingProductId) {
-      if (restoredDraft) {
-        try { sessionStorage.setItem(SUBMISSION_PAGE_DRAFT_KEY, JSON.stringify(restoredDraft)); sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Leave the original draft available. */ }
-      }
-      router.replace(restoredDraft ? "/submit/details?plan=free" : "/submit");
-      return;
-    }
-
-    restoreTimer = window.setTimeout(() => {
-      if (shouldSignIn) { setIsAuthOpen(true); params.delete("signin"); }
-      if (restoredDraft) {
-        const draft = restoredDraft;
-        setNewTitle(typeof draft.title === "string" ? draft.title : "");
-        setNewTagline(typeof draft.tagline === "string" ? draft.tagline : "");
-        setNewUrl(typeof draft.url === "string" ? draft.url : "");
-        setNewDescription(typeof draft.description === "string" ? draft.description : "");
-        setNewCategory(PRODUCT_CATEGORIES.some((item) => item.value === draft.category) ? draft.category as ProductCategory : "");
-        setNewPricingModel(PRICING_MODELS.some((item) => item.value === draft.pricingModel) ? draft.pricingModel as PricingModel : "unspecified");
-        if (draft.pricingDetails && typeof draft.pricingDetails === "object") {
-          const savedPricing = draft.pricingDetails as Record<string, unknown>;
-          setNewPricingDetails(Object.fromEntries(Object.keys(EMPTY_PRICING_DRAFT).map(key => [key, typeof savedPricing[key] === "string" ? savedPricing[key] : ""])) as unknown as PricingDraft);
-        }
-        if (!paidOrderId && typeof draft.editingProductId === "string") setEditingProduct({ id: draft.editingProductId } as Product);
-        setNewPlatforms(typeof draft.platforms === "string" ? draft.platforms : "");
-        setNewTargetAudience(typeof draft.targetAudience === "string" ? draft.targetAudience : "");
-        setNewMakerStory(typeof draft.makerStory === "string" ? draft.makerStory : "");
-        setNewFeedbackRequest(typeof draft.feedbackRequest === "string" ? draft.feedbackRequest : "");
-        setNewMaker(typeof draft.maker === "string" ? draft.maker : "");
-        setNewTwitter(typeof draft.twitter === "string" ? draft.twitter : "");
-        setNewLogo(typeof draft.logo === "string" ? draft.logo : "🚀");
-        setNewScreenshot(Array.isArray(draft.screenshot) ? draft.screenshot.filter((item): item is string => typeof item === "string").slice(0, 5) : typeof draft.screenshot === "string" && draft.screenshot ? [draft.screenshot] : []);
-        setSubmitSource(draft.source === "console" ? "console" : "home");
-        if (isSubmissionPage && draft.serviceDetails && typeof draft.serviceDetails === "object") {
-          const details = draft.serviceDetails as Record<string, unknown>;
-          setServiceDetails({
-            email: typeof details.email === "string" ? details.email : "",
-            history: details.history === "none" || details.history === "provided" || details.history === "unsure" ? details.history : "",
-            directories: typeof details.directories === "string" ? details.directories : "",
-            consent: details.consent === true,
-          });
-        }
-      }
-      if (shouldOpenFromQuery || savedDraft) setIsSubmitOpen(true);
-      if (!isSubmissionPage) {
-        try { sessionStorage.removeItem(OAUTH_SUBMIT_DRAFT_KEY); } catch { /* Optional draft storage. */ }
-      }
-    if (shouldOpenFromQuery) params.delete("submit");
-
-    const remainingQuery = params.toString();
-    const cleanUrl = `${window.location.pathname}${remainingQuery ? `?${remainingQuery}` : ""}${window.location.hash}`;
-    window.history.replaceState(window.history.state, "", cleanUrl);
-    }, 0);
-    };
-    restoreUi();
-    window.addEventListener(OAUTH_RESTORE_EVENT, restoreUi);
-    return () => {
-      if (restoreTimer !== undefined) window.clearTimeout(restoreTimer);
-      window.removeEventListener(OAUTH_RESTORE_EVENT, restoreUi);
-    };
-  }, [initialSubmissionDraft, isSubmissionPage, paidOrderId, router, submissionDraftKey]);
-
-  const resetProductForm = () => {
-    setNewTitle("");
-    setNewTagline("");
-    setNewUrl("");
-    setNewDescription("");
-    setNewCategory("");
-    setNewPricingModel("unspecified");
-    setNewPricingDetails({ ...EMPTY_PRICING_DRAFT });
-    setNewPlatforms("");
-    setNewTargetAudience("");
-    setNewMakerStory("");
-    setNewFeedbackRequest("");
-    setNewMaker("");
-    setNewTwitter("");
-    setNewLogo("🚀");
-    setNewScreenshot([]);
-  };
-
   const openSubmissionPage = () => {
     void requestSubmission();
-  };
-
-  const closeSubmitModal = () => {
-    if (isSubmittingProduct) return;
-    if (isSubmissionPage) { changeSubmissionPlan(); return; }
-    setSubmitError(null);
-    setIsSubmitOpen(false);
-    setEditingProduct(null);
-  };
-
-  useModalAccessibility(isSubmitOpen && !isSubmissionPage, submitDialogRef, closeSubmitModal);
-
-  const openEditProduct = (product: Product) => {
-    setEditingProduct(product);
-    setSubmitSource("console");
-    setSubmitError(null);
-    setNewTitle(product.title);
-    setNewTagline(product.tagline);
-    setNewUrl(product.url);
-    setNewDescription(product.description || "");
-    setNewCategory(product.category || "");
-    setNewPricingModel(product.pricingModel || "unspecified");
-    setNewPricingDetails(product.pricingDetails ? { ...product.pricingDetails } : { ...EMPTY_PRICING_DRAFT });
-    setNewPlatforms(product.platforms?.join(", ") || "");
-    setNewTargetAudience(product.targetAudience || "");
-    setNewMakerStory(product.makerStory || "");
-    setNewFeedbackRequest(product.feedbackRequest || "");
-    setNewMaker(product.makerName);
-    setNewTwitter(product.makerTwitter);
-    setNewLogo(product.logo || "🚀");
-    setNewScreenshot(product.screenshots ?? (product.screenshot ? [product.screenshot] : []));
-    setIsSubmitOpen(true);
   };
 
   // Vote Modal State with Dual-Input Feedback Loop
@@ -501,7 +219,6 @@ export default function ArenaClient({
   const [voteLoserFeedback, setVoteLoserFeedback] = useState("");
   const [voteError, setVoteError] = useState("");
   const [isVoting, setIsVoting] = useState(false);
-  const votePendingRef = useRef(false);
   
   // User simulated login
   const [userLoggedIn, setUserLoggedIn] = useState(false);
@@ -553,7 +270,11 @@ export default function ArenaClient({
     const privateRows = new Map(ownership.products.map((product) => [product.id, product]));
     return ownership.ids.flatMap((id) => {
       const product = privateRows.get(id) || catalog.get(id);
-      return product ? [{ ...product, ...catalog.get(id), creator_uid: userSupabaseId }] : [];
+      const card = catalog.get(id);
+      if (card?.moderationStatus === "restricted") return [{ ...card, creator_uid: userSupabaseId }];
+      return product ? [{ ...product, ...(card && { votesCount: card.votesCount, queueStatus: card.queueStatus,
+        arenaEnqueued: card.arenaEnqueued, arenaEnqueuedAt: card.arenaEnqueuedAt, qualifiedImpressions: card.qualifiedImpressions,
+        discoveryBoostUntil: card.discoveryBoostUntil }), creator_uid: userSupabaseId }] : [];
     });
   }, [ownership, products, userSupabaseId, userLoggedIn]);
 
@@ -755,34 +476,7 @@ export default function ArenaClient({
       return;
     }
 
-    if (isSubmitOpen) {
-      try {
-        sessionStorage.setItem(isSubmissionPage ? submissionDraftKey : OAUTH_SUBMIT_DRAFT_KEY, JSON.stringify({
-          title: newTitle,
-          tagline: newTagline,
-          url: newUrl,
-          description: newDescription,
-          category: newCategory,
-          pricingModel: newPricingModel,
-          pricingDetails: newPricingDetails,
-          editingProductId: editingProduct?.id,
-          platforms: newPlatforms,
-          targetAudience: newTargetAudience,
-          makerStory: newMakerStory,
-          feedbackRequest: newFeedbackRequest,
-          maker: newMaker,
-          twitter: newTwitter,
-          logo: newLogo,
-          screenshot: newScreenshot,
-          source: submitSource,
-          serviceDetails,
-          plan: submissionPlan,
-        }));
-      } catch {
-        setSubmitError("Your draft is too large for this browser to preserve during sign-in. Remove the images, sign in, then add them again. Your current form has not been cleared.");
-        return;
-      }
-    }
+    if (isSubmitOpen && !preserveOAuthDraft()) return;
 
     const returnUrl = new URL(window.location.href);
     returnUrl.searchParams.delete("code");
@@ -861,6 +555,20 @@ export default function ArenaClient({
   const [successModalTitle, setSuccessModalTitle] = useState("");
   const [successModalText, setSuccessModalText] = useState("");
   
+  const { fields, isSubmitOpen, setIsSubmitOpen, submitSource, submitPendingRef, isSubmittingProduct, isSavingDraft,
+    returnToDashboard, changeSubmissionPlan, openEditProduct, closeSubmitModal, submitDialogRef, editingProduct,
+    submitError, setSubmitError, serviceDetails, setServiceDetails, normalizedProductUrl, duplicateProduct,
+    preparingScreenshot, savePaidDraft, saveSubmissionDraft, preserveOAuthDraft, handleSubmitProduct } = useProductSubmission({
+    submissionPlan, paidOrderId, initialSubmissionDraft, userLoggedIn, mockUserTwitter, userSupabaseId,
+    products, setProducts, retryOwnership, syncCloudData, isSyncLockedRef, publicRevisionRef, setIsAuthOpen,
+    synthClick, pushToast, onPublished(newProd) {
+        setPublishedProduct(newProd);
+        setSuccessModalTitle("Your product is live");
+        setSuccessModalText("Share your profile with people who could use it. You can join the Arena from Dashboard.");
+        setIsSuccessOpen(true);
+    },
+  });
+
   // New York countdown & 3-2-1-1 active timer states
   const [countdownToMidnightMs, setCountdownToMidnightMs] = useState<number>(0);
   const [activeRoundRemainingMs, setActiveRoundRemainingMs] = useState<number>(0);
@@ -868,205 +576,15 @@ export default function ArenaClient({
 
   // Keep latestBracketRef synchronized with bracket state to avoid closure staleness
   const latestBracketRef = useRef<Bracket | null>(null);
-  const isResettingRef = useRef(false);
-  const isSyncLockedRef = useRef(false);
   const isRolloverPendingRef = useRef(false);
   const isSettleRequestedRef = useRef(false);
   useEffect(() => {
     latestBracketRef.current = bracket;
   }, [bracket]);
 
-  // Synchronize state changes to memoryCache and localStorage cache (SWR Sync)
-  useEffect(() => {
-    if (!isInitialSyncDone.current) return;
-    if (products) {
-      memoryCache.products = products;
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-        } catch {}
-      }
-    }
-  }, [products]);
-
-  useEffect(() => {
-    if (!isInitialSyncDone.current) return;
-    memoryCache.bracket = bracket;
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-      } catch {}
-    }
-  }, [bracket]);
-
-  useEffect(() => {
-    if (!isInitialSyncDone.current) return;
-    if (pastChampions) {
-      memoryCache.champs = pastChampions;
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-        } catch {}
-      }
-    }
-  }, [pastChampions]);
-
-  // Sync products and bracket from cloud or local storage with Stale-While-Revalidate
-  const syncCloudData = useCallback(async () => {
-    if (isPaidSubmission) return;
-    if (isResettingRef.current || isSyncLockedRef.current || votePendingRef.current || publicSyncPendingRef.current) {
-      console.log("ℹ️ [INDIE CLASH] syncCloudData bypassed because operation lock is active.");
-      return;
-    }
-    // 1. Load cache from localStorage if memory is empty
-    if (!memoryCache.products && typeof window !== "undefined") {
-      try {
-        const raw = localStorage.getItem("indieclash_client_cache");
-        if (raw) {
-          const parsed = JSON.parse(raw) as Partial<typeof memoryCache>;
-          if (parsed && Array.isArray(parsed.products)) {
-            // Filter out any mock SEED_PRODUCTS from previous offline cache
-            const cachedProducts = parsed.products.filter((product): product is Product => (
-              Boolean(product?.id)
-              && !/^p[1-9]/.test(product.id)
-              && product.makerName !== "Lucas Kent"
-            ));
-            memoryCache = {
-              products: cachedProducts,
-              bracket: parsed.bracket ?? null,
-              champs: Array.isArray(parsed.champs) ? parsed.champs : null,
-              lastFetchTime: typeof parsed.lastFetchTime === "number" ? parsed.lastFetchTime : 0,
-            };
-          }
-        }
-      } catch {}
-    }
-
-    // 2. Render cached data instantly in 0ms if it exists, ONLY if current state is empty
-    if (memoryCache.products && memoryCache.products.length > 0) {
-      setProducts((current) => current.length > 0 ? current : memoryCache.products!);
-    }
-    if (memoryCache.champs && memoryCache.champs.length > 0) {
-      setPastChampions((current) => current.length > 0 ? current : memoryCache.champs!);
-    }
-    if (memoryCache.bracket) {
-      setBracket((current) => current ?? memoryCache.bracket);
-      const b = memoryCache.bracket;
-      setActiveMatch(current => current ?? firstOpenBracketMatch(b));
-    }
-
-    // 3. Skip background fetch if we did one in the last 1 second (reduced from 3s to prevent stale data)
-    const now = Date.now();
-    if (memoryCache.products && (now - memoryCache.lastFetchTime < 1000)) {
-      isInitialSyncDone.current = true;
-      return;
-    }
-
-    // 4. Background revalidation: fetch fresh database records in parallel
-    publicSyncPendingRef.current = true;
-    setIsPublicSyncPending(true);
-    const revision = publicRevisionRef.current;
-    try {
-      const prods = await fetchCloudProducts();
-      const [champs, b] = await Promise.all([
-        fetchCloudPastChampions(prods), fetchCloudBracket(prods),
-      ]);
-      if (isSyncLockedRef.current || votePendingRef.current || revision !== publicRevisionRef.current) return;
-
-      memoryCache.lastFetchTime = Date.now();
-      setPublicSyncError(null);
-
-      if (prods) {
-        setProducts(prods);
-        memoryCache.products = prods;
-      }
-      
-      if (champs) {
-        setPastChampions(champs);
-        memoryCache.champs = champs;
-      }
-      
-      if (b) {
-        setBracket(b);
-        memoryCache.bracket = b;
-        // A background refresh updates scores, not the user's selected duel.
-        setActiveMatch(current => getRoundMatches(b, getActiveRound(b)).find(match => match.id === current?.id) ?? firstOpenBracketMatch(b));
-      } else {
-        setBracket(null);
-        memoryCache.bracket = null;
-        setActiveMatch(null);
-      }
-
-      if (typeof window !== "undefined") {
-        try {
-          localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-        } catch {}
-      }
-    } catch (e) {
-      if (e instanceof PublicRefreshError) {
-        setPublicSyncError(e.message);
-        console.warn("[INDIE CLASH] Public refresh failed:", e.message, e.cause);
-      } else {
-        console.error("Error syncing data:", e);
-      }
-    } finally {
-      publicSyncPendingRef.current = false;
-      setIsPublicSyncPending(false);
-      isInitialSyncDone.current = true;
-    }
-  }, [isPaidSubmission, setPastChampions]);
-
-  // Initial Load
-  useEffect(() => {
-    if (isPaidSubmission) return;
-    // Populate memory cache with fresh server initial props immediately on mount to prevent cache downgrade & redundant DB queries
-    memoryCache.products = initialProducts;
-    memoryCache.champs = initialPastChampions;
-    memoryCache.bracket = initialBracket;
-    // An empty server payload can be a transient database/cache fallback. Do
-    // not treat it as a successful fresh fetch or the client will suppress the
-    // immediate Supabase revalidation and incorrectly render zero products.
-    // Always perform one anonymous client revalidation. Public product logos
-    // must not depend on a later authentication event to replace stale SSR or
-    // browser-cached product data.
-    memoryCache.lastFetchTime = 0;
-    isInitialSyncDone.current = true;
-
-    const animationFrame = window.requestAnimationFrame(() => {
-      if (supabase) {
-        void syncCloudData();
-      } else {
-        setProducts(loadProducts());
-        const saved = loadBracket();
-        setBracket(saved);
-        if (saved) {
-          setActiveMatch(firstOpenBracketMatch(saved));
-        }
-      }
-
-    });
-    return () => window.cancelAnimationFrame(animationFrame);
-  }, [isPaidSubmission, initialBracket, initialPastChampions, initialProducts, syncCloudData]);
-
-  // Poll safe public views instead of subscribing to private base-table WAL rows.
-  useEffect(() => {
-    if (isPaidSubmission || !supabase) return;
-    const refresh = () => {
-      if (document.visibilityState === "visible") void syncCloudData();
-    };
-    const interval = window.setInterval(refresh, 60_000);
-    window.addEventListener("focus", refresh);
-    document.addEventListener("visibilitychange", refresh);
-    return () => {
-      window.clearInterval(interval);
-      window.removeEventListener("focus", refresh);
-      document.removeEventListener("visibilitychange", refresh);
-    };
-  }, [isPaidSubmission, syncCloudData]);
-
   // Load critiques for the active match dynamically from Supabase or localStorage
   useEffect(() => {
-    if (!activeMatch) {
+    if (!activeMatch || page !== "arena" || currentView !== "home" || isSubmissionPage) {
       const clearTimer = window.setTimeout(() => setActiveMatchCritiques([]), 0);
       return () => window.clearTimeout(clearTimer);
     }
@@ -1120,7 +638,7 @@ export default function ArenaClient({
     return () => {
       cancelled = true;
     };
-  }, [activeMatch]);
+  }, [activeMatch, page, currentView, isSubmissionPage]);
 
   // Local sandbox rollover. Cloud rollover is serialized by the settlement API.
   const tryAutoRollover = useCallback((currentProducts: Product[]) => {
@@ -1290,21 +808,6 @@ export default function ArenaClient({
     isResettingRef.current = true;
     localStorage.clear();
     const mockShowcase = generateMockShowcaseProducts(20);
-    memoryCache = {
-      products: mockShowcase,
-      bracket: null,
-      champs: [],
-      lastFetchTime: Date.now()
-    };
-    
-    // Synchronously write cache defaults back to localStorage immediately
-    if (typeof window !== "undefined") {
-      try {
-        localStorage.setItem("indieclash_client_cache", JSON.stringify(memoryCache));
-        localStorage.setItem("arena_products_v1", JSON.stringify(mockShowcase));
-      } catch {}
-    }
-
     setProducts(mockShowcase);
     saveProducts(mockShowcase);
     setPastChampions([]);
@@ -1418,213 +921,6 @@ export default function ArenaClient({
     } else {
       isSyncLockedRef.current = false;
       pushToast("20 Mock Competitors successfully injected (Local)!");
-    }
-  };
-
-  // Onboard Submission
-  const handleSubmitProduct = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (submitPendingRef.current || preparingScreenshot) return;
-    setSubmitError(null);
-    if (!newCategory) { setSubmitError("Please choose a primary category."); return; }
-    if (newPricingModel === "unspecified") { setSubmitError("Please choose a pricing model."); return; }
-    if (!newMaker.trim()) { setSubmitError("Please enter the maker name."); return; }
-
-    if (isPaidSubmission) {
-      if (!(e.currentTarget as HTMLFormElement).reportValidity()) return;
-      if (!normalizedProductUrl) { setSubmitError("Please enter a valid public website URL."); return; }
-      if (newDescription.trim().length < 80) { setSubmitError("Please describe the product in at least 80 characters."); return; }
-      if (serviceDetails.history === "provided" && !serviceDetails.directories.trim()) { setSubmitError("Please include your previous directory submissions, or choose another answer."); return; }
-      const pricingError = productPricingError(pricingDraftValue(newPricingDetails), newPricingModel);
-      if (pricingError) { setSubmitError(pricingError); return; }
-      if (!paidOrderId) { setSubmitError("A confirmed paid order is required before adding product details."); return; }
-      submitPendingRef.current = true;
-      setIsSubmittingProduct(true);
-      try {
-        const { logo, screenshot: screenshots } = await uploadSubmissionImages({ logo: newLogo, screenshot: newScreenshot });
-        const input = {
-          title: newTitle, tagline: newTagline, url: normalizedProductUrl, description: newDescription,
-          makerName: newMaker.trim(), makerTwitter: newTwitter || "@anonymous",
-          logo, screenshots, category: newCategory || undefined, pricingModel: newPricingModel,
-          pricingDetails: pricingDraftValue(newPricingDetails) ? normalizeProductPricing(newPricingDetails) : null,
-          platforms: newPlatforms.split(",").map(item => item.trim()).filter(Boolean), targetAudience: newTargetAudience,
-          makerStory: newMakerStory, feedbackRequest: newFeedbackRequest,
-        };
-        await authenticatedJson(`/api/payments/orders/${paidOrderId}/details`, { product: input, serviceDetails }, "PUT");
-        try { sessionStorage.removeItem(submissionDraftKey); } catch { /* Optional browser draft. */ }
-        router.replace(launchOrderDashboardPath(paidOrderId));
-      } catch (failure) {
-        if (failure instanceof ApiRequestError && failure.code === "details_already_received") {
-          try { sessionStorage.removeItem(submissionDraftKey); } catch { /* Optional browser draft. */ }
-          router.replace(launchOrderDashboardPath(paidOrderId));
-          return;
-        }
-        setSubmitError(failure instanceof Error ? failure.message : "Could not save your details. Your paid order remains available in Dashboard.");
-      } finally { submitPendingRef.current = false; setIsSubmittingProduct(false); }
-      return;
-    }
-
-    if (!userLoggedIn) {
-      const message = "Please link and verify your Google or GitHub identity before submitting.";
-      synthClick(150, "sawtooth", 0.12);
-      setSubmitError(message);
-      setIsAuthOpen(true);
-      return;
-    }
-    if (!newTitle || !newTagline || !newUrl || !newDescription) {
-      const message = "Please fill in the title, tagline, URL, and description.";
-      synthClick(150, "sawtooth", 0.12);
-      setSubmitError(message);
-      return;
-    }
-    if (!normalizedProductUrl) {
-      setSubmitError("Please enter a valid public website URL, such as https://example.com.");
-      return;
-    }
-    if (duplicateProduct) {
-      setSubmitError(DUPLICATE_PRODUCT_MESSAGE);
-      return;
-    }
-    if (newDescription.trim().length < 80) {
-      setSubmitError("Please describe the product in at least 80 characters so visitors can understand what makes it useful.");
-      return;
-    }
-
-    const pricingDraft = pricingDraftValue(newPricingDetails);
-    const pricingError = productPricingError(pricingDraft, newPricingModel);
-    if (pricingError) {
-      setSubmitError(pricingError);
-      return;
-    }
-    const pricingDetails = pricingDraft ? normalizeProductPricing(pricingDraft) : null;
-
-    const normalizedUrl = normalizedProductUrl;
-
-    isSyncLockedRef.current = true;
-    publicRevisionRef.current += 1;
-    submitPendingRef.current = true;
-    setIsSubmittingProduct(true);
-    try {
-      let newProd: Product;
-      const makerName = newMaker.trim();
-      const makerTwitter = newTwitter ? (newTwitter.startsWith("@") ? newTwitter : `@${newTwitter}`) : "@anonymous";
-      const makerAvatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop&crop=faces";
-
-      if (supabase) {
-        const uploadedLogo = await uploadArenaLogo(newLogo);
-        setNewLogo(uploadedLogo);
-        const uploadedScreenshot = [...newScreenshot];
-        for (let i = 0; i < uploadedScreenshot.length; i++) {
-          uploadedScreenshot[i] = await uploadArenaLogo(uploadedScreenshot[i]);
-          setNewScreenshot([...uploadedScreenshot]);
-        }
-        const input = {
-          title: newTitle,
-          tagline: newTagline,
-          url: normalizedUrl,
-          makerName,
-          makerTwitter,
-          makerAvatar,
-          logo: uploadedLogo,
-          screenshot: uploadedScreenshot[0] || "",
-          screenshots: uploadedScreenshot,
-          description: newDescription,
-          category: newCategory || undefined,
-          pricingModel: newPricingModel,
-          ...(pricingDetails || editingProduct ? { pricingDetails } : {}),
-          platforms: newPlatforms.split(",").map((item) => item.trim()).filter(Boolean),
-          targetAudience: newTargetAudience,
-          makerStory: newMakerStory,
-          feedbackRequest: newFeedbackRequest,
-        };
-        newProd = editingProduct
-          ? await updateArenaProduct(editingProduct.id, input)
-          : await submitArenaProduct(input);
-      } else {
-        let parsedSlug = newTitle.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
-        try {
-          const host = new URL(normalizedUrl).hostname.toLowerCase().replace(/^www\./, "");
-          parsedSlug = host.split(".")[0].replace(/[^a-z0-9-]/g, "") || parsedSlug;
-        } catch {}
-        if (!parsedSlug) parsedSlug = `product-${Date.now()}`;
-        let uniqueSlug = parsedSlug;
-        while (products.some(p => p.id.toLowerCase() === uniqueSlug.toLowerCase())) {
-          uniqueSlug = `${parsedSlug}-${Math.random().toString(36).slice(2, 8)}`;
-        }
-        newProd = {
-          ...(editingProduct || {}),
-          id: editingProduct?.id || uniqueSlug,
-          title: newTitle,
-          tagline: newTagline,
-          url: normalizedUrl,
-          makerName,
-          makerTwitter,
-          makerAvatar: `${makerAvatar}#creator=${encodeURIComponent(mockUserTwitter)}&uid=${encodeURIComponent(userSupabaseId)}&pushed=false`,
-          logo: newLogo,
-          screenshot: newScreenshot[0],
-          screenshots: newScreenshot,
-          submittedAt: editingProduct?.submittedAt || new Date().toISOString(),
-          queueStatus: editingProduct?.queueStatus || "waiting",
-          votesCount: editingProduct?.votesCount || 0,
-          creatorUsername: mockUserTwitter,
-          creator_uid: userSupabaseId,
-          arenaEnqueued: editingProduct?.arenaEnqueued || false,
-          description: newDescription,
-          category: newCategory || undefined,
-          pricingModel: newPricingModel,
-          pricingDetails: pricingDetails || undefined,
-          platforms: newPlatforms.split(",").map((item) => item.trim().toLowerCase()).filter(Boolean),
-          targetAudience: newTargetAudience || undefined,
-          makerStory: newMakerStory || undefined,
-          feedbackRequest: newFeedbackRequest || undefined,
-          publishedAt: editingProduct?.publishedAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-          qualifiedImpressions: editingProduct?.qualifiedImpressions || 0,
-          exposureStatus: editingProduct?.exposureStatus || "new",
-        };
-      }
-
-      const updated = editingProduct
-        ? products.map((product) => product.id === editingProduct.id ? newProd : product)
-        : [...products, newProd];
-      synthClick(600, "sine", 0.15, 0.06);
-      setProducts(updated);
-      saveProducts(updated);
-      if (supabase) retryOwnership();
-
-      if (!supabase && typeof window !== "undefined") {
-        try {
-          const myIds = JSON.parse(localStorage.getItem("my_arena_products") || "[]");
-          if (!myIds.includes(newProd.id)) myIds.push(newProd.id);
-          localStorage.setItem("my_arena_products", JSON.stringify(myIds));
-        } catch {}
-      }
-
-      const wasEditing = Boolean(editingProduct);
-      resetProductForm();
-      setSubmitError(null);
-      setIsSubmitOpen(false);
-      setEditingProduct(null);
-      if (isSubmissionPage) {
-        try { sessionStorage.removeItem(SUBMISSION_PAGE_DRAFT_KEY); } catch { /* Optional browser draft. */ }
-        router.push(`/products/${encodeURIComponent(newProd.id)}`);
-      } else if (wasEditing) {
-        pushToast("Product profile updated!", "success");
-      } else {
-        setPublishedProduct(newProd);
-        setSuccessModalTitle("Your product is live");
-        setSuccessModalText("Share your profile with people who could use it. You can join the Arena from Dashboard.");
-        setIsSuccessOpen(true);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Unable to submit this product.";
-      setSubmitError(message);
-      pushToast(message, "info");
-    } finally {
-      submitPendingRef.current = false;
-      setIsSubmittingProduct(false);
-      isSyncLockedRef.current = false;
-      if (supabase) void syncCloudData();
     }
   };
 
@@ -1815,7 +1111,6 @@ export default function ArenaClient({
     else if (round === 4) nextBracket.round4 = updateVotes(nextBracket.round4);
 
     setBracket(nextBracket);
-    memoryCache.bracket = nextBracket;
     if (!supabase) saveBracket(nextBracket);
 
     let freshMatch = null;
@@ -1873,7 +1168,6 @@ export default function ArenaClient({
           ? { ...voted, discoveryBoostUntil }
           : voted;
       });
-      memoryCache.products = next;
       if (!supabase) saveProducts(next);
       return next;
     });
@@ -2237,12 +1531,7 @@ export default function ArenaClient({
     return queuedProducts.slice(0, rosterTarget);
   }, [bracket, queuedProducts, rosterTarget]);
   const visibleProducts = useMemo(() => products.filter(isVisibleProduct), [products]);
-  const showcaseProducts = useMemo(() => {
-    // Preserve the newest-first rolling feed while keeping it bounded to the
-    // latest 50 permanent product profiles.
-    const sorted = [...visibleProducts].sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-    return sorted.slice(0, 50);
-  }, [visibleProducts]);
+
   const currentSeasonNum = pastChampions.length + 1;
   const currentSeasonStr = String(currentSeasonNum).padStart(2, "0");
 
@@ -2497,850 +1786,48 @@ export default function ArenaClient({
 
 
 
-        {page === "discover" && <>
-        {/* LATEST RELEASES (Product Discovery Feed Style) */}
-        <section id="launches-section" className="pt-8 pb-12 md:pt-10 md:pb-16">
-          
-          <div data-home-reveal="launches-heading" className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="text-left space-y-1.5">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="exhibition-index" aria-hidden="true">01 /</span>
-                <h2 className="exhibition-section-title">Latest launches</h2>
-                <span className="px-2.5 py-0.5 text-xs font-mono font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full flex items-center gap-1.5 shrink-0" style={{ transform: "translateZ(0)" }}>
-                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                  Newest 50 · Rolling
-                </span>
-              </div>
-              <p className="text-sm text-zinc-500 pl-4">
-                Freshly launched by indie makers.
-              </p>
-            </div>
-            <div className="flex items-center sm:self-center pl-4 sm:pl-0">
-              <Link
-                href="/products"
-                className="inline-flex items-center gap-1 text-xs sm:text-sm font-medium text-zinc-600 hover:text-zinc-950 transition group"
-                onClick={() => synthClick(280, "sine", 0.05)}
-              >
-                Browse all products
-                <span className="transition-transform duration-150 group-hover:translate-x-0.5">→</span>
-              </Link>
-            </div>
-          </div>
-          {/* Motion stops on hover or keyboard focus without an extra control. */}
-          <div 
-            data-home-reveal="launches-feed"
-            tabIndex={0}
-            aria-label="Latest products. Focus to pause scrolling."
-            onPointerDown={(event) => event.currentTarget.focus({ preventScroll: true })}
-            className="release-feed border border-zinc-300/80 bg-white shadow-xs rounded-2xl overflow-hidden h-[460px] sm:h-[540px] relative"
-            style={{
-              maskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
-              WebkitMaskImage: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.02) 2%, black 15%, black 85%, rgba(0,0,0,0.02) 98%, transparent)',
-            }}
-          >
-            {showcaseProducts.length === 0 ? (
-              <div className="absolute inset-0 flex items-center justify-center text-zinc-400 font-mono text-xs">
-                [ No waitlist submissions enqueued in waiting room. ]
-              </div>
-            ) : (
-              <div 
-                className="flex flex-col marquee-vertical-container"
-                style={{
-                  animationName: 'marquee-vertical',
-                  animationDuration: `${Math.max(15, showcaseProducts.length * 2.2)}s`,
-                  animationTimingFunction: 'linear',
-                  animationIterationCount: 'infinite',
-                  willChange: 'transform'
-                }}
-              >
-                {/* Double the list to make seamless looping possible */}
-                {[...showcaseProducts, ...showcaseProducts].map((item, index) => {
-                  const website = publicHttpUrl(item.url);
-                  const isQueued = item.arenaEnqueued ?? (!item.makerAvatar || !item.makerAvatar.includes("pushed=false"));
-                  const makerHandle = item.makerTwitter ? (item.makerTwitter.startsWith("@") ? item.makerTwitter : `@${item.makerTwitter}`) : null;
-                  const categoryTag = feedCategoryLabel(item.category);
-                  return (
-                    <div 
-                      key={`${item.id}-dup-${index}`} 
-                      data-feed-duplicate={index >= showcaseProducts.length || undefined}
-                      aria-hidden={index >= showcaseProducts.length || undefined}
-                      inert={index >= showcaseProducts.length || undefined}
-                      className="group px-4 sm:px-6 py-4 flex items-center justify-between gap-4 hover:bg-zinc-50/80 transition-colors duration-150 border-b border-zinc-200/70 last:border-b-0 min-h-[76px] box-border"
-                    >
-                      {/* Left side: Squircle badge + text info */}
-                      <div className="flex items-center gap-4 min-w-0 flex-1">
-                        <Link 
-                          href={`/products/${encodeURIComponent(item.id)}`}
-                          className="shrink-0 transition-transform duration-150 group-hover:scale-[1.03]"
-                          onClick={() => synthClick(320, "sine", 0.04)}
-                        >
-                          {renderDiscoveryFeedBadge(item)}
-                        </Link>
-
-                        <div className="min-w-0 flex-1 text-left">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Link
-                              href={`/products/${encodeURIComponent(item.id)}`}
-                              className="font-bold text-zinc-950 text-sm sm:text-base hover:underline hover:text-orange-600 transition-colors cursor-pointer truncate max-w-[200px] sm:max-w-xs"
-                              onClick={() => synthClick(320, "sine", 0.04)}
-                            >
-                              {item.title}
-                            </Link>
-
-                            {makerHandle ? (
-                              <a 
-                                href={`https://x.com/${item.makerTwitter ? item.makerTwitter.replace(/^@/, "") : ""}`}
-                                target="_blank"
-                                rel="ugc noopener noreferrer"
-                                className="text-xs font-mono text-zinc-400 hover:text-zinc-700 hover:underline transition-colors shrink-0"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                {makerHandle}
-                              </a>
-                            ) : null}
-
-                            {isQueued ? (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium tracking-wide uppercase bg-violet-50 text-violet-700 border border-violet-200/70 shrink-0">
-                                queued
-                              </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium tracking-wide uppercase bg-zinc-100 text-zinc-600 border border-zinc-200/70 shrink-0">
-                                showcase
-                              </span>
-                            )}
-                          </div>
-
-                          <p className="text-xs sm:text-sm text-zinc-500 truncate mt-1 max-w-xl">
-                            {item.tagline}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Right side: Category pill + Circular action button */}
-                      <div className="shrink-0 flex items-center gap-3">
-                        {categoryTag ? <span className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-mono font-medium uppercase tracking-wider text-zinc-600 bg-zinc-100/90 border border-zinc-200/70">
-                          {categoryTag}
-                        </span> : null}
-
-                        {website ? (
-                          <a
-                            href={website}
-                            target="_blank"
-                            rel={productLinkRel(item)}
-                            className="w-9 h-9 rounded-full border border-zinc-200/80 bg-white hover:bg-zinc-100 hover:border-zinc-300 text-zinc-500 hover:text-zinc-900 shadow-2xs flex items-center justify-center transition-all duration-150 shrink-0"
-                            aria-label={`Visit ${item.title}`}
-                            title={`Visit ${item.title}`}
-                            onClick={() => synthClick(360, "sine", 0.04)}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M17 7H7M17 7V17" />
-                            </svg>
-                          </a>
-                        ) : (
-                          <Link
-                            href={`/products/${encodeURIComponent(item.id)}`}
-                            className="w-9 h-9 rounded-full border border-zinc-200/80 bg-white hover:bg-zinc-100 hover:border-zinc-300 text-zinc-500 hover:text-zinc-900 shadow-2xs flex items-center justify-center transition-all duration-150 shrink-0"
-                            aria-label={`View ${item.title}`}
-                            title={`View ${item.title}`}
-                            onClick={() => synthClick(360, "sine", 0.04)}
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 17L17 7M17 7H7M17 7V17" />
-                            </svg>
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </section>
-
-        <FairDiscoverySection
-          products={visibleProducts}
+        {page === "discover" && <DiscoverFeed
+          visibleProducts={visibleProducts}
+          bracket={bracket}
+          activeMatch={activeMatch}
           renderLogo={renderLogo}
-          onAdvance={handleDiscoveryAdvance}
-        />
+          renderDiscoveryFeedBadge={renderDiscoveryFeedBadge}
+          synthClick={synthClick}
+          handleDiscoveryAdvance={handleDiscoveryAdvance}
+        />}
 
-        <section id="arena-preview" aria-labelledby="arena-preview-title" className="border-t border-zinc-200/80 py-10 md:py-14">
-          <div data-home-reveal="arena-preview" className="exhibition-arena-preview glass-panel flex flex-col gap-6 border p-6 sm:p-8 md:flex-row md:items-center md:justify-between">
-            <div className="max-w-xl">
-              <p className="mb-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-violet-700">
-                <span className={`h-1.5 w-1.5 rounded-full ${bracket?.status === "active" ? "bg-emerald-500" : "bg-violet-600"}`} />
-                {bracket?.status === "active" ? "Live in the Arena" : "The Arena"}
-              </p>
-              <h2 id="arena-preview-title" className="text-xl font-semibold tracking-tight text-zinc-950 sm:text-2xl">
-                {bracket?.status === "active" && activeMatch?.productA && activeMatch?.productB
-                  ? `${activeMatch.productA.title} vs ${activeMatch.productB.title}`
-                  : "Two products. Honest feedback."}
-              </h2>
-              <p className="mt-2 text-sm leading-6 text-zinc-600">Meet the makers, compare their products, and help them improve.</p>
-            </div>
-            <Link href="/arena" prefetch className="inline-flex min-h-11 shrink-0 items-center justify-center gap-3 self-start rounded-lg border border-violet-200 bg-violet-50/80 px-5 text-sm font-semibold text-violet-700 shadow-2xs transition hover:border-violet-300 hover:bg-violet-100 md:self-center">
-              Explore the Arena <span aria-hidden="true">→</span>
-            </Link>
-          </div>
-        </section>
-        </>}
+        {page === "arena" && <ArenaBoard
+          bracket={bracket}
+          activeMatch={activeMatch}
+          currentRoundMatches={currentRoundMatches}
+          queuedProducts={queuedProducts}
+          lineupProducts={lineupProducts}
+          rosterTarget={rosterTarget}
+          fallbackBracketSize={fallbackBracketSize}
+          activeBracketSize={activeBracketSize}
+          activeRoundNum={activeRoundNum}
+          activeRoundRemainingMs={activeRoundRemainingMs}
+          countdownToMidnightMs={countdownToMidnightMs}
+          currentSeasonStr={currentSeasonStr}
+          activeMatchCritiques={activeMatchCritiques}
+          renderLogo={renderLogo}
+          synthClick={synthClick}
+          setActiveMatch={setActiveMatch}
+          setActiveCardProduct={setActiveCardProduct}
+          pushToast={pushToast}
+          onVote={(match, product) => {
+            setVotingMatch(match);
+            setVotingTarget(product);
+            setVoteWinnerFeedback("");
+            setVoteLoserFeedback("");
+            setVoteError("");
+          }}
+        />}
 
-        {page === "arena" && <section id="arena-section" className="scroll-mt-32 py-10 md:py-14 relative">
-          
-          <div data-home-reveal="arena-heading" data-route-enter="left" className="exhibition-route-heading exhibition-arena-heading mb-10 flex flex-col gap-5">
-            <div>
-              <p className="exhibition-kicker mb-5">The independent arena</p>
-              <h1 className="text-zinc-950">
-                ARENA · PRODUCT BATTLES
-              </h1>
-              <p className="text-sm text-zinc-600 mt-3">
-                Two products. Honest feedback. Your vote.
-              </p>
-              <Link href="/champions#how-it-works-section" className="mt-4 inline-flex min-h-8 items-center gap-2 text-xs font-medium text-violet-700 hover:text-violet-900">How it works <span aria-hidden="true">↗</span></Link>
-            </div>
-            {bracket && bracket.status === "active" && (
-              <div className="flex shrink-0">
-                <span className="bg-white border border-zinc-200/90 shadow-2xs px-3.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider text-zinc-600 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#ffbe18] animate-pulse inline-block" />
-                  Round Closes In: <span className="text-zinc-950 font-semibold">{formatToHMS(activeRoundRemainingMs)}</span>
-                </span>
-              </div>
-            )}
-            <ClashSculpture variant="arena" />
-          </div>
-
-          {/* Arena Queue Status Bar */}
-          <div data-home-reveal="arena-status" data-route-enter="up" style={{ "--route-delay": "70ms" } as React.CSSProperties} className="mb-8 bg-white border border-zinc-200/80 shadow-xs rounded-xl px-5 py-3 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-4">
-              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                {bracket && activeBracketSize < 16 ? "Adaptive Run" : <>Season <span className="text-zinc-950 font-bold">{currentSeasonStr}</span></>}
-              </span>
-              {bracket ? (
-                <>
-                  <span className="text-zinc-300">|</span>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-violet-700 font-semibold">{getArenaFormatName(activeBracketSize)}</span>
-                </>
-              ) : null}
-              <span className="text-zinc-300">|</span>
-              {bracket && (bracket.status === "active" || bracket.status === "preparing") ? (
-                <span className="text-[10px] font-mono text-amber-700 bg-amber-50 border border-amber-200/80 px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1.5 font-semibold">
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse inline-block" />
-                  LIVE
-                </span>
-              ) : (
-                <span className="text-[10px] font-mono text-zinc-600 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 inline-block" />
-                  Accepting entries
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
-                Queue: <span className="text-zinc-950 font-bold">{queuedProducts.length}</span>
-                {!bracket && queuedProducts.length >= 16 ? (
-                  <> <span className="text-zinc-300">|</span> <span className="font-bold text-emerald-700">Locking championship</span></>
-                ) : !bracket && fallbackBracketSize ? (
-                  <> <span className="text-zinc-300">|</span> Daily auto-run: <span className="font-bold text-violet-700">{fallbackBracketSize} players</span> <span className="font-bold text-zinc-700"><DailyArenaRunCountdown /></span></>
-                ) : !bracket ? (
-                  <> <span className="text-zinc-300">|</span> Daily minimum: <span className="font-bold text-zinc-700">2 players</span></>
-                ) : (
-                  <> <span className="text-zinc-300">|</span> Next full run starts at <span className="font-bold text-zinc-700">16</span></>
-                )}
-                {!bracket && queuedProducts.length > rosterTarget && (
-                  <>
-                    {" "}<span className="text-zinc-300">|</span>{" "}
-                    FIFO carryover: <span className="text-amber-700 font-bold">+{queuedProducts.length - rosterTarget}</span> first in the next run
-                  </>
-                )}
-              </span>
-              <div className="w-20 h-1.5 bg-zinc-100 border border-zinc-200/60 rounded-full overflow-hidden shrink-0">
-                <div 
-                  className="h-full rounded-full transition-all duration-500 ease-out"
-                  style={{ 
-                    width: `${Math.min((queuedProducts.length / (bracket ? 16 : rosterTarget)) * 100, 100)}%`,
-                    backgroundColor: queuedProducts.length >= (bracket ? 16 : rosterTarget) ? '#059669' : '#7c3aed'
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {bracket && bracket.status === "active" ? (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Left Column: Matchup Slate (Grid of matches) */}
-              <div data-home-reveal="arena-slate" data-route-enter="left" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="lg:col-span-5 space-y-4">
-                <div className="bg-white border border-zinc-200/80 shadow-xs p-4 rounded-xl">
-                  <span className="text-[9px] font-mono uppercase tracking-widest text-zinc-500 font-semibold">
-                    MATCH SLATE // ROUND STATUS
-                  </span>
-                  <div className="flex justify-between items-center mt-1.5">
-                    <span className="text-xs font-mono font-bold text-zinc-950 uppercase">
-                      {activeRoundNum === 1 ? "Round of 16" : activeRoundNum === 2 ? "Quarterfinals" : activeRoundNum === 3 ? "Semifinals" : "Grand Finals"}
-                    </span>
-                    <span className="text-[10px] font-mono text-zinc-500">
-                      {currentRoundMatches.filter(m => !m.winnerId).length} Active Duels
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-3 max-h-[70vh] lg:max-h-[85vh] overflow-y-auto pr-2 custom-scrollbar">
-                  {currentRoundMatches.map((duel) => {
-                    const isDuelActive = !duel.winnerId && activeRoundRemainingMs > 0;
-                    const awaitingSettlement = !duel.winnerId && activeRoundRemainingMs <= 0;
-                    const isSelected = activeMatch?.id === duel.id;
-                    const sumVotes = duel.votesA + duel.votesB;
-                    const ratioA = sumVotes > 0 ? Math.round((duel.votesA / sumVotes) * 100) : 50;
-                    const ratioB = sumVotes > 0 ? 100 - ratioA : 50;
-
-                    return (
-                      <div
-                        key={duel.id}
-                        onClick={() => {
-                          synthClick(250, "sine", 0.05);
-                          setActiveMatch(duel);
-                          pushToast(`Inspecting matchup: ${duel.productA.title} vs ${duel.productB.title}`, "info");
-                        }}
-                        className={`p-4 bg-white border rounded-xl cursor-pointer transition-[background-color,border-color,box-shadow,translate] duration-200 text-left hover:border-zinc-300 hover:bg-zinc-50/80 hover:-translate-y-0.5 match-card-item ${
-                          isSelected ? "border-zinc-900 bg-zinc-50/90 shadow-xs ring-1 ring-zinc-900/10" : "border-zinc-200/80 shadow-2xs"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-3 text-[9px] font-mono text-zinc-500">
-                          <span>MATCH ID: {duel.id.slice(0, 8)}</span>
-                          {isDuelActive ? (
-                            <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
-                              <span className="w-1 h-1 rounded-full bg-emerald-600 animate-pulse" />
-                              Active
-                            </span>
-                          ) : (
-                            <span className="text-zinc-600 bg-zinc-100 border border-zinc-200 px-1.5 py-0.2 rounded uppercase tracking-wider font-medium">
-                              {awaitingSettlement ? "Awaiting settlement" : "Concluded"}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Versus Symmetrical Lineup */}
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0 flex items-center gap-2">
-                            <span className="text-base shrink-0">{renderLogo(duel.productA?.logo, "w-5 h-5")}</span>
-                            <span className={`text-xs truncate ${isSelected ? "text-zinc-950 font-bold" : "text-zinc-800 font-semibold"}`}>
-                              {duel.productA?.title || "Pending"}
-                            </span>
-                          </div>
-                          
-                          <span className="text-[10px] font-mono font-semibold text-zinc-400 shrink-0 px-2">VS</span>
-
-                          <div className="flex-1 min-w-0 flex items-center justify-end gap-2 text-right">
-                            <span className={`text-xs truncate ${isSelected ? "text-zinc-950 font-bold" : "text-zinc-800 font-semibold"}`}>
-                              {duel.productB?.title || "Pending"}
-                            </span>
-                            <span className="text-base shrink-0">{renderLogo(duel.productB?.logo, "w-5 h-5")}</span>
-                          </div>
-                        </div>
-
-                        {/* Settle status preview / Score slider */}
-                        <div className="mt-3.5 space-y-1">
-                          <div className="flex justify-between text-[9px] font-mono text-zinc-500">
-                            <span>{ratioA}% ({duel.votesA}v)</span>
-                            <span>{duel.votesB}v ({ratioB}%)</span>
-                          </div>
-                          <div className="h-1 bg-zinc-100 border border-zinc-200/60 w-full rounded-full overflow-hidden flex">
-                            <div className="bg-zinc-900 h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
-                            <div className="bg-zinc-200 h-full flex-1" />
-                          </div>
-                        </div>
-
-                        {/* Winner stamp if concluded */}
-                        {!isDuelActive && duel.winnerId && (
-                          <div className="mt-2 text-[9px] font-mono text-center text-violet-700 bg-violet-50 border border-violet-200/80 py-0.5 rounded uppercase tracking-wider font-semibold">
-                            Winner: {duel.winnerId === duel.productA?.id ? (duel.productA?.title || "Pending") : (duel.productB?.title || "Pending")}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Right Column: Combat Inspector Panel (Sticky) */}
-              <div data-home-reveal="arena-inspector" data-route-enter="right" style={{ "--route-delay": "220ms" } as React.CSSProperties} className="lg:col-span-7 lg:sticky lg:top-20 space-y-4">
-                {activeMatch ? (
-                  (() => {
-                    const duel = activeMatch;
-                    const isDuelActive = !duel.winnerId && activeRoundRemainingMs > 0;
-                    const awaitingSettlement = !duel.winnerId && activeRoundRemainingMs <= 0;
-                    const sumVotes = duel.votesA + duel.votesB;
-                    const ratioA = sumVotes > 0 ? Math.round((duel.votesA / sumVotes) * 100) : 50;
-                    const ratioB = sumVotes > 0 ? 100 - ratioA : 50;
-                    
-
-                    return (
-                      <div className="bg-white border border-zinc-200/90 rounded-2xl overflow-hidden shadow-xs p-6 md:p-8 space-y-6 inspector-panel">
-                        
-                        {/* Title Bar */}
-                        <div className="flex items-center justify-between border-b border-zinc-200/80 pb-4 inspector-title">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-[9px] uppercase tracking-wider font-semibold bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded text-zinc-700">
-                              ROUND {activeRoundNum} {"//"} BATTLE INSPECTOR
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                            {duel.productA && duel.productB ? (
-                              <a
-                                href={`/versus/${duel.productA.id}-vs-${duel.productB.id}`}
-                                className="font-mono text-[9px] uppercase tracking-wider text-zinc-500 transition hover:text-zinc-950 font-medium"
-                              >
-                                Public matchup ↗
-                              </a>
-                            ) : null}
-                            {isDuelActive ? (
-                              <span className="text-[9px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded flex items-center gap-1 uppercase tracking-wider font-semibold">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                                DECISION OPEN
-                              </span>
-                            ) : (
-                              <span className="text-[9px] font-mono text-zinc-600 bg-zinc-100 border border-zinc-200 px-2 py-0.5 rounded uppercase tracking-wider font-medium">
-                                {awaitingSettlement ? "AWAITING SETTLEMENT" : "CONCLUDED"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Interactive Duel Clash Head to Head */}
-                        <div className="grid grid-cols-1 md:grid-cols-7 gap-4 items-center">
-                          
-                          {/* Product A block */}
-                          <div className="md:col-span-3 p-4 bg-zinc-50/70 border border-zinc-200/80 rounded-xl text-left flex flex-col justify-between min-h-[160px] inspector-card-a">
-                            <div>
-                              <div className="flex justify-between items-center mb-2">
-                                <span className="text-base">{renderLogo(duel.productA?.logo, "w-6 h-6")}</span>
-                                <span className="text-[9px] font-mono text-zinc-500">{duel.productA?.makerTwitter}</span>
-                              </div>
-                              <h3 className="truncate text-base font-bold text-zinc-950">
-                                {duel.productA ? <a href={`/products/${duel.productA.id}`} className="transition hover:text-violet-700">{duel.productA.title}</a> : "Pending"}
-                              </h3>
-                              <p className="text-[11px] text-zinc-600 line-clamp-2 mt-1 leading-relaxed">{duel.productA?.tagline}</p>
-                            </div>
-                            <div className="mt-4 space-y-2">
-                              {publicHttpUrl(duel.productA?.url) && (
-                                <a
-                                  href={publicHttpUrl(duel.productA?.url)}
-                                  target="_blank"
-                                  rel={productLinkRel(duel.productA!)}
-                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer shadow-2xs"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  Visit Demo 🔗
-                                </a>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setVotingMatch(duel);
-                                  setVotingTarget(duel.productA);
-                                  setVoteWinnerFeedback("");
-                                  setVoteLoserFeedback("");
-                                  setVoteError("");
-                                }}
-                                disabled={!isDuelActive || !duel.productA}
-                                className={`w-full py-2 px-3 text-[10px] font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider ${
-                                  !isDuelActive
-                                  ? duel.winnerId === duel.productA?.id 
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed" 
-                                    : "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
-                                  : !duel.productA
-                                    ? "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
-                                    : "bg-zinc-900 text-white hover:bg-zinc-800 shadow-xs active:scale-[0.99]"
-                                }`}
-                              >
-                                {duel.winnerId === duel.productA?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR A" : awaitingSettlement ? "VOTING CLOSED" : "DEFEATED"}
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* VS center block */}
-                          <div className="md:col-span-1 flex flex-col items-center justify-center py-2 inspector-vs">
-                            <span className="text-zinc-400 font-mono tracking-widest text-[9px] uppercase font-bold">VS</span>
-                            <div className="flex flex-col items-center mt-2 leading-tight">
-                              <span className="font-mono font-bold text-lg text-zinc-950">{ratioA}%</span>
-                              <span className="font-mono font-semibold text-zinc-500 text-[10px]">{ratioB}%</span>
-                            </div>
-                            <span className="text-[8px] font-mono text-zinc-500 mt-2 uppercase tracking-widest">{sumVotes} Voted</span>
-                          </div>
-
-                          {/* Product B block */}
-                          <div className="md:col-span-3 p-4 bg-zinc-50/70 border border-zinc-200/80 rounded-xl text-left flex flex-col justify-between min-h-[160px] inspector-card-b">
-                            <div>
-                              <div className="flex justify-between items-center mb-2">
-                                <span className="text-base">{renderLogo(duel.productB?.logo, "w-6 h-6")}</span>
-                                <span className="text-[9px] font-mono text-zinc-500">{duel.productB?.makerTwitter}</span>
-                              </div>
-                              <h3 className="truncate text-base font-bold text-zinc-950">
-                                {duel.productB ? <a href={`/products/${duel.productB.id}`} className="transition hover:text-violet-700">{duel.productB.title}</a> : "Pending"}
-                              </h3>
-                              <p className="text-[11px] text-zinc-600 line-clamp-2 mt-1 leading-relaxed">{duel.productB?.tagline}</p>
-                            </div>
-                            <div className="mt-4 space-y-2">
-                              {publicHttpUrl(duel.productB?.url) && (
-                                <a
-                                  href={publicHttpUrl(duel.productB?.url)}
-                                  target="_blank"
-                                  rel={productLinkRel(duel.productB!)}
-                                  className="w-full py-1.5 px-3 text-[10px] font-bold rounded-lg border border-zinc-200 bg-white hover:bg-zinc-50 text-zinc-700 hover:text-zinc-950 transition-all text-center flex items-center justify-center gap-1 uppercase tracking-wider cursor-pointer shadow-2xs"
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  Visit Demo 🔗
-                                </a>
-                              )}
-                              <button
-                                onClick={() => {
-                                  setVotingMatch(duel);
-                                  setVotingTarget(duel.productB);
-                                  setVoteWinnerFeedback("");
-                                  setVoteLoserFeedback("");
-                                  setVoteError("");
-                                }}
-                                disabled={!isDuelActive || !duel.productB}
-                                className={`w-full py-2 px-3 text-[10px] font-bold rounded-lg transition-all cursor-pointer uppercase tracking-wider ${
-                                  !isDuelActive
-                                  ? duel.winnerId === duel.productB?.id 
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed" 
-                                    : "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
-                                  : !duel.productB
-                                    ? "bg-zinc-100 text-zinc-400 border border-zinc-200 cursor-not-allowed"
-                                    : "bg-zinc-900 text-white hover:bg-zinc-800 shadow-xs active:scale-[0.99]"
-                                }`}
-                              >
-                                {duel.winnerId === duel.productB?.id ? "🏆 WINNER" : isDuelActive ? "VOTE FOR B" : awaitingSettlement ? "VOTING CLOSED" : "DEFEATED"}
-                              </button>
-                            </div>
-                          </div>
-
-                        </div>
-
-                        {/* Symmetrical Tug of War Slider bar */}
-                        <div className="space-y-1.5">
-                          <div className="h-1.5 bg-zinc-100 border border-zinc-200/60 w-full rounded-full overflow-hidden flex">
-                            <div className="bg-zinc-900 h-full transition-all duration-500 ease-out" style={{ width: `${ratioA}%` }} />
-                            <div className="bg-zinc-200 h-full flex-1" />
-                          </div>
-                        </div>
-
-                        {/* Peer Critiques chronicles */}
-                        <div className="pt-4 border-t border-zinc-200/80 space-y-4">
-                          <div className="flex items-center justify-between border-b border-zinc-200/60 pb-2">
-                            <h4 className="text-[9px] font-mono uppercase tracking-widest text-zinc-600 font-semibold">
-                              PEER CRITIQUE CHRONICLES ({activeMatchCritiques.length})
-                            </h4>
-                            <span className="text-[8px] font-mono text-zinc-500 uppercase">
-                              verified feedback stream
-                            </span>
-                          </div>
-
-                          {/* Comments list inside inspector */}
-                          <div className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
-                            {activeMatchCritiques.map((c) => {
-                              const isProductA = c.role.includes(duel.productA.title) || c.text.toLowerCase().includes(duel.productA.title.toLowerCase());
-                              const badgeColor = isProductA
-                                ? "bg-zinc-900 text-white border border-zinc-900"
-                                : "bg-white text-zinc-700 border border-zinc-200 shadow-2xs";
-                              const auditedName = isProductA ? duel.productA.title : duel.productB.title;
-                              return (
-                                <div
-                                  key={c.id}
-                                  className="p-3 bg-zinc-50 border border-zinc-200/80 hover:border-zinc-300 transition duration-150 rounded-xl text-left space-y-1"
-                                >
-                                  <div className="flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-[11px] font-mono font-bold text-zinc-950">{c.voter}</span>
-                                      <span className={`text-[8px] font-mono uppercase px-1.5 py-0.2 rounded ${badgeColor}`}>
-                                        audited {auditedName}
-                                      </span>
-                                    </div>
-                                    <span className="text-[9px] text-zinc-400 font-mono">{c.date}</span>
-                                  </div>
-                                  <p className="text-[11px] text-zinc-600 leading-relaxed pl-1">
-                                    {c.text}
-                                  </p>
-                                </div>
-                              );
-                            })}
-
-                            {activeMatchCritiques.length === 0 && (
-                              <div className="p-6 text-center text-zinc-500 font-mono text-[10px] border border-dashed border-zinc-200 rounded-xl">
-                                [ No verified peer critiques enqueued for this matchup. ]
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <div className="bg-white border border-zinc-200/80 rounded-2xl p-12 text-center text-zinc-500 font-mono text-xs shadow-xs">
-                    [ SELECT A MATCHUP FROM THE LEFT SLATE TO INSPECT ]
-                  </div>
-                )}
-              </div>
-
-            </div>
-          ) : (
-            /* ========================================================
-                WAITLIST QUEUE PREPARING SCREEN
-               ======================================================== */
-            <div data-home-reveal="arena-queue" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 shadow-sm p-8 sm:p-12 text-zinc-950 text-center max-w-2xl mx-auto rounded-2xl">
-              
-              {/* Sleek countdown timer pill */}
-              {lineupProducts.length >= 16 && (
-                <div className="flex justify-center mb-6">
-                  <span className="bg-zinc-50 border border-zinc-200/90 px-3.5 py-1.5 rounded-lg text-[10px] font-mono uppercase tracking-wider text-zinc-600 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
-                    Cycle Closes: <span className="text-zinc-950 font-semibold">{formatToHMS(countdownToMidnightMs)}</span>
-                  </span>
-                </div>
-              )}
-
-              <div className="inline-block relative w-36 h-36 mb-6">
-                <svg className="w-full h-full transform -rotate-90">
-                  <circle 
-                    cx="72" 
-                    cy="72" 
-                    r="62" 
-                    stroke="#f4f4f5" 
-                    strokeWidth="6" 
-                    fill="transparent" 
-                  />
-                  <circle 
-                    cx="72" 
-                    cy="72" 
-                    r="62" 
-                    stroke="#18181b" 
-                    strokeWidth="6" 
-                    fill="transparent" 
-                    strokeDasharray={390}
-                    strokeDashoffset={390 - (390 * Math.min(lineupProducts.length, rosterTarget)) / rosterTarget}
-                    className="transition-all duration-1000 ease-out"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex flex-col justify-center items-center">
-                  {bracket?.status === "preparing" ? (
-                    <>
-                      <span className="text-xl font-bold text-zinc-950 font-mono tracking-tight">{formatToHMS(countdownToMidnightMs)}</span>
-                      <span className="text-[9px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Starts In</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-2xl font-bold text-zinc-950">{Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget}</span>
-                      <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider mt-1">Ready</span>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <h2 className="text-lg sm:text-xl font-sans font-semibold tracking-tight uppercase mb-3 text-zinc-950">
-                {bracket?.status === "preparing" ? `${getArenaFormatName(activeBracketSize)} Ready` : "Assembling Next Arena"}
-              </h2>
-              <p className="text-xs text-zinc-600 max-w-md mx-auto leading-relaxed">
-                Sixteen products lock a Championship roster immediately, with voting opening at the next New York midnight. The daily cutoff also starts the largest ready 8, 4, or 2-product run automatically.
-              </p>
-              <p className="mt-3 text-[9px] font-mono uppercase tracking-wider text-zinc-500">
-                Tie rule: the higher verified vote total wins, and every vote contains two critiques. A tied count advances the earlier submission; exact timestamp ties use a stable product-ID decision. Zero-vote matches still advance.
-              </p>
-
-              {/* Roster Slots Grid (Street Fighter style character select) */}
-              <div className="mt-8 pt-6 border-t border-zinc-200/80 max-w-md mx-auto">
-                <span className="block text-[10px] font-mono text-zinc-500 uppercase tracking-wider mb-4 font-semibold">
-                  Roster Lineup ({Math.min(lineupProducts.length, rosterTarget)} / {rosterTarget})
-                </span>
-                <div className={`grid gap-2.5 justify-center ${rosterTarget >= 8 ? "grid-cols-[repeat(4,2.75rem)] sm:grid-cols-[repeat(8,2.75rem)]" : rosterTarget === 4 ? "grid-cols-[repeat(4,2.75rem)]" : "grid-cols-[repeat(2,2.75rem)]"}`}>
-                  {Array.from({ length: rosterTarget }).map((_, idx) => {
-                    const prod = lineupProducts[idx];
-                    if (prod) {
-                      return (
-                        <button 
-                          key={idx} 
-                          onClick={(e) => {
-                            e.preventDefault();
-                            synthClick(300, "sine", 0.05);
-                            setActiveCardProduct(prod);
-                          }}
-                          className="w-11 h-11 rounded-xl flex items-center justify-center text-lg select-none border transition-all duration-300 bg-white border-zinc-200/90 text-zinc-900 shadow-2xs hover:scale-105 cursor-pointer hover:border-violet-400 hover:shadow-xs"
-                          title={prod.title}
-                        >
-                          {renderLogo(prod.logo, "w-7 h-7 object-contain")}
-                        </button>
-                      );
-                    }
-                    return (
-                      <div 
-                        key={idx} 
-                        className="w-11 h-11 rounded-xl flex items-center justify-center text-lg select-none border transition-all duration-300 bg-zinc-50 border-dashed border-zinc-200 text-zinc-400"
-                        title="Empty Slot"
-                      >
-                        <span className="text-[10px] font-mono font-light opacity-50">?</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
-        </section>}
-
-        {page === "champions" && <>
-        {/* THE HALL OF VALOR — HISTORIC CHAMPIONS */}
-        <section id="champions-section" className="scroll-mt-32 py-10 md:py-14">
-          <div data-home-reveal="champions-heading" data-route-enter="left" className="exhibition-route-heading exhibition-champions-heading mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="text-left">
-              <p className="exhibition-kicker mb-5">Hall of Valor</p>
-              <h1 className="text-zinc-950">
-                Champions
-              </h1>
-              <p className="text-sm text-zinc-600 mt-3">
-                Meet the products that won their Arena runs.
-              </p>
-            </div>
-            <Link href="/arena" className="inline-flex min-h-11 items-center gap-2 text-sm font-medium text-violet-700 hover:text-violet-900">Explore the Arena <span aria-hidden="true">→</span></Link>
-          </div>
-
-          {pastChampions && pastChampions.length > 0 ? (
-            <div className="exhibition-champions-grid">
-              {pastChampions.map((c, idx) => (
-                <div 
-                  key={c.id} 
-                  data-home-reveal={`champion-${c.id}`}
-                  data-route-enter="up"
-                  style={{ "--route-delay": `${140 + (idx % 4) * 70}ms` } as React.CSSProperties}
-                  className="exhibition-champion border hover:border-zinc-300 hover:-translate-y-1 transition-[background-color,border-color,box-shadow,translate] duration-300 flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-2xl flex items-center justify-center">
-                        {renderLogo(c.logo, "w-8 h-8")}
-                      </span>
-                      <span className="border border-zinc-200 text-[9px] font-mono px-2 py-0.5 uppercase bg-zinc-100 text-zinc-700 rounded tracking-wider font-semibold">
-                        SEASON {String(idx + 1).padStart(2, "0")}
-                      </span>
-                    </div>
-                    <Link
-                      href={`/products/${encodeURIComponent(c.id)}`}
-                      className="font-sans text-xs hover:underline uppercase block mb-1 text-zinc-950 font-bold tracking-wide hover:text-violet-700 transition"
-                    >
-                      {c.title}
-                    </Link>
-                    <p className="text-[10px] leading-relaxed line-clamp-2 mb-4 text-zinc-600 font-sans">{c.tagline}</p>
-                  </div>
-                  
-                  <div className="flex items-center justify-between border-t border-zinc-200/80 pt-3.5 text-[10px] font-mono text-zinc-500">
-                    <div className="flex items-center space-x-2">
-                      <img src={c.makerAvatar} alt="Maker" className="w-5 h-5 border border-zinc-200 rounded-md shrink-0 object-cover" />
-                      <a 
-                        href={`https://x.com/${c.makerTwitter.replace(/^@/, "")}`}
-                        target="_blank"
-                        rel="ugc noopener noreferrer"
-                        className="hover:underline font-semibold text-zinc-600 hover:text-zinc-950"
-                      >
-                        {c.makerTwitter}
-                      </a>
-                    </div>
-                    {publicHttpUrl(c.url) ? (
-                      <a
-                        href={publicHttpUrl(c.url)}
-                        target="_blank"
-                        rel={productLinkRel(c)}
-                        className="text-[10px] uppercase font-mono underline text-zinc-900 hover:text-violet-700 font-semibold transition-colors"
-                      >
-                        DEMO
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div data-home-reveal="champions-empty" data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="exhibition-champions-empty border p-10 sm:p-16 text-center text-zinc-500 font-mono text-xs mx-auto flex flex-col items-center justify-center space-y-3">
-              <svg className="w-8 h-8 text-zinc-400 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
-              </svg>
-              <span>[ NO CHAMPION HAS CONQUERED THE ARENA YET ]</span>
-              <span className="text-[10px] text-zinc-600">Be the first to claim eternal glory and enter the Hall of Valor!</span>
-            </div>
-          )}
-        </section>
-
-        {/* HOW IT WORKS SECTION */}
-        <section id="how-it-works-section" className="scroll-mt-32 py-12 md:py-16 border-t border-zinc-200/80">
-          <div data-home-reveal="how-heading" data-route-enter="left" className="mb-12">
-            <h2 className="text-lg sm:text-xl font-bold uppercase tracking-tight text-zinc-950 border-l-2 border-zinc-950 pl-4 font-sans">
-              HOW IT WORKS
-            </h2>
-            <p className="text-xs text-zinc-600 mt-2 font-sans">
-              Free to launch. Fair discovery. Optional battles for useful feedback.
-            </p>
-          </div>
-
-          <div data-home-reveal="how-steps" className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            
-            {/* Step 1 */}
-            <div data-route-enter="up" style={{ "--route-delay": "140ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-300 shadow-xs transition-colors duration-200">
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-zinc-300">01</span>
-                  <span className="text-[9px] font-mono text-zinc-400 tracking-wider">STEP_01</span>
-                </div>
-                <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-950 mb-3 font-semibold">
-                  PUBLISH YOUR PRODUCT
-                </h3>
-                <p className="text-xs text-zinc-600 leading-relaxed font-sans font-medium">
-                  Submit for free and get a permanent product page. Latest Launches highlights new arrivals; fair discovery gives overlooked products another chance to be seen.
-                </p>
-              </div>
-              <div className="mt-8 pt-4 border-t border-zinc-100 text-[9px] font-mono text-zinc-500 uppercase tracking-widest">
-                [ STAGE_1 : $0 FEE ]
-              </div>
-            </div>
-
-            {/* Step 2 */}
-            <div data-route-enter="up" style={{ "--route-delay": "210ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-300 shadow-xs transition-colors duration-200">
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-zinc-300">02</span>
-                  <span className="text-[9px] font-mono text-zinc-400 tracking-wider">STEP_02</span>
-                </div>
-                <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-950 mb-3 font-semibold">
-                  JOIN THE ARENA
-                </h3>
-                <p className="text-xs text-zinc-600 leading-relaxed font-sans font-medium">
-                  Opt in from Dashboard. Sixteen products lock a Championship roster; otherwise the daily cutoff starts the largest ready 8, 4, or 2-product run. Earlier queue entries go first.
-                </p>
-              </div>
-              <div className="mt-8 pt-4 border-t border-zinc-100 text-[9px] font-mono text-emerald-700 uppercase tracking-widest font-semibold">
-                [ OPTIONAL · FREE TO ENTER ]
-              </div>
-            </div>
-
-            {/* Step 3 */}
-            <div data-route-enter="up" style={{ "--route-delay": "280ms" } as React.CSSProperties} className="bg-white border border-zinc-200/90 rounded-2xl p-6 flex flex-col justify-between hover:border-zinc-300 shadow-xs transition-colors duration-200">
-              <div>
-                <div className="flex justify-between items-center mb-6">
-                  <span className="text-4xl font-extrabold font-mono text-zinc-300">03</span>
-                  <span className="text-[9px] font-mono text-zinc-400 tracking-wider">STEP_03</span>
-                </div>
-                <h3 className="text-xs font-mono uppercase tracking-wider text-zinc-950 mb-3 font-semibold">
-                  LEARN FROM EVERY MATCH
-                </h3>
-                <p className="text-xs text-zinc-600 leading-relaxed font-sans font-medium">
-                  Sign in and leave feedback for both products before voting. Winners advance, and every maker keeps their product page and the feedback they received.
-                </p>
-              </div>
-              <div className="mt-8 pt-4 border-t border-zinc-100 text-[9px] font-mono text-violet-700 uppercase tracking-widest font-semibold">
-                [ DUAL CRITIQUE FEEDBACK ]
-              </div>
-            </div>
-
-          </div>
-        </section>
-        </>}
+        {page === "champions" && <ChampionsSection
+          pastChampions={pastChampions}
+          renderLogo={renderLogo}
+        />}
 
       </main>
 
@@ -3653,292 +2140,8 @@ export default function ArenaClient({
             >
               <fieldset disabled={isSubmittingProduct} className="submission-form-fields">
               {isPaidSubmission && <ServiceFields value={serviceDetails} onChange={setServiceDetails} />}
-              <div className="flex flex-col gap-1">
-                <label htmlFor="product-title" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Title *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. SiteShot 📸"
-                  id="product-title"
-                  minLength={2}
-                  maxLength={80}
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
-                />
-                <p className="text-[10px] leading-4 text-zinc-500">Use your own product name. Explain any third-party models or integrations in the description.</p>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="product-tagline" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">One-Sentence Tagline *</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. High-def screenshot API with full-page scrolling..."
-                  id="product-tagline"
-                  minLength={10}
-                  maxLength={240}
-                  value={newTagline}
-                  onChange={(e) => setNewTagline(e.target.value)}
-                  className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
-                />
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label htmlFor="product-url" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product website *</label>
-                <input
-                  type="text"
-                  inputMode="url"
-                  autoCapitalize="none"
-                  required
-                  placeholder="https://siteshot.net"
-                  id="product-url"
-                  value={newUrl}
-                  onBlur={() => { if (normalizedProductUrl) setNewUrl(normalizedProductUrl); }}
-                  onChange={(e) => { setNewUrl(e.target.value); setSubmitError(null); }}
-                  aria-invalid={!isPaidSubmission && Boolean(duplicateProduct)}
-                  aria-describedby="product-url-hint"
-                  className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
-                />
-                {duplicateProduct && isPaidSubmission ? (
-                  <p id="product-url-hint" className="text-sm leading-6 text-zinc-600">This website already has an Indie Clash profile. A directory service can use the existing profile; no duplicate product will be created. <Link href={`/products/${duplicateProduct.id}`} target="_blank" rel="noopener noreferrer" className="underline underline-offset-4">View profile ↗</Link></p>
-                ) : duplicateProduct ? (
-                  <p id="product-url-hint" role="alert" className="text-[11px] leading-5 text-red-700">
-                    {DUPLICATE_PRODUCT_MESSAGE}{" "}
-                    <Link href={`/products/${duplicateProduct.id}`} target="_blank" rel="noopener noreferrer" className="font-medium underline underline-offset-2">
-                      View existing product ↗
-                    </Link>
-                    <span className="block">If this is yours, edit it in Dashboard instead. Changing www, the page path or URL parameters does not create a different website.</span>
-                  </p>
-                ) : (
-                  <p id="product-url-hint" className="text-[10px] leading-4 text-zinc-500">One profile per website, not per page. Changing www, the page path or URL parameters does not allow another submission.</p>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center justify-between gap-3">
-                  <label htmlFor="product-description" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Description *</label>
-                  <span className="font-mono text-[9px] text-zinc-500">{newDescription.length}/2000</span>
-                </div>
-                <textarea
-                  required
-                  minLength={80}
-                  maxLength={2000}
-                  rows={5}
-                  placeholder="What does it do? Who is it for? What makes it different?"
-                  id="product-description"
-                  value={newDescription}
-                  onChange={(e) => setNewDescription(e.target.value)}
-                  className="w-full resize-y rounded-lg border border-zinc-200 bg-zinc-50/50 p-2.5 text-xs leading-5 text-zinc-900 outline-none placeholder:text-zinc-400 focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-                />
-                <p className="text-[10px] leading-4 text-zinc-500">80–2,000 characters. Describe a real use case.</p>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div className="flex flex-col gap-1">
-                <label htmlFor="product-category" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Primary category *</label>
-                <select
-                  id="product-category"
-                  required
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value as ProductCategory | "")}
-                  aria-describedby="product-category-hint"
-                  className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-                >
-                  <option value="" disabled>Select a category</option>
-                  {PRODUCT_CATEGORY_GROUPS.map((group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.categories.map((category) => <option key={category.value} value={category.value}>{category.label}</option>)}
-                    </optgroup>
-                  ))}
-                </select>
-                <p id="product-category-hint" className="text-[10px] leading-4 text-zinc-500">Choose the main use. Your profile shows this category; the discovery feed shows its broader group.</p>
-              </div>
-              <div className="flex flex-col gap-1">
-                <label htmlFor="product-pricing" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Pricing model *</label>
-                <select
-                  id="product-pricing"
-                  required
-                  value={newPricingModel === "unspecified" ? "" : newPricingModel}
-                  onChange={(e) => setNewPricingModel(e.target.value as PricingModel)}
-                  className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-                >
-                  <option value="" disabled>Select a pricing model</option>
-                  {PRICING_MODELS.filter((pricing) => pricing.value !== "unspecified").map((pricing) => <option key={pricing.value} value={pricing.value}>{pricing.label}</option>)}
-                </select>
-              </div>
-              </div>
-
-              <PricingFields value={newPricingDetails} onChange={setNewPricingDetails} disabled={isSubmittingProduct} />
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="product-audience" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Target Audience</label>
-                  <input
-                    type="text"
-                    maxLength={300}
-                    placeholder="e.g. Solo SaaS founders"
-                    id="product-audience"
-                  value={newTargetAudience}
-                    onChange={(e) => setNewTargetAudience(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none placeholder:text-zinc-400 focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="product-platforms" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Platforms</label>
-                  <input
-                    type="text"
-                    maxLength={320}
-                    placeholder="Web, iOS, Windows"
-                    id="product-platforms"
-                  value={newPlatforms}
-                    onChange={(e) => setNewPlatforms(e.target.value)}
-                    className="h-9 w-full rounded-lg border border-zinc-200 bg-zinc-50/50 p-2 text-xs text-zinc-900 outline-none placeholder:text-zinc-400 focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-                  />
-                </div>
-              </div>
-
-              <details className="rounded-xl border border-zinc-200/80 bg-zinc-50/50 p-3">
-                <summary className="cursor-pointer select-none text-[10px] font-semibold uppercase tracking-wider text-zinc-700">Tell the maker story (optional)</summary>
-                <div className="mt-3 space-y-3">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest" htmlFor="product-story">Why did you build it?</label>
-                    <textarea
-                      maxLength={1000}
-                      rows={3}
-                      placeholder="The problem, moment, or personal experience behind the product."
-                      id="product-story" value={newMakerStory}
-                      onChange={(e) => setNewMakerStory(e.target.value)}
-                      className="w-full resize-y rounded-lg border border-zinc-200 bg-white p-2.5 text-xs leading-5 text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest" htmlFor="product-feedback">What feedback would help most?</label>
-                    <textarea
-                      maxLength={500}
-                      rows={2}
-                      placeholder="e.g. Is the onboarding clear? Would this workflow save you time?"
-                      id="product-feedback" value={newFeedbackRequest}
-                      onChange={(e) => setNewFeedbackRequest(e.target.value)}
-                      className="w-full resize-y rounded-lg border border-zinc-200 bg-white p-2.5 text-xs leading-5 text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400"
-                    />
-                  </div>
-                </div>
-              </details>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="product-maker" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Maker Name *</label>
-                  <input
-                    type="text"
-                    required
-                    maxLength={80}
-                    placeholder="Sarah"
-                    id="product-maker"
-                  value={newMaker}
-                    onChange={(e) => setNewMaker(e.target.value)}
-                    className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label htmlFor="product-twitter" className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Twitter (X)</label>
-                  <input
-                    type="text"
-                    placeholder="@sarah_dev"
-                    id="product-twitter"
-                  value={newTwitter}
-                    onChange={(e) => setNewTwitter(e.target.value)}
-                    className="w-full bg-zinc-50/50 border border-zinc-200 text-zinc-900 placeholder:text-zinc-400 p-2 text-xs rounded-lg focus:bg-white focus:border-zinc-400 focus:ring-1 focus:ring-zinc-400 outline-none h-9"
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-1">
-                <label className="text-[9px] font-mono text-zinc-500 uppercase tracking-widest">Product Logo (Max 2MB)</label>
-                <div className="flex items-center space-x-4">
-                  <label 
-                    htmlFor="logo-upload" 
-                    className="cursor-pointer flex flex-col items-center justify-center border border-dashed border-zinc-300 hover:border-zinc-400 bg-zinc-50 w-16 h-16 rounded-xl transition-all relative overflow-hidden group select-none shadow-2xs"
-                  >
-                    {newLogo ? (
-                      newLogo.startsWith("data:image") || newLogo.startsWith("http") ? (
-                        <img src={newLogo} alt="Preview" className="w-full h-full object-contain p-1.5" />
-                      ) : (
-                        <span className="text-xl animate-pixel-bounce">{newLogo}</span>
-                      )
-                    ) : (
-                      <span className="text-xl text-zinc-400">＋</span>
-                    )}
-                    
-                    <div className="absolute inset-0 bg-zinc-900/60 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-white">
-                      <span className="text-[9px] uppercase font-medium">Upload</span>
-                    </div>
-                  </label>
-                  
-                  <input
-                    type="file"
-                    id="logo-upload"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        if (file.size > 2 * 1024 * 1024) {
-                          alert("File size exceeds the 2MB limit!");
-                          e.target.value = "";
-                          return;
-                        }
-                        const reader = new FileReader();
-                        reader.onload = () => {
-                          const result = reader.result;
-                          if (result && typeof result === "string") {
-                            const img = new Image();
-                            img.onload = () => {
-                              const canvas = document.createElement("canvas");
-                              const MAX_WIDTH = 128;
-                              const MAX_HEIGHT = 128;
-                              let width = img.width;
-                              let height = img.height;
-                              if (width > height) {
-                                if (width > MAX_WIDTH) {
-                                  height *= MAX_WIDTH / width;
-                                  width = MAX_WIDTH;
-                                }
-                              } else {
-                                if (height > MAX_HEIGHT) {
-                                  width *= MAX_HEIGHT / height;
-                                  height = MAX_HEIGHT;
-                                }
-                              }
-                              canvas.width = width;
-                              canvas.height = height;
-                              const ctx = canvas.getContext("2d");
-                              if (ctx) {
-                                ctx.drawImage(img, 0, 0, width, height);
-                                const resizedBase64 = canvas.toDataURL("image/jpeg", 0.85);
-                                setNewLogo(resizedBase64);
-                              } else {
-                                setNewLogo(result);
-                              }
-                            };
-                            img.src = result;
-                          }
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                    className="hidden"
-                  />
-                  
-                  <div className="text-left flex-1">
-                    <span className="text-[9px] font-mono text-zinc-500 uppercase block mb-0.5">Image Specs</span>
-                    <p className="text-[10px] text-zinc-500 leading-normal">
-                      PNG, JPG, or WebP image. If skipped, default 🚀 rocket booster is used.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <ScreenshotInput value={newScreenshot} onChange={setNewScreenshot} onBusy={setPreparingScreenshot} disabled={isSubmittingProduct} />
+              <ProductFields fields={fields} normalizedProductUrl={normalizedProductUrl} duplicateProduct={duplicateProduct}
+                isPaidSubmission={isPaidSubmission} isSubmittingProduct={isSubmittingProduct} setSubmitError={setSubmitError} />
 
               {isPaidSubmission && <label className="submission-consent"><input type="checkbox" required checked={serviceDetails.consent} onChange={event => setServiceDetails({ ...serviceDetails, consent: event.target.checked })} /><span>I am authorized to submit this product and allow Indie Clash and its fulfillment partner to use these details for directory submissions and delivery reports.</span></label>}
               <div className={isPaidSubmission ? "sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white py-4" : isSubmissionPage ? "flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white pt-6" : "sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-zinc-200/80 bg-white py-4"}>

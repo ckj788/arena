@@ -11,10 +11,10 @@ let mode = process.env.PUBLIC_REFRESH_TEST_FAILURE || 'offline', productRequests
 assert(['offline', 'timeout'].includes(mode));
 const errors = [], consoleErrors = [];
 const rows = Array.from({ length: 3 }, (_, i) => ({
-  shipandbattle_id: `refresh-fixture-${i}`, shipandbattle_title: `Recovered Product ${i}`,
-  shipandbattle_tagline: 'An isolated refresh test product.', shipandbattle_url: `https://refresh-${i}.example.com`,
-  shipandbattle_maker_name: 'Test Maker', shipandbattle_logo: '🚀', shipandbattle_submitted_at: '2026-10-10T00:00:00Z',
-  shipandbattle_queue_status: 'waiting', shipandbattle_votes_count: 0, shipandbattle_arena_enqueued: false,
+  id: `refresh-fixture-${i}`, title: `Recovered Product ${i}`,
+  tagline: 'An isolated refresh test product.', url: `https://refresh-${i}.example.com`,
+  makerName: 'Test Maker', makerAvatar: '', makerTwitter: '', logo: '🚀', submittedAt: '2026-10-10T00:00:00Z',
+  queueStatus: 'waiting', votesCount: 0, arenaEnqueued: false,
 }));
 try {
   const page = await browser.newPage();
@@ -33,13 +33,14 @@ try {
     } });
     // All writes and authentication are blocked; only public GETs are mocked.
     if (!['GET', 'HEAD'].includes(request.method())) return reply({ recorded: 0 });
-    if (url.pathname.endsWith('public_products')) {
+    if (url.pathname === '/api/arena/catalogue') {
       productRequests++;
       if (mode === 'timeout') return; // The application's 15s AbortSignal cancels this paused GET.
       if (mode === 'offline') return setTimeout(() => request.abort(), 1000);
       if (mode === 'http-error') return reply({ code: 'TEST_OUTAGE', message: 'Injected read-only outage' }, 503);
-      return setTimeout(() => reply(mode === 'empty' ? [] : rows), 400);
+      return setTimeout(() => reply({ products: mode === 'empty' ? [] : rows, next: null, etag: mode }), 400);
     }
+    if (url.pathname === '/api/arena/activity') return reply({ bracket: null });
     if (url.pathname.endsWith('public_brackets') || url.pathname.endsWith('public_matches') || url.pathname.endsWith('public_votes')) return reply([]);
     if (url.hostname.endsWith('.supabase.co') || url.pathname.startsWith('/_vercel/')) return request.abort();
     return request.continue();

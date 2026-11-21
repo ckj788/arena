@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cache } from "react";
 import type { Product } from "@/lib/mockData";
-import { fetchCloudProducts } from "@/lib/arenaStore";
+import { getArenaProducts as getProducts } from "@/lib/server/cataloguePages";
 import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { compareFairDiscovery } from "@/lib/discoveryRanking";
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
@@ -12,7 +11,6 @@ import { productLinkRel } from "@/lib/productSafety";
 interface Props { params: Promise<{ slug: string }> }
 
 export const dynamic = "force-dynamic";
-const getProducts = cache(fetchCloudProducts);
 
 export function generateStaticParams() {
   if (!PUBLIC_CATEGORIES_ENABLED) return [];

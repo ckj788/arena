@@ -92,7 +92,9 @@ for (const plan of ['starter', 'growth', 'pro']) {
   action.props.onClick();
   assert.equal(consumedPlans.at(-1), plan, 'Each card consumes its own prepared checkout');
 }
-const freeAction = picker({}).props.children[0].props.children[1].props.children[0];
+const freeActionContainer = picker({}).props.children[0].props.children[1];
+const [freeAction] = React.Children.toArray(freeActionContainer.props.children);
+assert.equal(freeAction?.type, 'button');
 assert(!freeAction.props.disabled, 'Free submission must not wait for payment preparation');
 freeAction.props.onClick();
 assert.equal(formRoutes.at(-1), '/submit/details?plan=free');

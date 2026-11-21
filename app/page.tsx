@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import ArenaClient from "./ArenaClient";
-import { getPublicProducts } from "@/lib/server/publicSeoData";
+import { initialCataloguePages } from "@/lib/server/cataloguePages";
+import { catalogueProducts } from "@/lib/cataloguePages";
+import { isVisibleProduct } from "@/lib/productSafety";
 import { absoluteUrl, serializeJsonLd, SITE_DESCRIPTION } from "@/lib/site";
 
 export const revalidate = 3600;
@@ -25,7 +27,8 @@ export const metadata: Metadata = {
 };
 
 export default async function Page() {
-  const initialProducts = await getPublicProducts().catch(() => []);
+  const initialPages = await initialCataloguePages();
+  const initialProducts = catalogueProducts(initialPages).filter(isVisibleProduct);
   const latestProducts = initialProducts
     .slice()
     .sort((a, b) => new Date(b.publishedAt || b.submittedAt).getTime() - new Date(a.publishedAt || a.submittedAt).getTime())
@@ -75,7 +78,8 @@ export default async function Page() {
         dangerouslySetInnerHTML={{ __html: serializeJsonLd(homeJsonLd) }}
       />
       <ArenaClient
-        initialProducts={initialProducts}
+        initialPages={initialPages}
+        initialProducts={[]}
         initialPastChampions={[]}
         initialBracket={null}
       />

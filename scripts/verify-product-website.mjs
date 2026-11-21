@@ -17,7 +17,7 @@ const site = load('lib/site.ts');
 const { normalizeProductWebsite } = load('lib/productWebsite.ts', { './site': site });
 for (const [input, expected] of [['example.com', 'https://example.com/'], ['www.example.com/path?q=1', 'https://www.example.com/path?q=1'], [' https://example.com/a ', 'https://example.com/a'], ['http://example.com', 'http://example.com/']]) assert.equal(normalizeProductWebsite(input), expected);
 for (const input of ['', ' ', 'not a url', 'ftp://example.com', 'javascript:alert(1)', 'https://user:password@example.com', 'localhost', 'https://127.0.0.1']) assert.equal(normalizeProductWebsite(input), undefined);
-const source = ts.createSourceFile('ArenaClient.tsx', fs.readFileSync('app/ArenaClient.tsx', 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+const source = ts.createSourceFile('ArenaClient.tsx', fs.readFileSync('app/submit/ProductFields.tsx', 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 let inputNode;
 function find(node) {
   if (ts.isJsxSelfClosingElement(node) && node.tagName.getText(source) === 'input' && node.attributes.properties.some(p => ts.isJsxAttribute(p) && p.name.getText(source) === 'id' && p.initializer?.text === 'product-url')) inputNode = node;

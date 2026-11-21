@@ -76,7 +76,7 @@ for (const plan of [undefined, 'invalid', ['free', 'pro']]) {
 assert.equal(detailsPage.metadata.robots.index, false);
 assert.equal(detailsPage.metadata.robots.googleBot.index, false);
 
-const client = fs.readFileSync('app/ArenaClient.tsx', 'utf8');
+const client = fs.readFileSync('app/submit/useProductSubmission.ts', 'utf8');
 const paidBranch = client.slice(client.indexOf('if (isPaidSubmission) {'), client.indexOf('if (!userLoggedIn)', client.indexOf('const handleSubmitProduct')));
 assert(paidBranch.includes('return;'));
 assert(!/submitArenaProduct|updateArenaProduct/.test(paidBranch), 'Paid order details must not create duplicate product profiles');

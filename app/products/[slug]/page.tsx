@@ -9,7 +9,6 @@ import { productLinkRel } from "@/lib/productSafety";
 import ReportProduct from "@/app/components/ReportProduct";
 import ProductGallery from "@/app/components/ProductGallery";
 import { profileCategoryLabel, pricingLabel } from "@/lib/productTaxonomy";
-import { RESOURCE_PATH } from "@/lib/launchResources";
 import { productOffer, productPriceLabel } from "@/lib/productPricing";
 
 interface Props {
@@ -31,9 +30,12 @@ export async function generateStaticParams() {
 }
 
 function conciseDescription(title: string, tagline: string, longDescription?: string) {
-  const source = longDescription || tagline;
-  const description = `${title}: ${source}`;
-  return description.length <= 160 ? description : `${description.slice(0, 157).trimEnd()}…`;
+  const description = [longDescription, tagline]
+    .map(value => value?.trim())
+    .find(value => value && value.toLowerCase() !== title.trim().toLowerCase())
+    || `Explore the ${title} product profile on Indie Clash.`;
+  if (description.length <= 160) return description;
+  return `${description.slice(0, 159).replace(/\s+\S*$/, "").trimEnd()}…`;
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -47,7 +49,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const image = `/api/og/versus?slug=${encodeURIComponent(product.id)}`;
 
   return {
-    title: `${product.title} — Product Profile`,
+    title: product.title,
     description,
     authors: [{ name: product.makerName }],
     alternates: { canonical: canonicalPath },
@@ -87,6 +89,9 @@ export default async function ProductPage({ params }: Props) {
   const canonicalUrl = absoluteUrl(canonicalPath);
   const productWebsite = publicHttpUrl(product.url);
   const productCategory = profileCategoryLabel(product.category);
+  const relatedHeading = productCategory && relatedProducts.length && relatedProducts[0].category === product.category
+    ? `More in ${productCategory} on Indie Clash`
+    : "Discover more launches on Indie Clash";
   const productPricing = pricingLabel(product.pricingModel);
   const quote = product.pricingDetails;
   const schemaImage = [product.logo, ...(product.screenshots || [])]
@@ -95,11 +100,13 @@ export default async function ProductPage({ params }: Props) {
     .find(image => image?.startsWith("https://"));
   const publishedDate = product.submittedAt ? new Date(product.submittedAt) : null;
   const validPublishedDate = publishedDate && !Number.isNaN(publishedDate.getTime()) ? publishedDate : null;
+  const hasDistinctTagline = Boolean(product.tagline?.trim()) &&
+    product.tagline.trim().toLowerCase() !== product.title.trim().toLowerCase();
   const faqEntries = [
-    {
+    ...(hasDistinctTagline ? [{
       question: `What is ${product.title}?`,
-      answer: `${product.title} is an indie product by ${product.makerName}. ${product.tagline}`,
-    },
+      answer: product.tagline,
+    }] : []),
     {
       question: `Who made ${product.title}?`,
       answer: `${product.title} was submitted by ${product.makerName}.`,
@@ -140,7 +147,11 @@ export default async function ProductPage({ params }: Props) {
         description: conciseDescription(product.title, product.tagline, product.description),
         url: canonicalUrl,
         datePublished: validPublishedDate?.toISOString(),
-        mainEntity: quote ? { "@id": `${canonicalUrl}#product` } : undefined,
+        isPartOf: { "@id": `${absoluteUrl("/")}#website` },
+        publisher: { "@type": "Organization", "@id": `${absoluteUrl("/")}#organization`, name: "Indie Clash", url: absoluteUrl("/") },
+        mainEntity: quote ? { "@id": `${canonicalUrl}#product` } : {
+          "@type": "Thing", name: product.title, description: product.description || product.tagline, sameAs: productWebsite,
+        },
         breadcrumb: { "@id": `${canonicalUrl}#breadcrumb` },
       },
       {
@@ -189,11 +200,14 @@ export default async function ProductPage({ params }: Props) {
               <div className="min-w-0 flex-1">
                 <p className="mb-2 font-mono text-[11px] uppercase tracking-[0.2em] text-violet-700 font-semibold">Indie product profile</p>
                 <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 sm:text-5xl">{product.title}</h1>
-                <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg">{product.tagline}</p>
+                {hasDistinctTagline && <p className="mt-4 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg">{product.tagline}</p>}
                 <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-zinc-500">
                   <span>Built by <strong className="font-semibold text-zinc-950">{product.makerName}</strong></span>
                   {validPublishedDate ? <time dateTime={validPublishedDate.toISOString()}>Launched {validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}</time> : null}
                 </div>
+                <p className="mt-3 text-sm leading-6 text-zinc-600">
+                  Listed on <Link href="/" className="font-semibold text-violet-700 hover:underline">Indie Clash</Link>, a free product launch and discovery platform.
+                </p>
                 {(productCategory || productPricing || product.platforms?.length) ? (
                   <div className="mt-4 flex flex-wrap gap-2">
                     {productCategory ? <span className="rounded-full border border-violet-200/80 bg-violet-50 px-3 py-1 text-xs text-violet-700 font-medium">{productCategory}</span> : null}
@@ -364,7 +378,7 @@ export default async function ProductPage({ params }: Props) {
           {relatedProducts.length ? (
             <section className="mt-16 border-t border-zinc-200/80 pt-10" aria-labelledby="related-heading">
               <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-500 font-semibold">Keep exploring</p>
-              <h2 id="related-heading" className="mt-1 text-2xl font-semibold text-zinc-950">More indie products</h2>
+              <h2 id="related-heading" className="mt-1 text-2xl font-semibold text-zinc-950">{relatedHeading}</h2>
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {relatedProducts.map((related) => (
                   <Link key={related.id} href={`/products/${encodeURIComponent(related.id)}`} className="rounded-2xl border border-zinc-200/80 bg-white shadow-2xs p-5 transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-xs">
@@ -376,6 +390,7 @@ export default async function ProductPage({ params }: Props) {
                   </Link>
                 ))}
               </div>
+              <Link href="/products" className="mt-4 inline-block text-sm font-medium text-violet-700 hover:underline">Browse all product launches →</Link>
             </section>
           ) : null}
 
@@ -394,9 +409,9 @@ export default async function ProductPage({ params }: Props) {
 
           <section className="mt-16 flex flex-col items-start justify-between gap-6 rounded-2xl border border-amber-200/80 bg-amber-50/70 p-8 sm:flex-row sm:items-center shadow-xs">
             <div>
-              <h2 className="text-2xl font-semibold text-zinc-950">Launch your own indie product</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Create a public product profile, enter real 1v1 matchups, and collect useful builder feedback.</p>
-              <Link href={RESOURCE_PATH} className="mt-3 inline-block text-sm font-medium text-violet-700 hover:underline">Explore more places to launch your startup →</Link>
+              <h2 className="text-2xl font-semibold text-zinc-950">Launch your product on Indie Clash</h2>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-600">Publish a free product profile in the discovery directory. You can also enter the Arena for feedback from other makers.</p>
+              <Link href="/resources/how-to-launch-a-product" className="mt-3 inline-block text-sm font-medium text-violet-700 hover:underline">Read the product launch guide →</Link>
             </div>
             <Link href="/submit" className="shrink-0 rounded-xl bg-zinc-900 px-6 py-3 text-sm font-semibold text-white hover:bg-zinc-800 transition shadow-xs">Submit a product</Link>
           </section>

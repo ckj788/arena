@@ -1,13 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { cache } from "react";
-import { fetchCloudProducts } from "@/lib/arenaStore";
+import { getArenaProducts as getProducts } from "@/lib/server/cataloguePages";
 import { PRODUCT_CATEGORIES, PUBLIC_CATEGORIES_ENABLED } from "@/lib/productTaxonomy";
 import { absoluteUrl, serializeJsonLd } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
-const getProducts = cache(fetchCloudProducts);
 
 export async function generateMetadata(): Promise<Metadata> {
   if (!PUBLIC_CATEGORIES_ENABLED) notFound();
