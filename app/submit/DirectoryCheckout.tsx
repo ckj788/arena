@@ -1,57 +1,50 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { SUBMISSION_PLANS, type SubmissionPlanId } from "@/lib/submissionPlans";
-import { CHECKOUT_PREPARATION_LIFETIME, consumePreparedCheckout, prepareCheckout } from "@/lib/preparedCheckout";
+import type { SubmissionPlanId } from "@/lib/submissionPlans";
+import { consumePreparedCheckout, prepareCheckout } from "@/lib/preparedCheckout";
 import { useSubmissionAccess } from "@/app/components/SubmissionAccess";
 
-type PaymentOptions = { userId: string; links: Partial<Record<SubmissionPlanId, string>>; errors: Partial<Record<SubmissionPlanId, string>> };
+type Selection = { userId: string; plan: SubmissionPlanId };
 
-export function useDirectoryCheckout(selectedPlan: SubmissionPlanId | null = null) {
+export function useDirectoryCheckout() {
   const { status, userId, requestSubmission } = useSubmissionAccess();
-  const [options, setOptions] = useState<PaymentOptions | null>(null);
-  const [retry, setRetry] = useState(0);
+  const [selection, setSelection] = useState<Selection | null>(null);
+  const [failure, setFailure] = useState<(Selection & { message: string }) | null>(null);
 
   useEffect(() => {
-    if (status !== "signed-in" || !userId) return;
-    let active = true;
-    for (const plan of SUBMISSION_PLANS.filter(plan => plan.id !== "free")) {
-      prepareCheckout(userId, plan.id).then(result => {
-        if (active) setOptions(previous => ({
-          userId,
-          links: { ...(previous?.userId === userId ? previous.links : {}), [plan.id]: result.url },
-          errors: { ...(previous?.userId === userId ? previous.errors : {}), [plan.id]: "" },
-        }));
-      }).catch(failure => {
-        if (active) setOptions(previous => ({
-          userId,
-          links: { ...(previous?.userId === userId ? previous.links : {}), [plan.id]: undefined },
-          errors: { ...(previous?.userId === userId ? previous.errors : {}), [plan.id]: failure instanceof Error ? failure.message : "Payment options could not load." },
-        }));
-      });
+    if (!selection) return;
+    if (status !== "signed-in" || selection.userId !== userId) {
+      setSelection(null);
+      return;
     }
-    const timer = setTimeout(() => {
-      setOptions(null);
-      setRetry(value => value + 1);
-    }, CHECKOUT_PREPARATION_LIFETIME);
-    return () => { active = false; clearTimeout(timer); };
-  }, [status, userId, retry]);
+    let active = true;
+    const { plan } = selection;
+    prepareCheckout(userId, plan).then(result => {
+      if (!active) return;
+      setSelection(null);
+      window.location.assign(result.url);
+      consumePreparedCheckout(userId, plan);
+    }).catch(error => {
+      if (!active) return;
+      setFailure({ ...selection, message: error instanceof Error ? error.message : "Could not open checkout. Please try again." });
+      setSelection(null);
+    });
+    return () => { active = false; };
+  }, [selection, status, userId]);
 
-  const current = status === "signed-in" && options?.userId === userId ? options : null;
-  const error = selectedPlan ? current?.errors[selectedPlan] || "" : "";
-  const href = selectedPlan ? current?.links[selectedPlan] : undefined;
-  function forPlan(planId: SubmissionPlanId) {
+  function forPlan(plan: SubmissionPlanId) {
     return {
-      href: current?.links[planId],
-      error: current?.errors[planId] || "",
-      signIn: () => requestSubmission(`/submit?plan=${planId}`),
-      consume: () => { if (userId) consumePreparedCheckout(userId, planId); },
+      busy: selection?.plan === plan,
+      disabled: status === "checking" || selection !== null,
+      error: status === "signed-in" && failure?.userId === userId && failure?.plan === plan ? failure.message : "",
+      start: () => {
+        if (selection || status === "checking") return;
+        if (status !== "signed-in" || !userId) return requestSubmission(`/submit?plan=${plan}`);
+        setFailure(null);
+        setSelection({ userId, plan });
+      },
     };
   }
-  return {
-    href, error, forPlan, signedOut: status === "signed-out" || status === "error",
-    signIn: () => requestSubmission(`/submit${selectedPlan ? `?plan=${selectedPlan}` : ""}`),
-    consume: () => { if (userId && selectedPlan) consumePreparedCheckout(userId, selectedPlan); },
-    reload: () => { setOptions(null); setRetry(value => value + 1); },
-  };
+  return { forPlan };
 }

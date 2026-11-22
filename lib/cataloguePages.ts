@@ -4,6 +4,14 @@ export interface CataloguePage {
   products: Product[];
   next: string | null;
   etag: string;
+  fetchedAt?: number;
+}
+
+export const CATALOGUE_REFRESH_SECONDS = 30;
+
+export function isFreshCatalogue(pages: CataloguePage[], now: number) {
+  return pages.length > 0 && pages.every(({ etag, fetchedAt }) =>
+    Boolean(etag) && fetchedAt !== undefined && fetchedAt <= now && now - fetchedAt < CATALOGUE_REFRESH_SECONDS * 1000);
 }
 
 export function catalogueProducts(pages: CataloguePage[]) {

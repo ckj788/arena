@@ -66,7 +66,7 @@ assert(html.includes(productUrl));
 assert.match(html, /official website/);
 const directory = await get('/products');
 assert.equal(directory.status, 200);
-assert.match(await directory.text(), /Discover new indie products/);
+assert.match(await directory.text(), /New indie products\. Recent launches\./);
 console.log('PASS: existing product URL, restored official link, and directory preserved');
 
 assert.match(xml, /<loc>https:\/\/www\.indieclash\.com\/arena<\/loc>/);
@@ -95,7 +95,8 @@ for (const path of ['/', '/arena', '/champions', '/products', '/resources', reso
   for (const schema of schemas) JSON.parse(schema[1]);
   if (path === '/products' || path === productPath) {
     const main = [...body.matchAll(/<main\b[^>]*>([\s\S]*?)<\/main>/g)].map(match => match[1]).join('');
-    assert(main.includes(`href="${resourcePath}"`), `${path}: resource link missing from content`);
+    const guide = path === productPath ? '/resources/how-to-launch-a-product' : resourcePath;
+    assert(main.includes(`href="${guide}"`), `${path}: resource link missing from content`);
   }
 }
 console.log('PASS: seven public pages have unique canonicals, metadata, one H1, valid JSON-LD and resource content links');

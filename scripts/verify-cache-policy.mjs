@@ -112,6 +112,15 @@ const reader = load('lib/cataloguePages.ts', {}, { fetch: async (url, init) => {
   return response;
 } });
 const initial = await paged.getCataloguePages();
+const checkedAt = Date.now();
+assert(reader.isFreshCatalogue(initial, checkedAt));
+for (const page of [
+  { ...initial[0], fetchedAt: checkedAt - 30_000 },
+  { ...initial[0], fetchedAt: checkedAt + 1 },
+  { ...initial[0], fetchedAt: undefined },
+  { ...initial[0], etag: '' },
+]) assert.equal(reader.isFreshCatalogue([...initial, page], checkedAt), false);
+assert.equal(reader.isFreshCatalogue([], checkedAt), false);
 const signal = new AbortController().signal;
 assert.equal(reader.catalogueProducts(initial).length, inventory.length);
 assert.equal(await reader.refreshCatalogue(initial, signal), initial);

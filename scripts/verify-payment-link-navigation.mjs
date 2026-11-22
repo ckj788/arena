@@ -15,7 +15,7 @@ try {
   await page.evaluateOnNewDocument((key, session) => { localStorage.setItem(key, JSON.stringify(session)); }, storageKey,
     { access_token: token, refresh_token: 'offline-fixture', token_type: 'bearer', expires_in: 3600, expires_at: expiresAt,
       user: { id: userId, aud: 'authenticated', role: 'authenticated', email: 'fixture@example.invalid', app_metadata: { provider: 'google', providers: ['google'] }, user_metadata: {} } });
-  let checkoutRequests = 0, linkRequests = 0, navigationTime, navigationDone;
+  let checkoutRequests = 0, linkRequests = 0, rejectNext = true;
   await page.setRequestInterception(true);
   page.on('request', async request => {
     const url = new URL(request.url());
@@ -23,6 +23,10 @@ try {
       checkoutRequests++;
       const body = JSON.parse(request.postData());
       assert.match(body.requestId, /^[a-f0-9]{8}-[a-f0-9]{4}-7[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);
+      if (rejectNext) {
+        rejectNext = false;
+        return request.respond({ status: 429, contentType: 'application/json', body: JSON.stringify({ error: 'Too many payment requests.' }) });
+      }
       return request.respond({ status: 200, contentType: 'application/json', body: JSON.stringify({ userId, orderId: 'fixture-order', url: config.links[body.plan].url }) });
     }
     if (url.pathname === '/api/payments/links') {
@@ -31,30 +35,33 @@ try {
         links: Object.fromEntries(Object.entries(config.links).map(([plan, link]) => [plan, link.url])) }) });
     }
     if (url.hostname === 'checkout.stripe.com') {
-      navigationTime = performance.now();
       await request.respond({ status: 200, contentType: 'text/html', body: '<h1>Stripe navigation captured</h1>' });
-      navigationDone?.();
       return;
     }
     if (url.hostname.endsWith('.supabase.co')) return request.respond({ status: 200, contentType: 'application/json', body: '[]' });
     return request.continue();
   });
   for (const plan of ['starter', 'growth', 'pro']) {
-    await page.goto(`${process.env.VERIFY_BASE_URL || config.baseUrl}/submit?plan=${plan}`, { waitUntil: 'networkidle0', timeout: 60000 });
-    const selector = `[data-plan="${plan}"] a.launch-card-choice`;
+    const before = checkoutRequests;
+    await page.goto(config.baseUrl + '/submit?plan=' + plan, { waitUntil: 'networkidle0' });
+    await page.reload({ waitUntil: 'networkidle0' });
+    const selector = '[data-plan="' + plan + '"] button.launch-card-choice:enabled';
     await page.waitForSelector(selector);
-    const url = await page.$eval(selector, a => a.href);
-    assert.equal(url, config.links[plan].url);
-    const before = { checkoutRequests, linkRequests };
-    const navigation = new Promise(resolve => { navigationDone = resolve; });
-    const started = performance.now();
-    await page.click(selector);
-    await navigation;
-    const elapsed = navigationTime - started;
-    assert.equal(checkoutRequests, before.checkoutRequests, 'Click must not create a session');
-    assert.equal(linkRequests, 0, 'Fixed payment links must not be requested');
-    assert(elapsed < 1000, `Navigation took ${elapsed}ms`);
-    console.log(`${plan}: native Stripe navigation started in ${elapsed.toFixed(0)}ms; click-time API requests: 0.`);
+    assert.equal(checkoutRequests, before, 'Opening and refreshing must consume zero checkout quota');
+    if (plan === 'starter') {
+      await page.click(selector);
+      await page.waitForSelector('[data-plan="starter"] [role="alert"]');
+      assert.equal(await page.$$eval('[role="alert"]', nodes => nodes.length), 1);
+    }
+    const requestsBeforeClick = checkoutRequests;
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'domcontentloaded' }),
+      page.$eval(selector, button => { button.click(); button.click(); }),
+    ]);
+    assert.equal(page.url(), config.links[plan].url);
+    assert.equal(checkoutRequests, requestsBeforeClick + 1);
+    assert.equal(linkRequests, 0);
+    console.log(plan + ': no requests on load/reload, one on double click, correct destination.');
   }
   console.log('PASS: real local page/native navigation, mocked account and binding responses. No payment performed.');
 } finally { await browser.close(); }

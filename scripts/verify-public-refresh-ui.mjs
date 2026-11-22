@@ -18,6 +18,11 @@ const rows = Array.from({ length: 3 }, (_, i) => ({
 }));
 try {
   const page = await browser.newPage();
+  // Exercise a stale SSR snapshot even when the dev server just rebuilt it.
+  await page.evaluateOnNewDocument(() => {
+    const realNow = Date.now;
+    Date.now = () => realNow() + 60_000;
+  });
   await page.setViewport({ width: 390, height: 900 });
   await page.setRequestInterception(true);
   page.on('pageerror', e => errors.push(e.message));

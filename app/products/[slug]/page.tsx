@@ -206,7 +206,7 @@ export default async function ProductPage({ params }: Props) {
                   {validPublishedDate ? <time dateTime={validPublishedDate.toISOString()}>Launched {validPublishedDate.toLocaleDateString("en", { year: "numeric", month: "short", day: "numeric" })}</time> : null}
                 </div>
                 <p className="mt-3 text-sm leading-6 text-zinc-600">
-                  Listed on <Link href="/" className="font-semibold text-violet-700 hover:underline">Indie Clash</Link>, a free product launch and discovery platform.
+                  Listed on <Link href="/" className="font-semibold text-violet-700 hover:underline">Indie Clash</Link>, a platform for launching and discovering products.
                 </p>
                 {(productCategory || productPricing || product.platforms?.length) ? (
                   <div className="mt-4 flex flex-wrap gap-2">

@@ -35,7 +35,7 @@ for (const invalid of [undefined, null, '', 'enterprise', '__proto__', ['free'],
   assert.equal(plans.getSubmissionPlan(invalid), undefined);
 }
 
-const picker = load('app/submit/PlanPicker.tsx', { '@/lib/submissionPlans': plans, 'next/navigation': { useRouter: () => ({ push() {} }) }, './DirectoryCheckout': { useDirectoryCheckout: () => ({ forPlan: () => ({}) }) } }).default;
+const picker = load('app/submit/PlanPicker.tsx', { '@/lib/submissionPlans': plans, 'next/navigation': { useRouter: () => ({ push() {} }) }, './DirectoryCheckout': { useDirectoryCheckout: () => ({ forPlan: () => ({ disabled: true }) }) } }).default;
 const pickerHtml = renderToStaticMarkup(React.createElement(picker));
 assert.equal((pickerHtml.match(/type="radio"/g) || []).length, 0);
 assert.equal((pickerHtml.match(/class="launch-plan-card/g) || []).length, 3);

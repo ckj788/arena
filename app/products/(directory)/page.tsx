@@ -38,10 +38,10 @@ export const metadata: Metadata = {
   },
 };
 
-function ProductMark({ product }: { product: Product }) {
+function ProductMark({ product, loading }: { product: Product; loading: "eager" | "lazy" }) {
   const image = trustedProductImageUrl(product.logo);
   if (image) {
-    return <img src={image} alt={`${product.title} logo`} className="h-10 w-10 rounded-lg object-contain bg-white" />;
+    return <img src={image} alt={`${product.title} logo`} loading={loading} className="h-10 w-10 rounded-lg object-contain bg-white" />;
   }
   // Legacy rows may contain an entire base64 image or an arbitrary remote URL.
   // Never render those untrusted/oversized values as visible fallback text.
@@ -121,7 +121,7 @@ export default async function ProductsPage() {
               <span className="font-mono text-xs text-zinc-500">Updated continuously</span>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              {products.map((product) => {
+              {products.map((product, index) => {
                 const website = publicHttpUrl(product.url);
                 const submittedAt = new Date(product.submittedAt);
                 const hasDate = !Number.isNaN(submittedAt.getTime());
@@ -129,7 +129,7 @@ export default async function ProductsPage() {
                   <article key={product.id} className="product-card relative flex flex-col rounded-2xl border border-zinc-200/90 bg-white p-5 shadow-xs transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md">
                     <div className="flex items-start gap-4">
                       <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-zinc-200/80 bg-white shadow-2xs">
-                        <ProductMark product={product} />
+                        <ProductMark product={product} loading={index < 6 ? "eager" : "lazy"} />
                       </span>
                       <div className="min-w-0 flex-1">
                         <h3 className="text-lg font-semibold text-zinc-950">

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Bracket, Match, Product } from "@/lib/mockData";
-import { catalogueProducts, refreshCatalogue, type CataloguePage } from "@/lib/cataloguePages";
+import { catalogueProducts, isFreshCatalogue, refreshCatalogue, type CataloguePage } from "@/lib/cataloguePages";
 import { getActiveRound, getBracketSize, getInitialRoundNumber, getRoundMatches, loadBracket, loadProducts } from "@/lib/arenaStore";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -34,7 +34,7 @@ export default function usePublicArenaData(
   const votePendingRef = useRef(false);
   const publicRevisionRef = useRef(0);
 
-  const syncCloudData = useCallback(async () => {
+  const syncCloudData = useCallback(async (initialRefresh = false) => {
     if (scope === "paid" || isResettingRef.current || isSyncLockedRef.current || votePendingRef.current || pending.current) return;
     if (!supabase) {
       setProducts(loadProducts());
@@ -56,8 +56,10 @@ export default function usePublicArenaData(
           if (!response.ok) throw new Error("Unable to refresh the Arena.");
           return response.json();
         });
+      const reuseCatalogue = scope === "champions" ||
+        (scope === "discover" && initialRefresh && isFreshCatalogue(pages.current, Date.now()));
       const [updated, live]: [CataloguePage[], { bracket?: Bracket | null; champions?: Product[] }] = await Promise.all([
-        scope === "champions" ? pages.current : refreshCatalogue(pages.current, signal), activity,
+        reuseCatalogue ? pages.current : refreshCatalogue(pages.current, signal), activity,
       ]);
       if (controller.signal.aborted || isSyncLockedRef.current || votePendingRef.current || revision !== publicRevisionRef.current) return;
       if (updated !== pages.current) {
@@ -86,7 +88,7 @@ export default function usePublicArenaData(
   useEffect(() => {
     if (scope === "paid") return;
     lastSuccess.current = 0;
-    const frame = requestAnimationFrame(() => void syncCloudData());
+    const frame = requestAnimationFrame(() => void syncCloudData(true));
     const refresh = () => { if (supabase && document.visibilityState === "visible") void syncCloudData(); };
     const timer = window.setInterval(refresh, 60_000);
     window.addEventListener("focus", refresh);

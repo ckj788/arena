@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { cache } from "react";
 import { unstable_cache } from "next/cache";
 import { fromDbProduct } from "@/lib/arenaStore";
-import { catalogueProducts, type CataloguePage } from "@/lib/cataloguePages";
+import { CATALOGUE_REFRESH_SECONDS, catalogueProducts, type CataloguePage } from "@/lib/cataloguePages";
 import { SEED_PRODUCTS } from "@/lib/mockData";
 import { DB_PREFIX, publicArenaTable, supabase } from "@/lib/supabaseClient";
 import { isVisibleProduct } from "@/lib/productSafety";
@@ -34,11 +34,11 @@ async function loadPage(after: string): Promise<CataloguePage> {
   const products = data.slice(0, pageSize).map(row => withPublicImageUrls(fromDbProduct(row as unknown as Record<string, unknown>)));
   const next = data.length > pageSize ? products[products.length - 1].id : null;
   const hash = createHash("sha256").update(JSON.stringify([products, next])).digest("base64url");
-  return { products, next, etag: '"' + hash + '"' };
+  return { products, next, etag: '"' + hash + '"', fetchedAt: Date.now() };
 }
 
 // Browser polling and ISR have separate freshness budgets. Both expire on publication or moderation.
-export const getCataloguePage = unstable_cache(loadPage, ["live-card-page-v1"], { revalidate: 30, tags: [CATALOGUE_TAG] });
+export const getCataloguePage = unstable_cache(loadPage, ["live-card-page-v1"], { revalidate: CATALOGUE_REFRESH_SECONDS, tags: [CATALOGUE_TAG] });
 const getInitialPage = unstable_cache(loadPage, ["initial-card-page-v1"], { revalidate: CATALOGUE_SECONDS, tags: [CATALOGUE_TAG] });
 
 export const getCataloguePages = cache(async () => {
