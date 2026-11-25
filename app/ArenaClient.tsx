@@ -54,7 +54,7 @@ import { compareArenaQueue } from "@/lib/discoveryRanking";
 import { publicHttpUrl, trustedProductImageUrl } from "@/lib/site";
 import { isVisibleProduct, productLinkRel } from "@/lib/productSafety";
 import LaunchShareKit from "@/app/components/LaunchShareKit";
-import { exchangeOAuthCodeOnce, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, OAUTH_SUBMISSION_TARGET_KEY, oauthReturnDestination } from "@/lib/browserOAuth";
+import { exchangeOAuthCodeOnce, oauthFailureCode, oauthFailureMessage, OAUTH_RESTORE_EVENT, OAUTH_RETURN_TO_KEY, OAUTH_SUBMISSION_TARGET_KEY, oauthReturnDestination } from "@/lib/browserOAuth";
 import { getSubmissionPlan, type SubmissionPlanId } from "@/lib/submissionPlans";
 import ServiceFields from "@/app/submit/ServiceFields";
 import { useSubmissionAccess } from "@/app/components/SubmissionAccess";
@@ -345,8 +345,9 @@ export default function ArenaClient({
     const url = new URL(window.location.href);
     const fragment = new URLSearchParams(url.hash.slice(1));
     const code = url.searchParams.get("code");
-    const callbackError = url.searchParams.get("error") || fragment.get("error");
-    const isCallback = Boolean(code || callbackError || url.searchParams.has("error_description"));
+    const callbackError = url.searchParams.get("error_code") || fragment.get("error_code") || url.searchParams.get("error") || fragment.get("error");
+    const callbackDescription = url.searchParams.get("error_description") || fragment.get("error_description");
+    const isCallback = Boolean(code || callbackError || callbackDescription);
 
     const restoreAfterOAuth = (failureCode?: string) => {
       let requestedReturn: string | null = null;
@@ -375,9 +376,13 @@ export default function ArenaClient({
     const recoverSession = async () => {
       let failureCode: string | undefined;
       try {
-        if (callbackError) throw { code: callbackError };
+        if (callbackError || callbackDescription) throw { code: callbackError, message: callbackDescription };
         if (isCallback && !code) throw new Error("Missing sign-in code");
-        const result = await withDeadline(code ? exchangeOAuthCodeOnce(authClient, code) : authClient.auth.getSession(), 15_000);
+        // The exchange has a transport timeout. Wait for the SDK to finish
+        // before consuming the return path or reporting a sign-in result.
+        const result = code
+          ? await exchangeOAuthCodeOnce(authClient, code)
+          : await withDeadline(authClient.auth.getSession(), 15_000);
         if (result.error) {
           const isStaleToken =
             result.error.message?.toLowerCase().includes("refresh token") ||
@@ -406,7 +411,7 @@ export default function ArenaClient({
         if (isStaleToken && !isCallback) {
           await authClient.auth.signOut({ scope: "local" }).catch(() => {});
         } else {
-          failureCode = error && typeof error === "object" && "code" in error && typeof error.code === "string" ? error.code : "sign_in_failed";
+          failureCode = oauthFailureCode(error);
           if (active && isCallback) setAuthError(oauthFailureMessage(error));
         }
       } finally {
@@ -481,6 +486,7 @@ export default function ArenaClient({
     const returnUrl = new URL(window.location.href);
     returnUrl.searchParams.delete("code");
     returnUrl.searchParams.delete("error");
+    returnUrl.searchParams.delete("error_code");
     returnUrl.searchParams.delete("error_description");
     if (isSubmitOpen) returnUrl.searchParams.set("submit", "1");
     if (currentView === "console" || (isSubmitOpen && submitSource === "console")) {

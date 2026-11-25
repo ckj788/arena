@@ -16,6 +16,15 @@ export function publicArenaTable(table: PublicArenaTable) {
 // Missing configuration intentionally enables the existing local sandbox mode.
 export const supabase = supabaseUrl && supabaseAnonKey
   ? createClient(supabaseUrl, supabaseAnonKey, {
+      global: {
+        fetch(input, init) {
+          // Abort the one-use login exchange itself, including a stalled response body.
+          if (typeof input === "string" && input.endsWith("/auth/v1/token?grant_type=pkce") && !init?.signal) {
+            return fetch(input, { ...init, signal: AbortSignal.timeout(45_000) });
+          }
+          return fetch(input, init);
+        },
+      },
       auth: {
         detectSessionInUrl: false,
         flowType: "pkce",

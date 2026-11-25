@@ -153,7 +153,7 @@ export default function useProductSubmission({
     const restoreUi = () => {
     const params = new URLSearchParams(window.location.search);
     const fragment = new URLSearchParams(window.location.hash.slice(1));
-    const isOAuthCallback = params.has("code") || params.has("error") || params.has("error_description") || fragment.has("error");
+    const isOAuthCallback = params.has("code") || ["error", "error_code", "error_description"].some(key => params.has(key) || fragment.has(key));
     // Wait for the code exchange before consuming the draft/return context.
     if (isOAuthCallback) return;
     const shouldOpenFromQuery = params.get("submit") === "1";
