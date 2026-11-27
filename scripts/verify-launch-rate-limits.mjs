@@ -46,7 +46,7 @@ try {
   await db.exec('RESET ROLE');
   const counters = (await db.query('SELECT shipandbattle_user_id AS owner, shipandbattle_action AS action, shipandbattle_request_count AS count FROM public.shipandbattle_rate_limits ORDER BY owner, action')).rows;
   assert.deepEqual(counters.map(({ action, count }) => [action, count]), [['checkout', 20], ['launch_details', 20], ['product_submit', 3], ['checkout', 1]]);
-  console.log('PASS: actual PostgreSQL migration runs twice, keeps product quota at 3/day, isolates checkout/details at 20/hour per account, rejects the 21st request, requires authentication, denies direct table access and preserves the existing limiter. Local ephemeral database only.');
+  console.log('PASS: actual PostgreSQL migration runs twice, keeps the separate free-submit request throttle at 3/day, isolates checkout/details at 20/hour per account, rejects the 21st request, requires authentication, denies direct table access and preserves the existing limiter. Local ephemeral database only.');
 } finally {
   await db.close();
 }

@@ -295,6 +295,7 @@ export async function saveLaunchDetails(userId: string, orderId: string, input: 
     p_order_id: orderId, p_user_id: userId, p_livemode: orderLiveMode(),
     p_product: input.product, p_service_details: input.serviceDetails, p_profile: toDbProduct(profile),
   });
+  if (error?.code === "IC001") throw new HttpError(429, error.message);
   if (error?.code === "42501") throw new HttpError(409, "This website is already listed under another account. Sign in with its owner account or contact support to link your paid service.");
   if (error?.code === "P0002") throw new HttpError(409, "The order has changed. Check its status before submitting again.");
   if (error) databaseFailure("publish paid product and save order details", error);

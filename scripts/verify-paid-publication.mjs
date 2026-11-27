@@ -79,5 +79,49 @@ try {
   const collision = await order();
   const collisionId = (await submit(collision, owner, { ...input, url: 'https://published.other' }, undefined, profile('https://published.other'))).rows[0].id;
   assert(collisionId.startsWith('published-'));
+  const quotaMigration = fs.readFileSync('lib/migrations/20261127_daily_product_publication.sql', 'utf8');
+  await db.exec(quotaMigration);
+  await db.exec(quotaMigration);
+  const limited = error => error.code === 'IC001';
+  const newUrl = 'https://next-product.example';
+  const pending = await order();
+  await assert.rejects(submit(pending, owner, { ...input, url: newUrl }, undefined, profile(newUrl)), limited);
+  assert.equal((await db.query('SELECT product_id FROM shipandbattle_launch_orders WHERE id=$1', [pending])).rows[0].product_id, null);
+  assert.equal((await submit(await order())).rows[0].id, published);
+  const freeInsert = (id, user) => db.query(
+    'INSERT INTO shipandbattle_products(shipandbattle_id, shipandbattle_title, shipandbattle_url, shipandbattle_creator_uid) VALUES ($1,$1,$2,$3)',
+    [id, 'https://' + id + '.example', user]);
+  await db.exec('BEGIN');
+  await freeInsert('discarded', other);
+  await db.exec('ROLLBACK');
+  await freeInsert('free', other);
+  await assert.rejects(submit(await order(other), other, { ...input, url: newUrl }, undefined,
+    { ...profile(newUrl), shipandbattle_creator_uid: other }), limited);
+  await db.query("UPDATE shipandbattle_last_publication SET publication_day = publication_day - 1 WHERE user_id=$1", [owner]);
+  await submit(pending, owner, { ...input, url: newUrl }, undefined, profile(newUrl));
+  await assert.rejects(freeInsert('after-paid', owner), limited);
+  // Drive the database clock through both DST transition days in the ephemeral fixture.
+  const clockedMigration = quotaMigration.replaceAll('statement_timestamp()', "current_setting('fixture.instant')::timestamptz");
+  const setClock = instant => db.query("SELECT set_config('fixture.instant', $1, false)", [instant]);
+  await setClock('2027-03-14T04:59:59Z');
+  await db.exec(clockedMigration);
+  const dstOwner = randomUUID();
+  await db.query('INSERT INTO auth.users VALUES ($1)', [dstOwner]);
+  for (const [index, instant, allowed] of [
+    [1, '2027-03-14T04:59:59Z', true],
+    [2, '2027-03-14T05:00:00Z', true],
+    [3, '2027-03-15T03:59:59Z', false],
+    [4, '2027-03-15T04:00:00Z', true],
+    [5, '2027-11-07T03:59:59Z', true],
+    [6, '2027-11-07T04:00:00Z', true],
+    [7, '2027-11-08T04:59:59Z', false],
+    [8, '2027-11-08T05:00:00Z', true],
+  ]) {
+    await setClock(instant);
+    const insert = freeInsert('dst-' + index, dstOwner);
+    if (allowed) await insert;
+    else await assert.rejects(insert, limited);
+  }
+  console.log('PASS: daily quota covers existing listings, free and paid publication, rollback and New York midnight on 23- and 25-hour days.');
   console.log('PASS: shared real product mapping, atomic publication/order/email, private paid-only RPC, repeat submission, owned-domain reuse, foreign ownership denial, slug collisions and rollback.');
 } finally { await db.close(); }

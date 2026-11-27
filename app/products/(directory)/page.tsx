@@ -106,7 +106,7 @@ export default async function ProductsPage() {
           <div className="mt-6 flex flex-wrap gap-3 text-xs text-zinc-600">
             <Link href="/underrated" className="rounded-full border border-violet-200/80 bg-violet-50/80 px-3 py-1.5 text-violet-700 font-medium hover:text-violet-900 transition">Explore overlooked products →</Link>
             <span className="rounded-full border border-zinc-200 bg-white shadow-2xs px-3 py-1.5">{products.length} public profiles</span>
-            <span className="rounded-full border border-zinc-200 bg-white shadow-2xs px-3 py-1.5">Followed official-site links</span>
+            <span className="rounded-full border border-zinc-200 bg-white shadow-2xs px-3 py-1.5">Official-site links</span>
             <span className="rounded-full border border-zinc-200 bg-white shadow-2xs px-3 py-1.5">Authenticated builder feedback</span>
           </div>
         </section>

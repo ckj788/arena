@@ -70,7 +70,7 @@ entries and category-based discovery diversification stay disabled.
 - `/underrated` orders real products by qualified visibility rather than payment or raw popularity.
 - `/versus/[product-a]-vs-[product-b]` is indexable only when that exact matchup exists in Supabase. Unknown products and fabricated matchups return a real `404` with `noindex`.
 - `/sitemap.xml` contains the homepage, product directory, underrated discovery, sufficiently populated category pages, real product pages, and deduplicated real matchup pages. `/robots.txt` keeps public pages crawlable while excluding API and auth endpoints.
-- Product and matchup pages emit canonical metadata, Open Graph/Twitter metadata, breadcrumbs, and visible-content-matched JSON-LD. Valid official product-site links are standard followed links; user-supplied social/profile links remain marked `ugc`.
+- Product and matchup pages emit canonical metadata, Open Graph/Twitter metadata, breadcrumbs, and visible-content-matched JSON-LD. Listings after the first 150 use ugc and nofollow on official product links; user-supplied social/profile links remain marked `ugc`.
 
 After the production deployment, submit `https://www.indieclash.com/sitemap.xml` in Google Search Console and inspect the homepage plus a representative product and matchup URL.
 

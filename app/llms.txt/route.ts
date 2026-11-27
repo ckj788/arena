@@ -35,7 +35,7 @@ ${PUBLIC_CATEGORIES_ENABLED ? `## Categories\n${categories}\n` : ""}\
 - A valid two-sided peer critique can temporarily add 20% Needs More Eyes discovery weight; it never changes Arena FIFO or match results.
 - Arena entry follows the time a maker joins the queue. Leftovers keep guaranteed priority for the next run, and ties always settle deterministically.
 - Arena voting requires authenticated participants to leave constructive feedback.
-- Official product website links are normal followed links.
+- Listings after the first 150 use ugc and nofollow on official product website links.
 
 ## Content notes
 Product descriptions and maker stories are submitted by their makers. Arena critiques are community-authored. Check the linked official product website for current product claims, pricing, and availability.

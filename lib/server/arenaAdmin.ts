@@ -171,6 +171,7 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     .single();
   // Another request can submit the same domain after the initial check. The
   // database rejects it; repeat the lookup to return the existing profile.
+  if (error?.code === "IC001") throw new HttpError(429, error.message);
   if (error && isDuplicateProductDomain(error)) await assertUniqueProductDomain(client, input.url);
   if (error || !data) databaseError("creating product", error);
   return fromDbProduct(data);

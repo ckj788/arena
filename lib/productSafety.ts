@@ -31,9 +31,13 @@ export function isVisibleProduct(product: Product): boolean {
   return product.moderationStatus !== "restricted";
 }
 
-export function productLinkRel(product: Product): string {
-  // Published product websites are followed immediately, including unreviewed
-  // submissions. Keep moderation metadata independent from this launch policy.
-  return product.moderationStatus === "restricted"
-    ? "ugc nofollow noopener noreferrer" : "noopener noreferrer";
+// Production's 150th product (cleancitation), ordered by submitted_at then id.
+const LAST_FOLLOWED_SUBMISSION = Date.parse("2026-11-27T06:15:59.083Z");
+
+export function productLinkRel(product: Pick<Product, "submittedAt" | "moderationStatus">): string {
+  const submitted = Date.parse(product.submittedAt);
+  // Missing database timestamps are represented by the Unix epoch in fromDbProduct.
+  return product.moderationStatus !== "restricted" && submitted > 0 && submitted <= LAST_FOLLOWED_SUBMISSION
+    ? "noopener noreferrer"
+    : "ugc nofollow noopener noreferrer";
 }

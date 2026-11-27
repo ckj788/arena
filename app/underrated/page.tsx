@@ -4,7 +4,7 @@ import PublicSiteHeader from "@/app/components/PublicSiteHeader";
 import type { Product } from "@/lib/mockData";
 import { getPublicProducts } from "@/lib/server/publicSeoData";
 import { categoryLabel } from "@/lib/productTaxonomy";
-import { compareFairDiscovery, hasActiveDiscoveryBoost } from "@/lib/discoveryRanking";
+import { hasActiveDiscoveryBoost } from "@/lib/discoveryRanking";
 import { absoluteUrl, publicHttpUrl, serializeJsonLd, trustedProductImageUrl } from "@/lib/site";
 import { productLinkRel } from "@/lib/productSafety";
 
@@ -37,7 +37,9 @@ function ProductMark({ product }: { product: Product }) {
 }
 
 export default async function UnderratedPage() {
-  const products = (await getPublicProducts().catch(() => [])).slice().sort((a, b) => compareFairDiscovery(a, b));
+  const products = (await getPublicProducts().catch(() => [])).slice().sort((a, b) =>
+    Date.parse(b.publishedAt || b.submittedAt) - Date.parse(a.publishedAt || a.submittedAt) || a.id.localeCompare(b.id)
+  );
   const canonicalUrl = absoluteUrl("/underrated");
   const jsonLd = {
     "@context": "https://schema.org",
@@ -72,12 +74,7 @@ export default async function UnderratedPage() {
         <section className="mb-12 max-w-4xl">
           <p className="font-mono text-[11px] uppercase tracking-[0.2em] text-violet-700 font-medium">Fair discovery</p>
           <h1 className="mt-3 text-4xl font-bold tracking-tight text-zinc-950 sm:text-6xl">Underrated indie products</h1>
-          <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg">Products with the least qualified visibility rise first. Nobody can buy this position, and popularity never locks a new maker out.</p>
-          <div className="mt-6 flex flex-wrap gap-3 font-mono text-xs text-zinc-600">
-            <span className="rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1.5 shadow-2xs">{products.length} products</span>
-            <span className="rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1.5 shadow-2xs">Lowest visibility first</span>
-            <span className="rounded-full border border-zinc-200/80 bg-zinc-50 px-3 py-1.5 shadow-2xs">No paid ranking</span>
-          </div>
+          <p className="mt-5 max-w-3xl text-base leading-7 text-zinc-600 sm:text-lg">The newest launches appear first. Nobody can buy this position, and popularity never locks a new maker out.</p>
         </section>
 
         {products.length ? (
@@ -110,7 +107,6 @@ export default async function UnderratedPage() {
                     </div>
                     <div className="mt-5 flex items-center justify-between border-t border-zinc-100 pt-4 text-xs text-zinc-500">
                       <span>By {product.makerName}</span>
-                      <span className="font-mono text-zinc-400">Needs more eyes</span>
                     </div>
                     <div className="mt-4 flex flex-wrap items-center gap-2 text-xs font-semibold">
                       <span aria-hidden="true" className="inline-flex min-h-11 items-center text-zinc-700">View product →</span>

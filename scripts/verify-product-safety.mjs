@@ -51,9 +51,12 @@ assert.equal(site.publicHttpUrl('https://HTTPS://mistol.ai'),'https://mistol.ai/
 assert.equal(safety.productDomainKey('https://WWW.Example.com.:443/path'),'example.com');
 assert.notEqual(safety.productDomainKey('https://a.vercel.app'),safety.productDomainKey('https://b.vercel.app'));
 assert.notEqual(safety.productDomainKey('https://github.com/owner/a'),safety.productDomainKey('https://github.com/owner/b'));
-assert.equal(safety.productLinkRel({moderationStatus:'unreviewed',linkTrust:'ugc'}),'noopener noreferrer');
-assert.match(safety.productLinkRel({moderationStatus:'restricted',linkTrust:'trusted'}),/ugc nofollow/);
-assert(!safety.productLinkRel({moderationStatus:'approved',linkTrust:'trusted'}).includes('nofollow'));
+const linkRel = (submittedAt, moderationStatus = 'unreviewed') => safety.productLinkRel({submittedAt, moderationStatus});
+assert.equal(linkRel('2026-11-27T06:15:59.083+00:00'), 'noopener noreferrer'); // #150
+assert.match(linkRel('2026-11-27T09:43:40.794Z', 'approved'), /ugc nofollow/); // #151
+assert.match(linkRel('2026-11-27T06:15:59.084Z'), /ugc nofollow/);
+assert.match(linkRel('2026-10-01T00:00:00Z', 'restricted'), /ugc nofollow/);
+for (const missing of ['', 'invalid', '1970-01-01T00:00:00Z']) assert.match(linkRel(missing), /nofollow/);
 assert(!safety.isVisibleProduct({moderationStatus:'restricted'}));
 const robots = load('app/robots.ts',{'@/lib/site':site}).default();
 assert(robots.rules.allow.includes('/api/og/'));
