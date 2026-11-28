@@ -19,7 +19,7 @@ import type { Bracket, Match, Product } from "@/lib/mockData";
 import { DB_PREFIX } from "@/lib/supabaseClient";
 import { getMillisecondsToNextNYMidnight, getRoundEndAtIso, getRoundRemainingMs } from "@/lib/timeHelpers";
 import { getAdminClient, HttpError } from "./auth";
-import { DUPLICATE_PRODUCT_MESSAGE, productDomainKey } from "@/lib/productSafety";
+import { DAILY_PUBLICATION_LIMIT_MESSAGE, DUPLICATE_PRODUCT_MESSAGE, productDomainKey } from "@/lib/productSafety";
 
 type DbRow = Record<string, unknown>;
 
@@ -171,7 +171,7 @@ export async function createProductForUser(user: User, input: NewProductInput): 
     .single();
   // Another request can submit the same domain after the initial check. The
   // database rejects it; repeat the lookup to return the existing profile.
-  if (error?.code === "IC001") throw new HttpError(429, error.message);
+  if (error?.code === "IC001") throw new HttpError(429, DAILY_PUBLICATION_LIMIT_MESSAGE);
   if (error && isDuplicateProductDomain(error)) await assertUniqueProductDomain(client, input.url);
   if (error || !data) databaseError("creating product", error);
   return fromDbProduct(data);

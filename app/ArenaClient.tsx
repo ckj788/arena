@@ -2095,7 +2095,7 @@ export default function ArenaClient({
             </p>
 
             {/* Auth Status Segment */}
-            {authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
+            {!isPaidSubmission && authError && <p role="alert" data-auth-error className="rounded-md border border-red-400/25 bg-red-950/30 p-3 text-sm leading-6 text-red-200">{authError}</p>}
             {!isPaidSubmission && <div className="p-4 bg-zinc-50/80 border border-zinc-200/80 rounded-xl flex flex-col gap-3 text-left">
               <div className="flex items-center space-x-3">
                 <span className="w-8 h-8 bg-white border border-zinc-200 shadow-2xs flex items-center justify-center text-sm rounded-lg">
@@ -2128,16 +2128,6 @@ export default function ArenaClient({
               )}
             </div>}
 
-            {submitError && (
-              <div
-                role="alert"
-                aria-live="polite"
-                className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[11px] leading-relaxed text-red-700"
-              >
-                {submitError}
-              </div>
-            )}
-
             <form
               onSubmit={handleSubmitProduct}
               noValidate
@@ -2149,6 +2139,15 @@ export default function ArenaClient({
               <ProductFields fields={fields} normalizedProductUrl={normalizedProductUrl} duplicateProduct={duplicateProduct}
                 isPaidSubmission={isPaidSubmission} isSubmittingProduct={isSubmittingProduct} setSubmitError={setSubmitError} />
 
+              {(submitError || (isPaidSubmission && authError)) && (
+                <div
+                  role="alert"
+                  aria-live="polite"
+                  className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2.5 text-[11px] leading-relaxed text-red-700"
+                >
+                  {submitError || authError}
+                </div>
+              )}
               {isPaidSubmission && <label className="submission-consent"><input type="checkbox" required checked={serviceDetails.consent} onChange={event => setServiceDetails({ ...serviceDetails, consent: event.target.checked })} /><span>I am authorized to submit this product and allow Indie Clash and its fulfillment partner to use these details for directory submissions and delivery reports.</span></label>}
               <div className={isPaidSubmission ? "sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white py-4" : isSubmissionPage ? "flex flex-wrap items-center justify-between gap-3 border-t border-zinc-200/80 bg-white pt-6" : "sticky -bottom-4 sm:-bottom-6 z-20 flex justify-end gap-3 border-t border-zinc-200/80 bg-white py-4"}>
                 <button

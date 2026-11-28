@@ -69,6 +69,7 @@ function projectColumns(row, columns) {
 }
 let storeFailure = false;
 let launchLimitError = null;
+let publicationError = null;
 const db = {
   from(table) {
     calls.tables.push(table);
@@ -107,6 +108,7 @@ const db = {
     if (name === 'shipandbattle_consume_launch_rate_limit') return { error: launchLimitError };
     if (storeFailure) return { error: { message: 'offline store failure' } };
     if (name === 'shipandbattle_submit_launch_product') {
+      if (publicationError) return { error: publicationError };
       const order = orders.get(args.p_order_id);
       if (!order || order.user_id !== args.p_user_id || order.livemode !== args.p_livemode || order.status !== 'paid') return { error: { code: 'P0002' } };
       order.product = args.p_product;
@@ -147,6 +149,7 @@ const paymentLinks = load('lib/server/paymentLinks.ts', {
 });
 const payments = load('lib/server/launchPayments.ts', {
   'server-only': {}, 'node:crypto': { createHash }, '@/lib/supabaseClient': { DB_PREFIX: 'shipandbattle_' },
+  '@/lib/productSafety': load('lib/productSafety.ts'),
   '@/lib/submissionPlans': plans, './auth': auth, './productInput': productInput,
   './stripe': { ...configuration, getStripe: () => stripeMock },
   './paymentLinks': paymentLinks,
@@ -303,6 +306,12 @@ const thirdOrder = [...orders.values()][2];
 assert.equal((await detailsRoute.PUT(detailsRequest(false), { params: Promise.resolve({ id: thirdOrder.id }) })).status, 401);
 assert.equal((await detailsRoute.PUT(detailsRequest(true), { params: Promise.resolve({ id: thirdOrder.id }) })).status, 403);
 thirdOrder.status = 'paid';
+publicationError = { code: 'IC001', message: 'You can publish one new product per account per day. Please try again after midnight New York time.' };
+const publicationRejected = await detailsRoute.PUT(detailsRequest(true), { params: Promise.resolve({ id: thirdOrder.id }) });
+assert.equal(publicationRejected.status, 503);
+assert.match((await publicationRejected.json()).error, /Your order is paid.*without paying again/);
+assert.equal(deferred.length, 0);
+publicationError = null;
 assert.equal((await detailsRoute.PUT(detailsRequest(true), { params: Promise.resolve({ id: thirdOrder.id }) })).status, 200);
 assert.equal(deferred.length, 1, 'Email is deferred until after submission succeeds');
 assert.equal(calls.rpc.at(-1).name, 'shipandbattle_submit_launch_product');

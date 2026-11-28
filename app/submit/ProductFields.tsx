@@ -265,7 +265,7 @@ export default function ProductFields({ fields, normalizedProductUrl, duplicateP
             const file = e.target.files?.[0];
             if (file) {
               if (file.size > 2 * 1024 * 1024) {
-                alert("File size exceeds the 2MB limit!");
+                setSubmitError("File size exceeds the 2MB limit!");
                 e.target.value = "";
                 return;
               }

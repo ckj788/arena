@@ -13,6 +13,7 @@ export interface Product {
   screenshot?: string;
   screenshots?: string[];
   submittedAt: string;
+  paidWebsiteLink?: boolean;
   queueStatus: "waiting" | "active" | "completed";
   votesCount: number;
   creatorUsername?: string;

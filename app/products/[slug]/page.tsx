@@ -234,7 +234,7 @@ export default async function ProductPage({ params }: Props) {
 
             <div className="mt-6 flex flex-wrap gap-3">
               {productWebsite ? (
-                <a href={productWebsite} target="_blank" rel={productLinkRel(product)} className="rounded-xl bg-[#ffbe18] px-5 py-3 text-sm font-semibold text-zinc-950 shadow-xs transition hover:bg-[#e0a612]">
+                <a href={productWebsite} target="_blank" rel={productLinkRel(product, "profile-website")} className="rounded-xl bg-[#ffbe18] px-5 py-3 text-sm font-semibold text-zinc-950 shadow-xs transition hover:bg-[#e0a612]">
                   Visit {product.title} official website ↗
                 </a>
               ) : null}

@@ -415,6 +415,7 @@ export function fromDbProduct(row: DatabaseRow): Product {
     logo: databaseString(row, `${DB_PREFIX}logo`, "🚀"),
     screenshot: databaseString(row, `${DB_PREFIX}screenshot`) || undefined,
     screenshots: Array.isArray(row[`${DB_PREFIX}screenshots`]) ? (row[`${DB_PREFIX}screenshots`] as unknown[]).filter((value): value is string => typeof value === "string").slice(0, 5) : undefined,
+    paidWebsiteLink: row[`${DB_PREFIX}paid_website_link`] === true,
     submittedAt: databaseString(row, `${DB_PREFIX}submitted_at`, new Date(0).toISOString()),
     queueStatus: queueStatus === "active" || queueStatus === "completed" ? queueStatus : "waiting",
     votesCount: databaseNumber(row, `${DB_PREFIX}votes_count`),

@@ -12,7 +12,7 @@ Do not deploy this app version before the SQL. New submissions/edits require the
 
 ## What the rules actually do
 
-- New products publish immediately as `unreviewed`; no mandatory manual queue. Listings after the first 150 use ugc and nofollow on official website links, including approved listings.
+- New products publish immediately as `unreviewed`; no mandatory manual queue. After the first 150 listings, free listings use nofollow and paid listings get one followed website link on their product profile.
 - The first 150 products retain followed links while unrestricted. They are grandfathered, not automatically declared safe. Staff can restrict them at any time. Material edits (including destination paths) reset an approved record to unreviewed; editing cannot unlock a restricted record.
 - Duplicate website hosts ignore scheme, `www`, trailing dot, path and port. Distinct hosted subdomains stay separate. GitHub/GitLab repositories are distinguished by owner/repository. Historical duplicates are not deleted or merged; editing their unchanged destination is permitted. Database checks protect against concurrent submissions and preserve uniqueness even if a legacy representative changes domains.
 - Reports require Google/GitHub sign-in, allow one report per account/product and at most ten distinct product reports per rolling 24 hours. Reports do not automatically hide listings. Staff can dismiss, approve, restrict or restore, with a required reason saved to a private audit log.

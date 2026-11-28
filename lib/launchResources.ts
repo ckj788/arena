@@ -63,7 +63,7 @@ export const LAUNCH_RESOURCES: LaunchResource[] = [
     fit: "Independent makers who want a public profile, ongoing discovery and optional peer feedback.",
     timing: "A successful submission creates a profile. Optional Arena entry has a separate queue.",
     listing: "Permanent product profile, subject to moderation.",
-    links: "New listings include a nofollow link to the official website.",
+    links: "After the first 150 listings, free listings use nofollow and paid listings get one followed website link on their product profile.",
     note: "This is our platform. Fair discovery prioritizes products with fewer recorded views; it cannot guarantee a visitor count. Arena votes require feedback on both products.",
     url: "/submit",
     sources: [{ label: "How Indie Clash works", url: "/champions#how-it-works-section" }, { label: "Browse profiles", url: "/products" }],

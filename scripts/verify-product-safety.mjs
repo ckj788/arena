@@ -52,6 +52,11 @@ assert.equal(safety.productDomainKey('https://WWW.Example.com.:443/path'),'examp
 assert.notEqual(safety.productDomainKey('https://a.vercel.app'),safety.productDomainKey('https://b.vercel.app'));
 assert.notEqual(safety.productDomainKey('https://github.com/owner/a'),safety.productDomainKey('https://github.com/owner/b'));
 const linkRel = (submittedAt, moderationStatus = 'unreviewed') => safety.productLinkRel({submittedAt, moderationStatus});
+const paid = { submittedAt: '2026-11-28T00:00:00Z', paidWebsiteLink: true };
+assert.equal(safety.productLinkRel(paid, 'profile-website'), 'noopener noreferrer');
+assert.match(safety.productLinkRel(paid), /nofollow/);
+assert.match(safety.productLinkRel({ ...paid, paidWebsiteLink: false }, 'profile-website'), /nofollow/);
+assert.match(safety.productLinkRel({ ...paid, moderationStatus: 'restricted' }, 'profile-website'), /nofollow/);
 assert.equal(linkRel('2026-11-27T06:15:59.083+00:00'), 'noopener noreferrer'); // #150
 assert.match(linkRel('2026-11-27T09:43:40.794Z', 'approved'), /ugc nofollow/); // #151
 assert.match(linkRel('2026-11-27T06:15:59.084Z'), /ugc nofollow/);

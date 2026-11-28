@@ -1,6 +1,7 @@
 import type { Product } from "./mockData";
 
 export const DUPLICATE_PRODUCT_MESSAGE = "This website has already been submitted to Indie Clash.";
+export const DAILY_PUBLICATION_LIMIT_MESSAGE = "You can publish one free product per account per day.";
 
 /** Host identity, not a substring match: hosted subdomains remain independent. */
 export function productDomainKey(value: string): string {
@@ -34,10 +35,12 @@ export function isVisibleProduct(product: Product): boolean {
 // Production's 150th product (cleancitation), ordered by submitted_at then id.
 const LAST_FOLLOWED_SUBMISSION = Date.parse("2026-11-27T06:15:59.083Z");
 
-export function productLinkRel(product: Pick<Product, "submittedAt" | "moderationStatus">): string {
+export function productLinkRel(product: Pick<Product, "submittedAt" | "moderationStatus" | "paidWebsiteLink">, placement?: "profile-website"): string {
   const submitted = Date.parse(product.submittedAt);
   // Missing database timestamps are represented by the Unix epoch in fromDbProduct.
-  return product.moderationStatus !== "restricted" && submitted > 0 && submitted <= LAST_FOLLOWED_SUBMISSION
+  const grandfathered = submitted > 0 && submitted <= LAST_FOLLOWED_SUBMISSION;
+  const paidWebsite = placement === "profile-website" && product.paidWebsiteLink === true;
+  return product.moderationStatus !== "restricted" && (grandfathered || paidWebsite)
     ? "noopener noreferrer"
     : "ugc nofollow noopener noreferrer";
 }

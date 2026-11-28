@@ -105,6 +105,11 @@ try {
   const setClock = instant => db.query("SELECT set_config('fixture.instant', $1, false)", [instant]);
   await setClock('2027-03-14T04:59:59Z');
   await db.exec(clockedMigration);
+  await db.exec('CREATE VIEW shipandbattle_public_products AS SELECT shipandbattle_id FROM shipandbattle_products');
+  const benefits = fs.readFileSync('lib/migrations/20261128_paid_publication_benefits.sql', 'utf8')
+    .replaceAll('transaction_timestamp()', "current_setting('fixture.instant')::timestamptz");
+  await db.exec(benefits);
+  await db.exec(benefits);
   const dstOwner = randomUUID();
   await db.query('INSERT INTO auth.users VALUES ($1)', [dstOwner]);
   for (const [index, instant, allowed] of [
@@ -122,6 +127,27 @@ try {
     if (allowed) await insert;
     else await assert.rejects(insert, limited);
   }
-  console.log('PASS: daily quota covers existing listings, free and paid publication, rollback and New York midnight on 23- and 25-hour days.');
+  const verifyPaid = async (user, slug, liveMode = true) => {
+    const paidOrder = await order(user);
+    await db.query('UPDATE shipandbattle_launch_orders SET livemode=$2 WHERE id=$1', [paidOrder, liveMode]);
+    const url = 'https://' + slug + '.example';
+    const publish = () => submit(paidOrder, user, { ...input, url }, undefined,
+      { ...profile(url), shipandbattle_creator_uid: user }, liveMode);
+    const productId = (await publish()).rows[0].id;
+    assert.equal((await publish()).rows[0].id, productId);
+    assert.equal((await db.query('SELECT shipandbattle_paid_website_link AS benefit FROM shipandbattle_public_products WHERE shipandbattle_id=$1', [productId])).rows[0].benefit, liveMode);
+  };
+  const mixedOwner = randomUUID();
+  await db.query('INSERT INTO auth.users VALUES ($1)', [mixedOwner]);
+  await verifyPaid(mixedOwner, 'first-paid');
+  await verifyPaid(mixedOwner, 'first-test-paid', false);
+  await freeInsert('one-free', mixedOwner);
+  await verifyPaid(mixedOwner, 'second-paid');
+  await assert.rejects(freeInsert('extra-free', mixedOwner), limited);
+  await verifyPaid(mixedOwner, 'test-paid-after-free-limit', false);
+  await verifyPaid(mixedOwner, 'one-free'); // Upgrade an existing product.
+  await assert.rejects(freeInsert('another-free', mixedOwner), limited);
+  assert.equal((await db.query('SELECT shipandbattle_paid_website_link AS benefit FROM shipandbattle_public_products WHERE shipandbattle_id=$1', [published])).rows[0].benefit, false);
+  console.log('PASS: multiple paid products, independent free quota, upgrades, test-mode exclusion, retries and both New York DST boundaries.');
   console.log('PASS: shared real product mapping, atomic publication/order/email, private paid-only RPC, repeat submission, owned-domain reuse, foreign ownership denial, slug collisions and rollback.');
 } finally { await db.close(); }
