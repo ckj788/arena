@@ -45,7 +45,7 @@ export default function PlanPicker({ cancelled = false }: { cancelled?: boolean 
     <section aria-labelledby="launch-services-title">
       <div className="launch-service-intro" data-home-reveal="services-heading" data-route-enter="up">
         <h2 id="launch-services-title">Want to Reach More Directories?</h2>
-        <p>Expand your reach with our 100% manual directory submission services — backed by full screenshot reports.</p>
+        <p>Expand your reach with our 100% manual directory submission services.</p>
       </div>
       <div className="launch-paid-plans">
         {paidPlans.map(plan => {

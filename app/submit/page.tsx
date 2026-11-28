@@ -19,7 +19,6 @@ export default async function SubmitPage({ searchParams }: { searchParams: Promi
     <PlanPickerMain>
       <div className="launch-plan-intro" data-home-reveal="launch-heading" data-route-enter="up">
         <h1>Launch for Free. <span>Grow When <br className="hidden sm:block" />You&apos;re Ready.</span></h1>
-        <p>Skip 40+ hours of tedious form-filling. Get 100% manual submissions to top startup &amp; AI directories to boost your SEO and early traffic.</p>
       </div>
       <PlanPicker key={initialPlan ?? "choose"} cancelled={params.checkout === "cancelled"} />
     </PlanPickerMain>
