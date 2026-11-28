@@ -23,9 +23,27 @@ const planPresentation = {
     badge: "Best value",
     description: "Our broadest directory & SEO coverage",
     hoursSaved: 120,
-    domainRatingBoost: "Maximum",
+    domainRatingBoost: "Top",
   },
 };
+
+const submissionSteps = [
+  {
+    id: "payment",
+    title: "Pay securely via Stripe",
+    description: "Make a one-time payment with no subscriptions or hidden fees.",
+  },
+  {
+    id: "intake",
+    title: "Submit product URL & assets",
+    description: "Add your tagline, logo, and screenshots in a 3-minute form.",
+  },
+  {
+    id: "report",
+    title: "Receive report in 10 business days",
+    description: "We’ll email you a complete, detailed report on your submissions.",
+  },
+];
 
 export default function PlanPicker({ cancelled = false }: { cancelled?: boolean }) {
   const router = useRouter();
@@ -57,7 +75,7 @@ export default function PlanPicker({ cancelled = false }: { cancelled?: boolean 
             { id: "domain-rating", text: <>{domainRatingBoost} Domain Rating <strong>(DR)</strong> boost</> },
             { id: "delivery", text: <>Delivered within <strong>10 business days</strong></> },
             { id: "report", text: <>Complete detailed <strong>report</strong></> },
-            { id: "guarantee", text: <><strong>money-back</strong> guarantee</> },
+            { id: "guarantee", text: <><strong>Money-back</strong> guarantee</> },
           ];
           return <article key={plan.id} className={`launch-plan-card${plan.id === "growth" ? " launch-plan-featured" : ""}`} data-plan={plan.id} data-home-reveal={plan.id} data-route-enter="up">
             <span className="launch-plan-badge">{badge}</span>
@@ -75,6 +93,17 @@ export default function PlanPicker({ cancelled = false }: { cancelled?: boolean 
           </article>;
         })}
       </div>
+      <ol className="launch-service-steps" role="list" aria-label="Paid submission steps">
+        {submissionSteps.map(({ id, title, description }, index) => (
+          <li key={id}>
+            <span className="launch-step-number" aria-hidden="true">{index + 1}</span>
+            <div>
+              <h3>{index + 1}. {title}</h3>
+              <p>{description}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
     </section>
     {cancelled && <p role="status" className="launch-checkout-note">Payment was not completed. Choose a plan when you are ready to continue.</p>}
   </div>;
